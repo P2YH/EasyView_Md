@@ -663,15 +663,7 @@ export class TableOfContents {
     this.levelToggleBtn = this.dom.document.createElement('button');
     this.levelToggleBtn.className = 'toc-level-btn toc-level-toggle-btn active';
     this.levelToggleBtn.addEventListener('click', () => {
-      // Toggle between "show all" and "collapsed to H1".
-      if (this.maxVisibleLevel === null) {
-        this.maxVisibleLevel = 1;
-      } else {
-        this.maxVisibleLevel = null;
-      }
-      this.refreshLevelControls();
-      this.renderList();
-      this.saveExpandState();
+      this.setVisibleLevel(this.maxVisibleLevel === null ? 1 : null);
     });
     controls.appendChild(this.levelToggleBtn);
 
@@ -691,11 +683,7 @@ export class TableOfContents {
       btn.textContent = option.label;
       btn.title = option.title;
       btn.addEventListener('click', () => {
-        // Click same level again => cancel level filter (show all).
-        this.maxVisibleLevel = this.maxVisibleLevel === option.level ? null : option.level;
-        this.refreshLevelControls();
-        this.renderList();
-        this.saveExpandState();
+        this.setVisibleLevel(option.level);
       });
       controls.appendChild(btn);
       this.levelButtons.push({ level: option.level, el: btn });
@@ -1630,6 +1618,14 @@ export class TableOfContents {
       if (isVisible(index)) result.push(this.headings[index]);
     }
     return result;
+  }
+
+  private setVisibleLevel(level: number | null): void {
+    this.clearExpandStateInMemory();
+    this.maxVisibleLevel = level;
+    this.refreshLevelControls();
+    this.renderList();
+    this.saveExpandState();
   }
 
   private refreshLevelControls(): void {

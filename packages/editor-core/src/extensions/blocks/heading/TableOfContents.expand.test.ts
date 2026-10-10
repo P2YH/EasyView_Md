@@ -103,6 +103,58 @@ beforeEach(() => {
 });
 
 describe('TableOfContents one-level expand', () => {
+  it.each(['heading', 'table'] as const)('%s: clicking selected H1 resets manual expansion and stays at H1', (mode) => {
+    const { toc, view } = mode === 'heading' ? createHeadingToc() : createTableToc();
+    const labels = mode === 'heading' ? visibleHeadingLabels : visibleTableLabels;
+    const toggle = mode === 'heading' ? clickHeadingToggle : clickTableToggle;
+    try {
+      clickLevelFilter('H1');
+      toggle('事件处置工单');
+      toggle('关联事件添加抽屉');
+      expect(labels()).toContain('完整布局图');
+      clickLevelFilter('H1');
+      expect(labels()).toEqual(['事件处置工单']);
+      clickLevelFilter('H1');
+      expect(labels()).toEqual(['事件处置工单']);
+      expect(document.querySelector('.toc-level-btn.active')?.textContent).toBe('H1');
+    } finally {
+      toc.destroy();
+      view.destroy();
+    }
+  });
+
+  it.each([1, 2, 3, 4, 5])('H%s resets old collapse state and shows all headings through that level', (level) => {
+    const { toc, view } = createHeadingToc();
+    try {
+      clickHeadingToggle('事件处置工单');
+      expect(visibleHeadingLabels()).toEqual(['事件处置工单']);
+      clickLevelFilter(`H${level}`);
+      expect(visibleHeadingLabels()).toEqual(toc.getHeadings().filter((heading) => heading.level <= level).map((heading) => heading.text));
+    } finally {
+      toc.destroy();
+      view.destroy();
+    }
+  });
+
+  it.each([1, 2, 3, 4, 5])('table H%s resets old collapse state to the selected depth', (level) => {
+    const { toc, view } = createTableToc();
+    try {
+      clickTableToggle('事件处置工单');
+      clickLevelFilter(`H${level}`);
+      const expected = ['事件处置工单'];
+      if (level >= 2) expected.push('关联事件添加抽屉');
+      if (level >= 3) expected.push('完整布局图');
+      if (level >= 4) expected.push('字段说明');
+      if (level >= 3) expected.push('交互矩阵');
+      if (level >= 2) expected.push('流转记录添加弹窗');
+      if (level >= 3) expected.push('录入规则');
+      expect(visibleTableLabels()).toEqual(expected);
+    } finally {
+      toc.destroy();
+      view.destroy();
+    }
+  });
+
   it('H1 filter: expanding a heading reveals only the next level', () => {
     const { toc, view } = createHeadingToc();
     clickLevelFilter('H1');

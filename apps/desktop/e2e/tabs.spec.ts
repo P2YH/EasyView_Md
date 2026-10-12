@@ -2,14 +2,13 @@ import { _electron as electron, expect, test, type ElectronApplication, type Pag
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { firstWindowWithDiagnostics } from './support/diagnostics';
 import { terminateElectron } from './support/electronApp';
 
 const appDir = process.cwd();
 
 async function launch(userDataDir: string): Promise<{ application: ElectronApplication; page: Page }> {
   const application = await electron.launch({ args: [appDir, `--user-data-dir=${userDataDir}`] });
-  return { application, page: await firstWindowWithDiagnostics(application, 'tabs') };
+  return { application, page: await application.firstWindow() };
 }
 
 test('keeps Markdown dirty content while preview tabs occupy the central surface and restore after restart', async () => {

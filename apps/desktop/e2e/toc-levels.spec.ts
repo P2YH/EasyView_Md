@@ -3,6 +3,7 @@ import { once } from 'node:events';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { firstWindowWithDiagnostics } from './support/diagnostics';
 
 test('H1-H5 reset the outline to the selected level, including repeated clicks after manual expansion', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'easyview-toc-levels-'));
@@ -24,7 +25,7 @@ test('H1-H5 reset the outline to the selected level, including repeated clicks a
     env: { ...process.env, NODE_OPTIONS: '' },
   });
   try {
-    const page = await app.firstWindow();
+    const page = await firstWindowWithDiagnostics(app, 'toc');
     await expect(page.locator('.toc-sidebar')).toBeVisible();
     const labels = page.locator('.toc-item-text');
     const level = (value: number) => page.locator('.toc-level-btn').filter({ hasText: new RegExp(`^H${value}$`) });

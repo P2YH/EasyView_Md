@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { EasyViewDesktopApi } from '../src/preload/desktopApi';
+import { firstWindowWithDiagnostics } from './support/diagnostics';
 
 test('renames the original document through document and workspace commands while saves follow the new path', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'easyview-desktop-rename-'));
@@ -30,7 +31,7 @@ test('renames the original document through document and workspace commands whil
     env: { ...process.env, NODE_OPTIONS: '' },
   });
   try {
-    const page = await application.firstWindow();
+    const page = await firstWindowWithDiagnostics(application, 'rename');
     const errors: string[] = [];
     page.on('dialog', (dialog) => { errors.push(dialog.message()); void dialog.dismiss(); });
     await expect(page.locator('.ProseMirror')).toContainText('Original.');

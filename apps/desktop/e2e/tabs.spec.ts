@@ -3,12 +3,13 @@ import { once } from 'node:events';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { firstWindowWithDiagnostics } from './support/diagnostics';
 
 const appDir = process.cwd();
 
 async function launch(userDataDir: string): Promise<{ application: ElectronApplication; page: Page }> {
   const application = await electron.launch({ args: [appDir, `--user-data-dir=${userDataDir}`] });
-  return { application, page: await application.firstWindow() };
+  return { application, page: await firstWindowWithDiagnostics(application, 'tabs') };
 }
 
 

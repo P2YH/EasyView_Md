@@ -100,6 +100,21 @@ jobs:
           $exe = 'apps/desktop/out/EasyView_Md-win32-x64/EasyView_Md.exe'
           $version = (Get-Item $exe).VersionInfo.ProductVersion
           if ($version -ne $env:RELEASE_VERSION) { throw "Unexpected application version: $version" }
+      # Microsoft Store package (product 9MTQTBP489CN). Re-packages the Forge output with
+      # electron-builder; built unsigned on purpose because Partner Center re-signs it.
+      # Kept out of release-assets/ so it never reaches SHA256SUMS, release.json or the website.
+      - name: Make Microsoft Store package (unsigned AppX)
+        if: matrix.platform == 'win32'
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run make:appx --workspace @easyview/desktop
+      - name: Upload Microsoft Store package
+        if: matrix.platform == 'win32'
+        uses: actions/upload-artifact@v4
+        with:
+          name: store-win32-x64
+          path: apps/desktop/out/store/EasyView_Md-win-x64-store.appx
+          if-no-files-found: error
       - name: Stage fixed filenames
         env:
           TARGET_PLATFORM: ${{ matrix.platform }}
@@ -143,6 +158,11 @@ jobs:
           pattern: desktop-*
           merge-multiple: true
           path: artifacts
+      # Store AppX: attached to the GitHub Release only (not synced to the download server).
+      - uses: actions/download-artifact@v4
+        with:
+          name: store-win32-x64
+          path: store-assets
       - name: Prepare release manifest and checksums
         run: |
           bash website/scripts/prepare-easyview-downloads.sh artifacts "$RELEASE_VERSION" release-assets --extension-version "$EXTENSION_VERSION"
@@ -162,11 +182,13 @@ jobs:
             mkdir release-assets
             gh release download "$RELEASE_TAG" --dir release-assets \
               --pattern 'EasyView_Md-*' --pattern easyview-md.vsix --pattern SHA256SUMS --pattern release.json
+            # The Store AppX also matches EasyView_Md-*; it is never synced to the website.
+            rm -f release-assets/*-store.appx
           else
             if [[ "$state" == missing ]]; then
               gh release create "$RELEASE_TAG" --verify-tag --draft --title "EasyView_Md $RELEASE_TAG" --generate-notes
             fi
-            gh release upload "$RELEASE_TAG" release-assets/* --clobber
+            gh release upload "$RELEASE_TAG" release-assets/* store-assets/EasyView_Md-win-x64-store.appx --clobber
             gh release edit "$RELEASE_TAG" --draft=false
           fi
           node website/scripts/easyview-release.mjs verify release-assets "$RELEASE_VERSION"

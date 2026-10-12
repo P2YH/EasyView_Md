@@ -13,6 +13,7 @@
     "make": "npm run build -- --production && npm run prepare:runtime && electron-forge make",
     "make:dmg": "node scripts/make-dmg.mjs",
     "make:mac": "npm run make && npm run make:dmg",
+    "make:appx": "node scripts/make-appx.mjs",
     "test:e2e": "npm run build -- --production && playwright test -c playwright.desktop.config.ts",
     "prepare:runtime": "node scripts/prepare-runtime.mjs",
     "verify:package": "node scripts/verify-package.mjs",
@@ -32,6 +33,7 @@
     "@types/electron-squirrel-startup": "^1.0.2",
     "@types/node": "^22.0.0",
     "electron": "^37.0.0",
+    "electron-builder": "26.15.3",
     "electron-squirrel-startup": "^1.0.1",
     "esbuild": "^0.24.0",
     "typescript": "^5.7.0"

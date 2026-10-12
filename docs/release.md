@@ -12,6 +12,7 @@
 - `EasyView_Md-win-x64.zip`
 - `easyview-md.vsix`：VS Code / Cursor 扩展，版本见下文“VS Code 扩展（VSIX）”。
 - `SHA256SUMS`：上述五个文件的 SHA-256。
+- `EasyView_Md-win-x64-store.appx`：微软商店上传用的未签名包，见下文“微软商店（MSIX / AppX）”；不计入 `SHA256SUMS` 和 `release.json`。
 - `release.json`：产品、tag、desktopVersion、extensionVersion，以及每个文件的文件名、大小和 SHA-256。
 
 Release 先创建为草稿，上传完成后公开。失败重跑时，草稿继续上传；已公开的 Release 下载原始附件用于官网同步，不覆盖已发布的安装包。
@@ -31,6 +32,18 @@ VSIX 与桌面端走同一条 Desktop Release 流程，但版本独立：tag 只
 - 官网更新同时改写扩展卡片的 `vX.Y.Z · .vsix` 文字和 `easyview-md.vsix?v=X.Y.Z`（`data-easyview-extension-version` / `data-easyview-extension-download` 标记）。
 - 扩展版本没变时也会重新打包并上传同版本 VSIX，内容来自该 tag 的源码。
 - 本流程不发布到 VS Code Marketplace 或 Open VSX，商店发布仍需单独操作。
+
+## 微软商店（MSIX / AppX）
+
+商店版与官网安装包走同一个 tag 构建，但只作为 GitHub Release 附件，不进 `SHA256SUMS`、`release.json`，也不同步到下载服务器或官网。
+
+- **构建方式：** Windows job 在 Forge `make` 之后运行 `npm run make:appx --workspace @easyview/desktop`。`apps/desktop/scripts/make-appx.mjs` 用 electron-builder（配置 `apps/desktop/electron-builder.store.cjs`）把 Forge 产物 `out/EasyView_Md-win32-x64` 重新打成 `out/store/EasyView_Md-win-x64-store.appx`，程序文件与官网版一致。只能在 Windows 上打；在 macOS 上可用 `node apps/desktop/scripts/make-appx.mjs --check` 校验配置。
+- **身份信息：** 与 Partner Center 预留一致：`identityName` `wonderxy.EasyViewMd`、`publisher` `CN=19709C1F-89CA-4443-8E7F-815C01CEC37E`、`publisherDisplayName` `wonderxy`、显示名 `EasyView_Md`，Store ID `9MTQTBP489CN`，PFN `wonderxy.EasyViewMd_aeg7cng3hy970`。不要改这些值。
+- **不签名：** 商店提交不需要自己签名，Partner Center 会用微软证书重新签名。配置里没有证书，脚本在检测到 `CSC_LINK` / `WIN_CSC_LINK` / `CSC_NAME` 时直接失败。未签名的包不能直接双击安装，本地测试需开启开发者模式后用 `Add-AppxPackage` 安装。
+- **磁贴图标：** 在 `apps/desktop/build/appx/`，由 `node tooling/brand/generate-appx-assets.mjs`（macOS）从 `resources/brand/logo.png` 生成。换品牌图后重新生成并提交。
+- **提交商店：** 发版后在 Release 下载 `EasyView_Md-win-x64-store.appx`（或 Actions 运行里的 `store-win32-x64` artifact），打开 [Partner Center](https://partner.microsoft.com/dashboard/apps-and-games/overview) → EasyView_Md（9MTQTBP489CN）→ 新建提交 → 程序包，上传后补齐商店信息（描述、截图、分类、年龄分级）再提交审核。每次提交的版本号必须比上一次大（`X.Y.Z` 会成为 `X.Y.Z.0`）。
+- **隐私政策：** 商店要求填写隐私政策链接，需先在官网放一页（例如 `https://easyview.wonderxy.art/privacy.html`）再提交。
+- **不自动更新：** 应用目前没有内置自动更新（不使用 electron-updater，Squirrel 只负责官网 setup.exe 的安装）。商店版的更新只由微软商店完成，以后若加入应用内更新，需在 `process.windowsStore === true` 时跳过。
 
 ## GitHub Secrets
 

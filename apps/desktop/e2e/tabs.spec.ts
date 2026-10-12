@@ -1,27 +1,15 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { once } from 'node:events';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { firstWindowWithDiagnostics } from './support/diagnostics';
+import { terminateElectron } from './support/electronApp';
 
 const appDir = process.cwd();
 
 async function launch(userDataDir: string): Promise<{ application: ElectronApplication; page: Page }> {
   const application = await electron.launch({ args: [appDir, `--user-data-dir=${userDataDir}`] });
   return { application, page: await firstWindowWithDiagnostics(application, 'tabs') };
-}
-
-
-async function terminate(application: ElectronApplication | undefined): Promise<void> {
-  if (!application) return;
-  const process = application.process();
-  if (process.exitCode === null) {
-    const exited = once(process, 'exit');
-    process.kill('SIGKILL');
-    await exited;
-  }
-  await application.close();
 }
 
 test('keeps Markdown dirty content while preview tabs occupy the central surface and restore after restart', async () => {
@@ -216,7 +204,7 @@ test('keeps Markdown dirty content while preview tabs occupy the central surface
       // Wait until the preview.txt activation itself is persisted, not just any non-notes tab.
       return { tabCount: workspaceState.openTabs.length, activeRelativePath: activeTab?.relativePath };
     }).toEqual({ tabCount: 3, activeRelativePath: 'preview.txt' });
-    await terminate(first);
+    await terminateElectron(first);
     first = undefined;
 
     const restored = await launch(userData);
@@ -225,8 +213,8 @@ test('keeps Markdown dirty content while preview tabs occupy the central surface
     await expect(restored.page.locator('.desktop-tab.active .desktop-tab-label')).toHaveText('preview.txt');
     await expect(restored.page.locator('#file-preview-root')).toBeVisible();
   } finally {
-    await terminate(first).catch(() => undefined);
-    await terminate(second).catch(() => undefined);
+    await terminateElectron(first).catch(() => undefined);
+    await terminateElectron(second).catch(() => undefined);
     // Windows keeps Chromium profile files locked briefly after the Electron process is killed.
     await rm(temporaryDirectory, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }).catch(() => undefined);
   }

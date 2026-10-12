@@ -1,9 +1,9 @@
 import { _electron as electron, expect, test } from '@playwright/test';
-import { once } from 'node:events';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { firstWindowWithDiagnostics } from './support/diagnostics';
+import { terminateElectron } from './support/electronApp';
 
 test('H1-H5 reset the outline to the selected level, including repeated clicks after manual expansion', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'easyview-toc-levels-'));
@@ -43,12 +43,7 @@ test('H1-H5 reset the outline to the selected level, including repeated clicks a
       await expect(level(value)).toHaveClass(/active/);
     }
   } finally {
-    const process = app.process();
-    if (process.exitCode === null) {
-      const exited = once(process, 'exit');
-      process.kill('SIGKILL');
-      await exited;
-    }
-    await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 250 });
+    await terminateElectron(app);
+    await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 250 }).catch(() => undefined);
   }
 });

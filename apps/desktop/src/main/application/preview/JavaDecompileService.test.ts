@@ -32,5 +32,5 @@ describe('JavaDecompileService', () => {
     expect(result.engine).toBe('fernflower');
     expect(result.output).toContain('class Sample');
     expect(result.output).toContain('return this.n + 1');
-  });
+  }, 30_000); // javac plus a JVM decompile run exceeds the 5s default on cold Windows runners.
 });

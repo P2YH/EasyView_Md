@@ -66,6 +66,28 @@ describe('EditorSyncAdapter', () => {
     expect(sent.some((message) => message.type === 'requestResync')).toBe(false);
   });
 
+  it('keeps unacknowledged local edits when documentActivate arrives mid-flight', () => {
+    const sent: any[] = [];
+    const applied: string[] = [];
+    const adapter = new EditorSyncAdapter({
+      postMessage: (message) => sent.push(message),
+      getSettings: () => ({ fullWidth: true, tocVisible: false, tableWrap: false }),
+      onSnapshot: (content) => applied.push(content),
+      onExternalContent: () => true,
+    });
+    adapter.handleMessage({ type: 'documentSnapshot', documentId: 'doc', revision: 1, content: 'Original.', contentHash: hashContent('Original.'), reason: 'initial' });
+    adapter.applyLocalContent('Original. Unsaved con');
+    adapter.applyLocalContent('Original. Unsaved content.');
+    const inFlight = sent.find((message) => message.type === 'applyEdits');
+    // The host applied the first edit and re-activates the tab (e.g. after a rename) before the ACK lands.
+    adapter.handleMessage({ type: 'documentActivate', documentId: 'doc', revision: 2, contentHash: hashContent('Original. Unsaved con'), reason: 'visible' });
+    expect(sent.some((message) => message.type === 'requestResync')).toBe(false);
+    adapter.handleMessage({ type: 'editsApplied', documentId: 'doc', clientEditId: inFlight.clientEditId, revision: 2, resultHash: inFlight.resultHash });
+    expect(adapter.content).toBe('Original. Unsaved content.');
+    expect(sent.filter((message) => message.type === 'applyEdits')).toHaveLength(2);
+    expect(applied).toEqual(['Original.']);
+  });
+
   it('requests a resync when documentActivate cannot match a live session', () => {
     const sent: any[] = [];
     const adapter = new EditorSyncAdapter({

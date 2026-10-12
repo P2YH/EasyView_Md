@@ -516,7 +516,14 @@ export class WorkspaceExplorer {
       if (event.key === 'Enter') { event.preventDefault(); void this.renameEntry(entry.relativePath, input.value); }
     });
     input.addEventListener('blur', () => { if (this.renameRelativePath === entry.relativePath) void this.renameEntry(entry.relativePath, input.value); });
-    requestAnimationFrame(() => { input.focus(); input.setSelectionRange(...workspaceEntryNameSelectionRange(input.value)); });
+    requestAnimationFrame(() => {
+      // Editing may already have started before this frame (focus, select-all, typing).
+      // Re-applying the stem selection then would replace only the stem and keep the
+      // extension, turning "new.md" into "new.md.md".
+      if (!input.isConnected || document.activeElement === input) return;
+      input.focus();
+      input.setSelectionRange(...workspaceEntryNameSelectionRange(input.value));
+    });
     return input;
   }
 

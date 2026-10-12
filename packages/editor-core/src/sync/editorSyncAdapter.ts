@@ -93,6 +93,15 @@ export class EditorSyncAdapter {
           });
           return true;
         }
+        const { state } = session.snapshot;
+        if (state === 'awaitingAck' || state === 'awaitingAckWithBufferedEdits' || state === 'resyncing') {
+          // Local edits are still in flight, so the host revision/hash in this
+          // activation legitimately differs from the editor's optimistic content.
+          // The pending ACK reconciles it (and the host rejects a truly divergent
+          // edit with resyncRequired). Resyncing here would replace the document
+          // with the host copy and drop the unacknowledged keystrokes.
+          return true;
+        }
         const currentHash = hashContent(session.snapshot.canonicalContent);
         if (session.snapshot.revision === message.revision && currentHash === message.contentHash) {
           this.options.postMessage({

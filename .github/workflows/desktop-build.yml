@@ -50,6 +50,18 @@ jobs:
       - run: npx vitest run apps/desktop/src/main
       - run: npm run build:desktop
       - run: npm run test:e2e:desktop
+        env:
+          DEBUG: pw:browser
+      - name: Show e2e failure context
+        if: failure()
+        shell: bash
+        run: find apps/desktop/test-results -name '*.md' -exec sh -c 'echo "== $1"; cat "$1"' _ {} \; || true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-results-${{ matrix.os }}
+          path: apps/desktop/test-results
+          if-no-files-found: ignore
       - run: npm run package:desktop
       - run: npm run verify:desktop-package
       - run: npm run verify:desktop-runtime

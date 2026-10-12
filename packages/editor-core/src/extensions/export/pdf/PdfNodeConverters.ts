@@ -1509,6 +1509,14 @@ function convertInlineNode(node: ProsemirrorNode, ctx: ConvertContext): any {
   }
 }
 
+/** pdfmake accepts hex and named colors but not `rgb()`, which DOM-parsed marks may carry. */
+function pdfTextColor(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const rgb = value.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (!rgb) return value.trim();
+  return `#${rgb.slice(1, 4).map((part) => Math.min(255, Number(part)).toString(16).padStart(2, '0')).join('')}`;
+}
+
 /**
  * Apply ProseMirror marks to a text string, returning a pdfmake text object.
  */
@@ -1546,6 +1554,13 @@ function applyMarks(text: string, marks: readonly Mark[], palette: PdfPalette): 
         // pdfmake doesn't support alpha in hex colors — use solid light colors
         const hlColor = mark.attrs.color;
         result.background = hlColor ? lightenHex(hlColor, 0.35) : palette.markBg;
+        break;
+      }
+      case 'text_color': {
+        const color = pdfTextColor(mark.attrs.color);
+        if (color && !marks.some((other) => other.type.name === 'link' || other.type.name === 'code_inline')) {
+          result.color = color;
+        }
         break;
       }
       case 'link': {

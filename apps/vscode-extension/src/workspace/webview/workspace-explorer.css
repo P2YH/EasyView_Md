@@ -211,6 +211,24 @@ body {
   outline-offset: -1px;
 }
 
+.workspace-tree.is-drop-root {
+  background: var(--vscode-list-dropBackground, color-mix(in srgb, var(--vscode-focusBorder) 12%, transparent));
+}
+
+.workspace-drop-hint {
+  padding: 12px 12px 8px;
+  color: var(--vscode-descriptionForeground, #999);
+  font-size: 11px;
+  opacity: 0;
+  transition: opacity 150ms ease;
+  user-select: none;
+}
+
+.workspace-drop-hint:hover,
+.workspace-tree.is-drop-root .workspace-drop-hint {
+  opacity: 0.7;
+}
+
 .workspace-drop-indicator {
   position: absolute;
   z-index: 20;

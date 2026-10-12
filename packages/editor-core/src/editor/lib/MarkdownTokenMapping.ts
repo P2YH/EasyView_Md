@@ -164,6 +164,12 @@ export const tokenMapping: Record<string, any> = {
     },
   },
   highlight: { mark: 'highlight' },
+  text_color: {
+    mark: 'text_color',
+    getAttrs(token: any) {
+      return { color: token.attrGet('color') };
+    },
+  },
   underline: { mark: 'underline' },
   diff_add: { mark: 'diff_add' },
   diff_del: { mark: 'diff_del' },

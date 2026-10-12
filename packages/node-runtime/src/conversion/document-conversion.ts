@@ -227,6 +227,83 @@ async function copyExtractedMedia(sourceDirectory: string, targetDirectory: stri
   return copied;
 }
 
+/**
+ * Pandoc Lua filter for `--track-changes=all`: accepts tracked insertions/deletions
+ * and inlines Word comments as `【批注 作者 时间：内容】` right after the commented text,
+ * styled with the editor's highlight + text color marks.
+ * Word writes local wall-clock time with a `Z` suffix, so the date is shown as-is.
+ */
+const WORD_TRACK_CHANGES_LUA_FILTER = String.raw`
+local comments = {}
+local has_end = {}
+
+local function comment_id(span)
+  if span.identifier ~= '' then return span.identifier end
+  return span.attributes['id'] or ''
+end
+
+local function collect(doc)
+  doc:walk({
+    Span = function(span)
+      local id = comment_id(span)
+      if span.classes:includes('comment-start') then
+        local text = pandoc.utils.stringify(span.content):gsub('[ \t\r\n]+', ' '):gsub('^ ', ''):gsub(' $', '')
+        local meta = {}
+        local author = span.attributes['author'] or ''
+        if author ~= '' then table.insert(meta, author) end
+        local y, mo, d, h, mi = (span.attributes['date'] or ''):match('^(%d+)-(%d+)-(%d+)T(%d+):(%d+)')
+        if y then table.insert(meta, y .. '-' .. mo .. '-' .. d .. ' ' .. h .. ':' .. mi) end
+        local label = #meta > 0 and ('批注 ' .. table.concat(meta, ' ') .. '：') or '批注：'
+        comments[id] = '【' .. label .. text .. '】'
+      elseif span.classes:includes('comment-end') then
+        has_end[id] = true
+      end
+    end,
+  })
+end
+
+local function escape_html(text)
+  return (text:gsub('&', '&amp;'):gsub('<', '&lt;'):gsub('>', '&gt;'))
+end
+
+local function note(id)
+  local text = comments[id]
+  if not text then return {} end
+  comments[id] = nil
+  local markup = '==<span style="color: #ea580c">' .. escape_html(text):gsub('=', '&#61;') .. '</span>=='
+  return { pandoc.RawInline('markdown', markup) }
+end
+
+local function rewrite(span)
+  local id = comment_id(span)
+  if span.classes:includes('comment-start') then
+    if has_end[id] then return {} end
+    return note(id)
+  end
+  if span.classes:includes('comment-end') then
+    local result = pandoc.List(span.content)
+    result:extend(note(id))
+    return result
+  end
+  if span.classes:includes('deletion') then return {} end
+  if span.classes:includes('insertion')
+    or span.classes:includes('paragraph-insertion')
+    or span.classes:includes('paragraph-deletion') then
+    return span.content
+  end
+end
+
+function Pandoc(doc)
+  collect(doc)
+  return doc:walk({ Span = rewrite })
+end
+`;
+
+/** Pandoc inserts empty HTML comments to keep adjacent lists apart; they render as empty comment blocks. */
+export function removePandocListSeparators(markdown: string): string {
+  return markdown.replace(/(^|\n)<!-- -->\n(?:\n|$)/g, "$1");
+}
+
 async function findConvertedDocx(directory: string, stem: string): Promise<string> {
   const entries = await readdir(directory, { withFileTypes: true });
   const expected = `${stem}.docx`.toLowerCase();
@@ -261,19 +338,23 @@ export async function convertWordToMarkdown(request: DocumentConversionRequest):
     const temporaryMarkdownPath = path.join(temporaryDirectory, `${safeStem}.md`);
     const temporaryExtractDirectory = path.join(temporaryDirectory, "media");
     const temporaryMediaDirectory = path.join(temporaryExtractDirectory, "media");
+    const luaFilterPath = path.join(temporaryDirectory, "track-changes.lua");
+    await writeFile(luaFilterPath, WORD_TRACK_CHANGES_LUA_FILTER, "utf8");
     await runCommand("pandoc", [
       inputForPandoc,
       "--from=docx",
       "--to=gfm+pipe_tables",
       "--wrap=none",
+      "--track-changes=all",
+      `--lua-filter=${luaFilterPath}`,
       `--extract-media=${temporaryExtractDirectory}`,
       `--output=${temporaryMarkdownPath}`,
     ]);
 
     const converted = await readFile(temporaryMarkdownPath, "utf8");
-    const markdown = stripPandocHighlightMarkup(
+    const markdown = removePandocListSeparators(stripPandocHighlightMarkup(
       rewriteExtractedMediaPaths(converted, temporaryMediaDirectory, assetDirectoryName),
-    );
+    ));
     if (request.overwrite) await rm(assetDirectory, { recursive: true, force: true });
     const assetPaths = await copyExtractedMedia(temporaryMediaDirectory, assetDirectory);
     await writeFileAtomically(outputPath, markdown);

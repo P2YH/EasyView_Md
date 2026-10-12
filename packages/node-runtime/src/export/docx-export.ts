@@ -318,26 +318,165 @@ function fitMermaidToDocxPage(width: number, height: number, pngData?: Buffer): 
   };
 }
 
-function markdownInlineToDocxRuns(value: string, defaults: Record<string, unknown> = {}): TextRun[] {
-  const runs: TextRun[] = [];
-  const tokenRe = /(\*\*|__)(.+?)\1|~~(.+?)~~|`([^`]+)`|\[([^\]]+)\]\([^)]+\)|(\*|_)(.+?)\7/g;
-  let cursor = 0;
-  let match: RegExpExecArray | null;
+type DocxInlineStyle = Record<string, unknown>;
 
-  const append = (text: string, options: Record<string, unknown> = {}) => {
-    if (text) runs.push(new TextRun({ text, ...defaults, ...options }));
-  };
+const DOCX_NAMED_COLORS: Record<string, string> = {
+  black: '000000', white: 'FFFFFF', red: 'FF0000', green: '008000', blue: '0000FF',
+  yellow: 'FFFF00', orange: 'FFA500', purple: '800080', gray: '808080', grey: '808080',
+};
 
-  while ((match = tokenRe.exec(value)) !== null) {
-    append(value.slice(cursor, match.index));
-    if (match[1]) append(match[2], { bold: true });
-    else if (match[3]) append(match[3], { strike: true });
-    else if (match[4]) append(match[4], { font: 'Courier New', shading: { fill: 'EEF1F4' } });
-    else if (match[5]) append(match[5], { color: '0563C1', underline: {} });
-    else append(match[8], { italics: true });
-    cursor = match.index + match[0].length;
+/** CSS color → Word hex (RRGGBB), or null when it cannot be represented. */
+export function cssColorToDocxHex(value: string): string | null {
+  const color = value.trim().toLowerCase();
+  const hex = color.match(/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/);
+  if (hex) {
+    const digits = hex[1].length === 3 ? [...hex[1]].map((c) => c + c).join('') : hex[1].slice(0, 6);
+    return digits.toUpperCase();
   }
-  append(value.slice(cursor));
+  const rgb = color.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  if (rgb) {
+    return rgb.slice(1, 4)
+      .map((part) => Math.min(255, Number(part)).toString(16).padStart(2, '0'))
+      .join('')
+      .toUpperCase();
+  }
+  return DOCX_NAMED_COLORS[color] ?? null;
+}
+
+function decodeDocxHtmlEntities(text: string): string {
+  return text.replace(/&(?:#x([0-9a-f]+)|#(\d+)|(amp|lt|gt|quot|apos|nbsp));/gi, (_entity, hexCode, decimal, named) => {
+    if (hexCode) return String.fromCodePoint(parseInt(hexCode, 16));
+    if (decimal) return String.fromCodePoint(parseInt(decimal, 10));
+    const map: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00A0' };
+    return map[named.toLowerCase()];
+  });
+}
+
+const DOCX_DELIMITER_STYLES: ReadonlyArray<[string, DocxInlineStyle]> = [
+  ['**', { bold: true }],
+  ['__', { underline: {} }],
+  ['==', { highlight: 'yellow' }],
+  ['~~', { strike: true }],
+];
+
+function docxStyleForHtmlTag(tag: string, attributes: string): DocxInlineStyle {
+  switch (tag) {
+    case 'b': case 'strong': return { bold: true };
+    case 'i': case 'em': return { italics: true };
+    case 'u': return { underline: {} };
+    case 's': case 'del': case 'strike': return { strike: true };
+    case 'mark': return { highlight: 'yellow' };
+    case 'sub': return { subScript: true };
+    case 'sup': return { superScript: true };
+    case 'code': case 'kbd': case 'samp': return { font: 'Courier New', shading: { fill: 'EEF1F4' } };
+    case 'span': {
+      const color = attributes.match(/style\s*=\s*["'][^"']*?\bcolor\s*:\s*([^;"']+)/i)?.[1];
+      const hex = color ? cssColorToDocxHex(color) : null;
+      return hex ? { color: hex } : {};
+    }
+    default: return {};
+  }
+}
+
+/** Index of the close tag matching an already-consumed open tag, honoring nesting. */
+function findMatchingHtmlClose(text: string, tag: string): { index: number; length: number } | null {
+  const re = new RegExp(`<(/)?${tag}\\b[^>]*>`, 'gi');
+  let depth = 1;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text))) {
+    depth += match[1] ? -1 : 1;
+    if (depth === 0) return { index: match.index, length: match[0].length };
+  }
+  return null;
+}
+
+function parseDocxInline(text: string, style: DocxInlineStyle, out: Array<{ text: string; style: DocxInlineStyle }>): void {
+  let buffer = '';
+  const flush = () => {
+    if (buffer) out.push({ text: decodeDocxHtmlEntities(buffer), style });
+    buffer = '';
+  };
+  let index = 0;
+  outer: while (index < text.length) {
+    const rest = text.slice(index);
+
+    if (rest[0] === '\\' && rest.length > 1 && /[\\`*_~=[\]()<>#|!{}.+-]/.test(rest[1])) {
+      buffer += rest[1];
+      index += 2;
+      continue;
+    }
+
+    const code = rest.match(/^(`+)([\s\S]*?[^`])\1(?!`)/);
+    if (code) {
+      flush();
+      out.push({ text: code[2], style: { ...style, font: 'Courier New', shading: { fill: 'EEF1F4' } } });
+      index += code[0].length;
+      continue;
+    }
+
+    for (const [delimiter, delimiterStyle] of DOCX_DELIMITER_STYLES) {
+      if (!rest.startsWith(delimiter) || /\s/.test(rest[delimiter.length] ?? ' ')) continue;
+      const close = rest.indexOf(delimiter, delimiter.length + 1);
+      if (close < 0) continue;
+      flush();
+      parseDocxInline(rest.slice(delimiter.length, close), { ...style, ...delimiterStyle }, out);
+      index += close + delimiter.length;
+      continue outer;
+    }
+
+    if ((rest[0] === '*' || rest[0] === '_') && rest[1] && !/\s/.test(rest[1]) && rest[1] !== rest[0]) {
+      const close = rest.indexOf(rest[0], 2);
+      if (close > 0 && !/\s/.test(rest[close - 1])) {
+        flush();
+        parseDocxInline(rest.slice(1, close), { ...style, italics: true }, out);
+        index += close + 1;
+        continue;
+      }
+    }
+
+    const link = rest.match(/^\[([^\]]+)\]\(([^)]*)\)/);
+    if (link) {
+      flush();
+      parseDocxInline(link[1], { ...style, color: '0563C1', underline: {} }, out);
+      index += link[0].length;
+      continue;
+    }
+
+    const tag = rest.match(/^<(\/?)([a-zA-Z][\w-]*)([^>]*)>/);
+    if (tag) {
+      flush();
+      const name = tag[2].toLowerCase();
+      index += tag[0].length;
+      if (name === 'br' && !tag[1]) {
+        out.push({ text: '\n', style });
+        continue;
+      }
+      if (tag[1] || tag[3].trim().endsWith('/')) continue;
+      const after = text.slice(index);
+      const close = findMatchingHtmlClose(after, name);
+      if (!close) continue;
+      parseDocxInline(after.slice(0, close.index), { ...style, ...docxStyleForHtmlTag(name, tag[3]) }, out);
+      index += close.index + close.length;
+      continue;
+    }
+
+    buffer += rest[0];
+    index += 1;
+  }
+  flush();
+}
+
+function markdownInlineToDocxRuns(value: string, defaults: Record<string, unknown> = {}): TextRun[] {
+  const segments: Array<{ text: string; style: DocxInlineStyle }> = [];
+  parseDocxInline(value, {}, segments);
+  const runs: TextRun[] = [];
+  for (const segment of segments) {
+    if (segment.text === '\n') {
+      runs.push(new TextRun({ text: '', break: 1, ...defaults }));
+    } else if (segment.text) {
+      runs.push(new TextRun({ text: segment.text, ...defaults, ...segment.style }));
+    }
+  }
   return runs.length > 0 ? runs : [new TextRun({ text: '', ...defaults })];
 }
 

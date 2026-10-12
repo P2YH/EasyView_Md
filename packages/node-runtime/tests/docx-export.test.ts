@@ -11,6 +11,25 @@ import { Packer } from 'docx';
 
 import { markdownToDocx, writeDocxExport } from '../src/export/docx-export';
 
+describe('markdownToDocx inline styling', () => {
+  it('renders highlight and color spans as run formatting instead of literal markup', async () => {
+    const document = await markdownToDocx(
+      '文字。==<span style="color: #ea580c">【批注 张三 2026-10-10 10:25：内容】</span>== 和 **粗<span style="color: rgb(0, 128, 0)">绿</span>** &amp; `code`',
+      'inline-style-test',
+      '/tmp',
+    );
+    const zip = await JSZip.loadAsync(await Packer.toBuffer(document));
+    const xml = await zip.file('word/document.xml')!.async('string');
+
+    expect(xml).not.toContain('==');
+    expect(xml).not.toContain('&lt;span');
+    expect(xml).not.toContain('**');
+    expect(xml).toMatch(/<w:color w:val="EA580C"\/>[\s\S]*?<w:highlight w:val="yellow"\/>[\s\S]*?【批注 张三 2026-10-10 10:25：内容】/);
+    expect(xml).toMatch(/<w:b\/>[\s\S]*?<w:color w:val="008000"\/>[\s\S]*?绿/);
+    expect(xml).toContain('&amp; </w:t>');
+  });
+});
+
 describe('markdownToDocx page orientation', () => {
   it('keeps a narrow table in the same portrait section as surrounding text', async () => {
     const document = await markdownToDocx(

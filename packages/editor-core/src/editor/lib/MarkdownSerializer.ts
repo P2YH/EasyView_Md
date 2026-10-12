@@ -579,6 +579,15 @@ const markSerializers = {
     mixable: true,
     expelEnclosingWhitespace: true,
   },
+  text_color: {
+    open(_state: MarkdownSerializerState, mark: Mark) {
+      return `<span style="color: ${mark.attrs.color}">`;
+    },
+    close() {
+      return '</span>';
+    },
+    mixable: true,
+  },
   link: {
     open(_state: MarkdownSerializerState, mark: Mark) {
       return '[';

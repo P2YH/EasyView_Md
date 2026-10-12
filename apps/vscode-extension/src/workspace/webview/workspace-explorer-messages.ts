@@ -79,8 +79,10 @@ export type WorkspaceExplorerEvent =
       ok: false;
       relativePath: string;
       message: string;
+      missing?: boolean;
     }
   | { type: 'fsChanged'; relativePaths: string[] }
+  | { type: 'entriesDeleted'; relativePaths: string[] }
   | { type: 'reveal'; relativePath: string }
   | { type: 'rootChanged' }
   | { type: 'sortConfig'; sort: WorkspaceExplorerSortConfig }

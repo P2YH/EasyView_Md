@@ -289,6 +289,17 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="${styleUri}" rel="stylesheet">
     <link href="${xtermStyleUri}" rel="stylesheet">
+    <style>
+      body.easyview-vscode-editor::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        box-sizing: border-box;
+        border: 1px solid var(--vscode-editorGroup-border);
+        pointer-events: none;
+        z-index: 2147483647;
+      }
+    </style>
     <title>EasyView_Md</title>
     <script nonce="${nonce}">
       // CRITICAL: Prevent Service Worker registration BEFORE any other code runs
@@ -326,7 +337,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
       ${productThemeBootstrapScript(readProductTheme(this.context))}
     </script>
 </head>
-<body class="inlinemd-booting" data-easyview-theme="${readProductTheme(this.context)}">
+<body class="inlinemd-booting easyview-vscode-editor" data-easyview-theme="${readProductTheme(this.context)}">
     <div id="title-bar"></div>
     <div id="editor-body">
       <div id="editor-scroll-area">

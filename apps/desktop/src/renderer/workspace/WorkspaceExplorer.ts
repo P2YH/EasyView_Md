@@ -347,6 +347,16 @@ export class WorkspaceExplorer {
     tree.className = 'workspace-tree';
     tree.setAttribute('role', 'tree');
     tree.appendChild(this.renderDirectory('', 0));
+    tree.addEventListener('click', (event) => {
+      if (event.target instanceof Element && event.target.closest('.workspace-entry, .workspace-create-row')) return;
+      this.selectionFollowsActive = false;
+      this.options.container.focus({ preventScroll: true });
+      if (this.selectedRelativePaths.size === 0 && this.selectedRelativePath === null) return;
+      this.selectedRelativePath = null;
+      this.selectedRelativePaths.clear();
+      this.selectionAnchorRelativePath = null;
+      this.render();
+    });
     container.appendChild(tree);
     tree.scrollTop = previousScrollTop;
     tree.scrollLeft = previousScrollLeft;

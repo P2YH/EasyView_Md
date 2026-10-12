@@ -123,7 +123,10 @@ export class WorkspaceExplorerView {
     // Capture so Enter on a focused name <button> renames instead of activating click.
     this.container.addEventListener('keydown', this.handleKeyDown, true);
     this.container.addEventListener('dragover', this.handleContainerDragOver);
+    this.container.addEventListener('dragleave', this.handleContainerDragLeave);
     this.container.addEventListener('drop', this.handleContainerDrop);
+    // The webview host steals OS file drags on any dragenter that is not default-prevented.
+    document.addEventListener('dragenter', this.handleDocumentDragEnter);
     window.addEventListener('pointerdown', this.handleWindowPointerDown, true);
     this.render();
   }
@@ -131,7 +134,9 @@ export class WorkspaceExplorerView {
   dispose(): void {
     this.container.removeEventListener('keydown', this.handleKeyDown, true);
     this.container.removeEventListener('dragover', this.handleContainerDragOver);
+    this.container.removeEventListener('dragleave', this.handleContainerDragLeave);
     this.container.removeEventListener('drop', this.handleContainerDrop);
+    document.removeEventListener('dragenter', this.handleDocumentDragEnter);
     window.removeEventListener('pointerdown', this.handleWindowPointerDown, true);
     this.closeContextMenu();
     this.closeSortMenu();
@@ -154,6 +159,10 @@ export class WorkspaceExplorerView {
         break;
       case 'fsChanged':
         void this.onFsChanged(event.relativePaths);
+        break;
+      case 'entriesDeleted':
+        this.forgetEntries(event.relativePaths);
+        this.render();
         break;
       case 'reveal':
         void this.onReveal(event.relativePath);
@@ -364,7 +373,7 @@ export class WorkspaceExplorerView {
   }
 
   private primarySelectedDirectory(): string | null {
-    if (!this.primarySelected) return '';
+    if (!this.primarySelected) return null;
     const entry = this.findEntry(this.primarySelected);
     if (!entry) return parentRelativePath(this.primarySelected);
     return entry.kind === 'directory' ? entry.relativePath : parentRelativePath(entry.relativePath);
@@ -399,6 +408,10 @@ export class WorkspaceExplorerView {
       if (relativePath === '') {
         this.rootLoadError = result.message;
         this.render();
+      } else if (result.missing) {
+        this.forgetEntries([relativePath]);
+        this.render();
+        return;
       }
       this.showError(result.message);
       return;
@@ -457,6 +470,17 @@ export class WorkspaceExplorerView {
       tile.setAttribute('aria-selected', String(selected));
     });
     this.container.focus({ preventScroll: true });
+  }
+
+  private clearSelection(): void {
+    this.selectionFollowsActive = false;
+    this.container.focus({ preventScroll: true });
+    if (this.selected.size === 0 && this.primarySelected === null) return;
+    this.selected.clear();
+    this.anchor = null;
+    this.primarySelected = null;
+    this.post({ type: 'setSelection', relativePaths: [], anchorRelativePath: null });
+    this.render();
   }
 
   private visibleRelativePaths(): string[] {
@@ -544,6 +568,15 @@ export class WorkspaceExplorerView {
       tree.setAttribute('role', 'tree');
       tree.appendChild(this.renderDirectory('', 0));
     }
+    const dropHint = document.createElement('div');
+    dropHint.className = 'workspace-drop-hint';
+    dropHint.textContent = `Hold Shift to drop files from ${IS_MAC ? 'Finder' : 'File Explorer'}`;
+    tree.appendChild(dropHint);
+    tree.addEventListener('click', (event) => {
+      if (event.target instanceof Element
+        && event.target.closest('.workspace-entry, .workspace-icon-tile, .workspace-create-row, .workspace-icon-navigation')) return;
+      this.clearSelection();
+    });
     this.container.appendChild(tree);
     tree.scrollTop = previousScrollTop;
     tree.scrollLeft = previousScrollLeft;
@@ -1249,6 +1282,39 @@ export class WorkspaceExplorerView {
     await this.loadDirectory(parentRelativePath(relativePath));
   }
 
+  /** Drop removed entries and everything beneath them from local tree state. */
+  private forgetEntries(relativePaths: readonly string[]): void {
+    const removed = relativePaths.filter(Boolean);
+    if (removed.length === 0) return;
+    const covers = (value: string | null) => value !== null
+      && removed.some((path) => value === path || value.startsWith(`${path}/`));
+    for (const value of [...this.expanded]) {
+      if (!covers(value)) continue;
+      this.expanded.delete(value);
+      this.post({ type: 'setExpanded', relativePath: value, expanded: false });
+    }
+    for (const value of [...this.entriesByDirectory.keys()]) {
+      if (covers(value)) this.entriesByDirectory.delete(value);
+    }
+    let selectionChanged = false;
+    for (const value of [...this.selected]) {
+      if (covers(value)) {
+        this.selected.delete(value);
+        selectionChanged = true;
+      }
+    }
+    if (covers(this.primarySelected)) this.primarySelected = null;
+    if (covers(this.anchor)) this.anchor = null;
+    if (this.displayMode === 'icons' && covers(this.iconDirectory)) {
+      const top = removed.find((path) => this.iconDirectory === path || this.iconDirectory.startsWith(`${path}/`))!;
+      this.iconDirectory = parentRelativePath(top);
+      this.saveDisplayState();
+    }
+    if (selectionChanged) {
+      this.post({ type: 'setSelection', relativePaths: [...this.selected], anchorRelativePath: this.anchor });
+    }
+  }
+
   private async deleteEntries(relativePaths: string[]): Promise<void> {
     const unique = [...new Set(relativePaths.filter(Boolean))];
     if (unique.length === 0) return;
@@ -1261,12 +1327,7 @@ export class WorkspaceExplorerView {
       this.showError(result.message);
       return;
     }
-    for (const relativePath of unique) {
-      this.selected.delete(relativePath);
-      if (this.primarySelected === relativePath) this.primarySelected = null;
-      if (this.anchor === relativePath) this.anchor = null;
-      this.expanded.delete(relativePath);
-    }
+    this.forgetEntries(unique);
     const parents = [...new Set(unique.map(parentRelativePath))];
     await Promise.all(parents.map((parent) => this.loadDirectory(parent)));
   }
@@ -1563,6 +1624,7 @@ export class WorkspaceExplorerView {
   }
 
   private renderDropVisuals(row: HTMLElement, mode: 'before' | 'into'): void {
+    this.setRootDropHighlight(false);
     this.container.querySelectorAll('.workspace-entry.is-drop-into').forEach((node) => {
       node.classList.remove('is-drop-into');
     });
@@ -1593,6 +1655,7 @@ export class WorkspaceExplorerView {
 
   private clearDropVisuals(): void {
     this.dropIntent = null;
+    this.setRootDropHighlight(false);
     this.container.querySelectorAll('.workspace-entry.is-drop-into, .workspace-entry.is-drop-target').forEach((node) => {
       node.classList.remove('is-drop-into', 'is-drop-target');
     });
@@ -1615,10 +1678,26 @@ export class WorkspaceExplorerView {
     return true;
   }
 
+  private readonly handleDocumentDragEnter = (event: DragEvent): void => {
+    if (!this.hasRoot() || !isExternalWorkspaceFileDrag(event.dataTransfer, this.dragRelativePath !== null)) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+  };
+
   private readonly handleContainerDragOver = (event: DragEvent): void => {
     if (!this.hasRoot() || !isExternalWorkspaceFileDrag(event.dataTransfer, this.dragRelativePath !== null)) return;
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+    if (this.displayMode === 'list') {
+      this.clearDropVisuals();
+      this.setRootDropHighlight(true);
+    }
+  };
+
+  private readonly handleContainerDragLeave = (event: DragEvent): void => {
+    const related = event.relatedTarget;
+    if (related instanceof Node && this.container.contains(related)) return;
+    this.clearDropVisuals();
   };
 
   private readonly handleContainerDrop = (event: DragEvent): void => {
@@ -1626,8 +1705,12 @@ export class WorkspaceExplorerView {
     if (!isExternalWorkspaceFileDrag(event.dataTransfer, this.dragRelativePath !== null)) return;
     event.preventDefault();
     this.clearDropVisuals();
-    void this.importExternalDrop(event.dataTransfer, '');
+    void this.importExternalDrop(event.dataTransfer, this.displayMode === 'icons' ? this.iconDirectory : '');
   };
+
+  private setRootDropHighlight(active: boolean): void {
+    this.container.querySelector('.workspace-tree')?.classList.toggle('is-drop-root', active);
+  }
 
   private async importExternalDrop(dataTransfer: DataTransfer, targetParentRelativePath: string): Promise<void> {
     const sources = await collectWorkspaceExternalDropSources(dataTransfer);

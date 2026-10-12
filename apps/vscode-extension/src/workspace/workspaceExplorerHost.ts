@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { resolveMarkdownDiskUri } from '../application/document/openMarkdownEditor';
 import { resolvePreviewRoute } from '@easyview/contracts/preview';
 import { isPhase1PreviewRoute } from '@easyview/preview-ui/phase1';
 import {
@@ -301,10 +302,20 @@ class WorkspaceExplorerViewProvider implements vscode.WebviewViewProvider, vscod
       await this.treeService.delete(root, relativePath);
     }
     this.treeService.invalidate(root, paths);
+    this.forgetExpanded(paths);
+    this.postEvent({ type: 'entriesDeleted', relativePaths: paths });
     this.postEvent({
       type: 'fsChanged',
       relativePaths: [...new Set(paths.map(parentRelativePathOf))],
     });
+  }
+
+  private forgetExpanded(relativePaths: readonly string[]): void {
+    for (const expanded of [...this.expandedRelativePaths]) {
+      if (relativePaths.some((removed) => expanded === removed || expanded.startsWith(`${removed}/`))) {
+        this.expandedRelativePaths.delete(expanded);
+      }
+    }
   }
 
   handleWorkspaceFoldersChanged(): void {
@@ -686,6 +697,7 @@ class WorkspaceExplorerViewProvider implements vscode.WebviewViewProvider, vscod
         ok: false,
         relativePath,
         message: errorMessage(error),
+        missing: isMissingEntryError(error),
       });
     }
   }
@@ -790,6 +802,8 @@ class WorkspaceExplorerViewProvider implements vscode.WebviewViewProvider, vscod
       for (const relativePath of message.relativePaths) {
         await this.treeService.delete(root, relativePath);
       }
+      this.forgetExpanded(message.relativePaths);
+      this.postEvent({ type: 'entriesDeleted', relativePaths: message.relativePaths });
       this.postEvent({ type: 'opResult', requestId: message.requestId, ok: true });
     } catch (error) {
       this.postEvent({
@@ -1047,6 +1061,12 @@ function scheduleFocusWorkspacePanelOnStartup(): NodeJS.Timeout | undefined {
   if (!enabled) return undefined;
 
   return setTimeout(() => {
+    if (!vscode.workspace.workspaceFolders?.length) {
+      if (vscode.window.tabGroups.all.every((group) => group.tabs.length === 0)) {
+        void vscode.commands.executeCommand('workbench.action.closeSidebar');
+      }
+      return;
+    }
     void vscode.commands.executeCommand(VIEW_CONTAINER_COMMAND);
   }, FOCUS_ON_STARTUP_DELAY_MS);
 }
@@ -1061,16 +1081,21 @@ function resolveActiveResourceUri(): vscode.Uri | undefined {
     && typeof (candidate as { scheme?: unknown }).scheme === 'string'
     && 'toString' in candidate
   ) {
-    return candidate as vscode.Uri;
+    return resolveMarkdownDiskUri(candidate as vscode.Uri);
   }
 
   const activeDocument = vscode.window.activeTextEditor?.document;
-  if (activeDocument && activeDocument.uri.scheme !== 'untitled') return activeDocument.uri;
+  if (activeDocument && activeDocument.uri.scheme !== 'untitled') return resolveMarkdownDiskUri(activeDocument.uri);
   return undefined;
 }
 
 function parentRelativePathOf(relativePath: string): string {
   return relativePath.includes('/') ? relativePath.slice(0, relativePath.lastIndexOf('/')) : '';
+}
+
+function isMissingEntryError(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code;
+  return code === 'ENOENT' || code === 'FileNotFound' || /\bENOENT\b|EntryNotFound/.test(errorMessage(error));
 }
 
 function errorMessage(error: unknown): string {

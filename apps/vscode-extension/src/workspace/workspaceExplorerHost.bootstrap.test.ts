@@ -3,12 +3,14 @@ import { describe, expect, it, vi } from 'vitest';
 const mock = vi.hoisted(() => ({
   provider: null as null | { resolveWebviewView(view: unknown, context: unknown, token: unknown): void },
   errors: [] as string[],
+  focusOnStartup: false,
 }));
 
 vi.mock('vscode', () => {
-  const uri = (value: string) => ({
-    scheme: 'file', path: value, fsPath: value, authority: '',
-    toString: () => `file://${value}`,
+  const uri = (value: string, scheme = 'file'): object => ({
+    scheme, path: value, fsPath: value, authority: '',
+    toString: () => `${scheme}://${value}`,
+    with: (change: { scheme: string }) => uri(value, change.scheme),
   });
   const disposable = () => ({ dispose() {} });
   return {
@@ -17,13 +19,13 @@ vi.mock('vscode', () => {
     Disposable: { from: () => disposable() },
     workspace: {
       workspaceFolders: [{ name: 'Workspace', uri: uri('/workspace') }],
-      getConfiguration: () => ({ get: () => false }),
+      getConfiguration: () => ({ get: () => mock.focusOnStartup }),
       onDidChangeWorkspaceFolders: disposable,
       createFileSystemWatcher: () => ({ ...disposable(), onDidCreate: disposable, onDidChange: disposable, onDidDelete: disposable }),
       fs: { readFile: async () => { throw new Error('No saved sort config'); } },
     },
     window: {
-      tabGroups: { activeTabGroup: { activeTab: undefined }, onDidChangeTabs: disposable, onDidChangeTabGroups: disposable },
+      tabGroups: { all: [{ tabs: [] }], activeTabGroup: { activeTab: undefined }, onDidChangeTabs: disposable, onDidChangeTabGroups: disposable },
       activeTextEditor: undefined,
       registerWebviewViewProvider: (_id: string, provider: typeof mock.provider) => { mock.provider = provider; return disposable(); },
       onDidChangeActiveTextEditor: disposable,
@@ -38,6 +40,64 @@ import * as vscode from 'vscode';
 import { registerWorkspaceExplorer } from './workspaceExplorerHost';
 
 describe('workspace explorer startup', () => {
+  it.each([
+    { name: 'hides the sidebar in an empty welcome window', folder: false, tab: false, enabled: true, command: 'workbench.action.closeSidebar' },
+    { name: 'shows Files when a workspace is open', folder: true, tab: false, enabled: true, command: 'workbench.view.extension.easyviewMd-workspacePanel' },
+    { name: 'keeps the sidebar state for a standalone file', folder: false, tab: true, enabled: true, command: undefined },
+    { name: 'respects disabled startup sidebar management', folder: false, tab: false, enabled: false, command: undefined },
+  ])('$name', async ({ folder, tab, enabled, command }) => {
+    vi.useFakeTimers();
+    const folders = vscode.workspace.workspaceFolders;
+    const groups = vscode.window.tabGroups.all;
+    let subscription: vscode.Disposable | undefined;
+    try {
+      mock.focusOnStartup = enabled;
+      Object.assign(vscode.workspace, { workspaceFolders: folder ? folders : undefined });
+      Object.assign(vscode.window.tabGroups, { all: [{ tabs: tab ? [{ input: { uri: { scheme: 'file' } } }] : [] }] });
+      subscription = registerWorkspaceExplorer({ extensionUri: { path: '/extension' } } as never);
+      const execute = vi.mocked(vscode.commands.executeCommand);
+      execute.mockClear();
+      await vi.advanceTimersByTimeAsync(250);
+      const sidebarCommands = execute.mock.calls.filter(([id]) => id === 'workbench.action.closeSidebar' || id === 'workbench.view.extension.easyviewMd-workspacePanel');
+      expect(sidebarCommands).toEqual(command ? [[command]] : []);
+    } finally {
+      subscription?.dispose();
+      mock.focusOnStartup = false;
+      Object.assign(vscode.workspace, { workspaceFolders: folders });
+      Object.assign(vscode.window.tabGroups, { all: groups });
+      vi.useRealTimers();
+    }
+  });
+
+  it('reveals restored EasyView tabs using their disk URI and follows subsequent tab switches', async () => {
+    const first = vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, '功能设计', '设计.md').with({ scheme: 'easyviewMd' });
+    const second = vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, '笔记', '笔记本.md').with({ scheme: 'easyviewMd' });
+    const tabGroup = vscode.window.tabGroups.activeTabGroup as unknown as { activeTab: unknown };
+    tabGroup.activeTab = { input: { uri: first } } as never;
+    const subscription = registerWorkspaceExplorer({ extensionUri: { path: '/extension' } } as never);
+    const events: Array<{ type: string; relativePath?: string; revealRelativePath?: string }> = [];
+    const provider = mock.provider as unknown as {
+      resolveWebviewView(view: unknown, context: unknown, token: unknown): void;
+      dispatchRequest(message: unknown): Promise<void>;
+      revealActive(force: boolean): void;
+    };
+    try {
+      provider.resolveWebviewView({
+        visible: true,
+        webview: { options: {}, asWebviewUri: (uri: unknown) => uri, onDidReceiveMessage: () => ({ dispose() {} }), postMessage: async (event: typeof events[number]) => { events.push(event); return true; }, html: '' },
+        onDidDispose: () => ({ dispose() {} }),
+      }, {}, {});
+      await provider.dispatchRequest({ type: 'ready' });
+      await vi.waitFor(() => expect(events).toContainEqual(expect.objectContaining({ type: 'bootstrap', revealRelativePath: '功能设计/设计.md' })));
+      tabGroup.activeTab = { input: { uri: second } } as never;
+      provider.revealActive(false);
+      expect(events).toContainEqual({ type: 'reveal', relativePath: '笔记/笔记本.md' });
+    } finally {
+      tabGroup.activeTab = undefined;
+      subscription.dispose();
+    }
+  });
+
   it('routes PDF and Word tree actions to the existing converter commands for the clicked file', async () => {
     const subscription = registerWorkspaceExplorer({ extensionUri: { path: '/extension' } } as never);
     const provider = mock.provider as unknown as { dispatchRequest(message: unknown): Promise<void> };

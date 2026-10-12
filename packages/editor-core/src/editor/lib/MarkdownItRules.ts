@@ -22,6 +22,8 @@ const DIM_KV = /(?:width|height)\s*=\s*"?([^"\s}]+)"?/gi;
 const VIDEO_EXTS = /\.(mp4|m4v|mov|webm|ogv)(\?[^)]*)?$/i;
 const AUDIO_EXTS = /\.(mp3|oga|ogg|spx|wav|flac|aac|m4a)(\?[^)]*)?$/i;
 const KNOWN_INLINE_TAGS = new Set(['kbd', 'sub', 'sup', 'abbr', 'var', 'samp', 'small', 'ruby', 'rt', 'rp']);
+/** Matches the serializer's `text_color` output; only a plain color value is accepted. */
+const TEXT_COLOR_SPAN_OPEN = /^<span\s+style\s*=\s*"\s*color\s*:\s*(#[0-9a-f]{3,8}|[a-z]+|rgba?\([\d\s.,%]+\))\s*;?\s*"\s*>$/i;
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
@@ -53,16 +55,21 @@ export function applyCustomRules(md: MarkdownIt): void {
     const end = state.src.indexOf('==', start + 2);
     if (end === -1 || end >= max) return false;
 
-    // Always advance state.pos — skipToken requires it even in silent mode
-    state.pos = end + 2;
-    if (silent) return true;
+    if (silent) {
+      // Always advance state.pos — skipToken requires it even in silent mode
+      state.pos = end + 2;
+      return true;
+    }
 
     const token = state.push('highlight_open', 'mark', 1);
     token.markup = '==';
 
-    const content = state.src.slice(start + 2, end);
-    const textToken = state.push('text', '', 0);
-    textToken.content = content;
+    // Tokenize the inner range so nested marks (e.g. text color spans) survive.
+    state.pos = start + 2;
+    state.posMax = end;
+    state.md.inline.tokenize(state);
+    state.posMax = max;
+    state.pos = end + 2;
 
     const closeToken = state.push('highlight_close', 'mark', -1);
     closeToken.markup = '==';
@@ -620,8 +627,26 @@ export function applyCustomRules(md: MarkdownIt): void {
       if (!children) continue;
 
       const newChildren: any[] = [];
+      const spanStack: Array<'color' | 'other'> = [];
       for (const child of children) {
         if (child.type === 'html_inline') {
+          const html = child.content.trim();
+          const colorMatch = html.match(TEXT_COLOR_SPAN_OPEN);
+          if (colorMatch) {
+            const t = new state.Token('text_color_open', 'span', 1);
+            t.attrSet('color', colorMatch[1].trim());
+            t.markup = child.content;
+            newChildren.push(t);
+            spanStack.push('color');
+            continue;
+          }
+          if (/^<span\b[^>]*>$/i.test(html)) spanStack.push('other');
+          if (/^<\/span\s*>$/i.test(html) && spanStack.pop() === 'color') {
+            const t = new state.Token('text_color_close', 'span', -1);
+            t.markup = child.content;
+            newChildren.push(t);
+            continue;
+          }
           if (/^<br\s*\/?>$/i.test(child.content.trim())) {
             const t = new state.Token('hardbreak', 'br', 0);
             t.markup = child.content;

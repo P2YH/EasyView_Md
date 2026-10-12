@@ -2,7 +2,7 @@
   "name": "easyview-md",
   "displayName": "EasyView_Md",
   "description": "A visual Markdown editor for VS Code with rich editing, document conversion, and export tools.",
-  "version": "2.0.162",
+  "version": "2.0.175",
   "publisher": "zhangxy",
   "license": "MIT",
   "private": true,
@@ -595,7 +595,7 @@
         "easyviewMd.workspace.focusFilesOnStartup": {
           "type": "boolean",
           "default": true,
-          "description": "After window startup or reload, focus the EasyView_Md Files sidebar instead of the default Explorer. Disable to keep the host editor's sidebar restore behavior."
+          "description": "After window startup or reload, show the EasyView_Md Files sidebar for an open workspace and hide the sidebar in an empty welcome window. Disable to keep the host editor's sidebar restore behavior."
         }
       }
     },

@@ -9,6 +9,7 @@ import {
   flattenPngWithWhiteBackground,
   markdownImageReferences,
   pdfTextToMarkdown,
+  removePandocListSeparators,
   rewriteExtractedMediaPaths,
 } from '../src/conversion/document-conversion';
 import { PNG } from "pngjs";
@@ -41,6 +42,12 @@ describe("document conversion helpers", () => {
     expect(pdfTextToMarkdown("标题\r\n\r\n\r\n正文\f下一页")).toBe("标题\n\n正文\n\n---\n\n下一页");
     expect(markdownImageReferences("doc.assets", ["/tmp/image-10.png", "/tmp/image-2.png"]))
       .toBe("![](./doc.assets/image-2.png)\n\n![](./doc.assets/image-10.png)");
+  });
+
+  it("removes Pandoc list separator comments but keeps real HTML comments", () => {
+    expect(removePandocListSeparators("- a\n\n<!-- -->\n\n- b\n")).toBe("- a\n\n- b\n");
+    expect(removePandocListSeparators("<!-- -->\n\n- b\n")).toBe("- b\n");
+    expect(removePandocListSeparators("<!-- note -->\n")).toBe("<!-- note -->\n");
   });
 
   it("requires an explicit overwrite flag when the output already exists", async () => {
@@ -114,6 +121,31 @@ describe("native document conversion", () => {
       expect(result.outputPath).toBe(path.join(root, "report.md"));
       expect(await readFile(result.outputPath, "utf8")).toContain("Native Word conversion");
       expect(result.markdown).not.toContain("file://");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("inlines Word comments and accepts tracked changes", async () => {
+    if (!(await hasCommand("pandoc"))) return;
+    const root = await temporaryDirectory();
+    try {
+      const sourceMarkdown = path.join(root, "review-input.md");
+      const sourceDocx = path.join(root, "review.docx");
+      await writeFile(sourceMarkdown, [
+        '[增加创建按钮]{.comment-start id="0" author="张三" date="2026-10-10T10:25:00Z"}数据采集功能[]{.comment-end id="0"}',
+        "",
+        "保留[新增]{.insertion author=\"李四\"}文字[删除]{.deletion author=\"李四\"}",
+        "",
+      ].join("\n"));
+      await execFileNative("pandoc", [sourceMarkdown, "--from=markdown", "--to=docx", `--output=${sourceDocx}`]);
+      const result = await convertWordToMarkdown({ sourcePath: sourceDocx, overwrite: false });
+      expect(result.markdown).toContain(
+        '数据采集功能==<span style="color: #ea580c">【批注 张三 2026-10-10 10:25：增加创建按钮】</span>==',
+      );
+      expect(result.markdown).toContain("保留新增文字");
+      expect(result.markdown).not.toContain("删除");
+      expect(result.markdown).not.toMatch(/comment-(start|end)|insertion|deletion/);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

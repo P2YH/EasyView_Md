@@ -11,5 +11,6 @@ esbuild.mjs
 coverage/**
 .DS_Store
 .vscode-test.mjs
+playwright*.config.ts
 
 dist/metafile/**

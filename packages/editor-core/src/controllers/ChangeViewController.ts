@@ -1,4 +1,4 @@
-import { RangeSetBuilder, StateEffect, StateField, type EditorState, type Extension, type Range, type RangeSet } from '@codemirror/state';
+import { RangeSetBuilder, StateEffect, StateField, EditorState, type Extension, type Range, type RangeSet } from '@codemirror/state';
 import { Decoration, EditorView, GutterMarker, gutter, type DecorationSet, WidgetType } from '@codemirror/view';
 import {
   applyHunkToContent,
@@ -16,7 +16,14 @@ export interface ChangeViewVisibleAnchor {
   offsetFromTop: number;
 }
 
+export interface PreparedHistoryDiff {
+  hunks: GitDiffHunk[];
+  inline: ReturnType<typeof computeHunkInlineHighlights>[];
+}
+
 export interface ChangeViewControllerDeps {
+  readOnly?: boolean;
+  preparedDiff?: PreparedHistoryDiff;
   scrollArea: HTMLElement;
   editorElement: HTMLElement;
   currentContent: () => string;
@@ -182,17 +189,17 @@ function findHeadingLine(content: string, level: number, text: string): number {
   return -1;
 }
 
-function decorations(state: EditorState, base: string): { marks: DecorationSet; gutters: RangeSet<GutterMarker> } {
+function decorations(state: EditorState, base: string, prepared?: PreparedHistoryDiff): { marks: DecorationSet; gutters: RangeSet<GutterMarker> } {
   const changes: Range<Decoration>[] = [];
   const gutters = new RangeSetBuilder<GutterMarker>();
   let fencedCodeMarker: '`' | '~' | null = null;
   // Block widgets show deleted source immediately above the corresponding editable line.
-  for (const hunk of computeGitDiff(base, state.doc.toString()).hunks) {
+  for (const [hunkIndex, hunk] of (prepared?.hunks ?? computeGitDiff(base, state.doc.toString()).hunks).entries()) {
     const identity: HunkIdentity = { oldStart: hunk.oldStart, newStart: hunk.newStart, kind: hunk.kind };
     const at = state.doc.line(Math.max(1, Math.min(state.doc.lines, hunk.newStart))).from;
-    const inline = hunk.oldLines.length && hunk.newLines.length
+    const inline = prepared?.inline[hunkIndex] ?? (hunk.oldLines.length && hunk.newLines.length
       ? computeHunkInlineHighlights(hunk.oldLines, hunk.newLines)
-      : { old: hunk.oldLines.map((): InlineRange[] => []), new: hunk.newLines.map((): InlineRange[] => []) };
+      : { old: hunk.oldLines.map((): InlineRange[] => []), new: hunk.newLines.map((): InlineRange[] => []) });
     if (hunk.oldLines.length) {
       changes.push(Decoration.widget({ widget: new RemovedLines(hunk.oldLines, identity, inline.old), block: true, side: -1 }).range(at));
     }
@@ -257,12 +264,12 @@ function decorations(state: EditorState, base: string): { marks: DecorationSet; 
   return { marks: Decoration.set(changes, true), gutters: gutters.finish() };
 }
 
-function changeViewExtensions(initialBase: string): Extension {
+function changeViewExtensions(initialBase: string, prepared?: PreparedHistoryDiff): Extension {
   const field = StateField.define<{ base: string; marks: DecorationSet; gutters: RangeSet<GutterMarker> }>({
-    create(state) { return { base: initialBase, ...decorations(state, initialBase) }; },
+    create(state) { return { base: initialBase, ...decorations(state, initialBase, prepared) }; },
     update(value, tr) {
       const base = tr.effects.find((effect) => effect.is(setBase))?.value ?? value.base;
-      return tr.docChanged || base !== value.base ? { base, ...decorations(tr.state, base) } : value;
+      return tr.docChanged || base !== value.base ? { base, ...decorations(tr.state, base, prepared) } : value;
     },
     provide: (stateField) => [
       EditorView.decorations.from(stateField, (value) => value.marks),
@@ -395,10 +402,11 @@ export class ChangeViewController {
     this.sourceEditor = createSourceEditor({
       parent: container,
       visualMode: 'changeViewMarkdown',
-      extraExtensions: [changeViewExtensions(this.deps.getBaseContent())],
+      extraExtensions: [changeViewExtensions(this.deps.getBaseContent(), this.deps.preparedDiff), ...(this.deps.readOnly ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : [])],
       enableWordWrapToggle: true,
       lineWrapping: false,
       onChange: (content) => {
+        if (this.deps.readOnly) return;
         this.deps.setContent(content);
         this.deps.postEdit(content);
         this.renderOverview();
@@ -468,6 +476,7 @@ export class ChangeViewController {
   private revertHunk(identity: Pick<GitDiffHunk, 'oldStart' | 'newStart' | 'kind'>): void {
     const hunk = this.resolveHunk(identity);
     if (!hunk || !this.sourceEditor) return;
+    if (this.deps.readOnly) return;
     const next = revertHunkInContent(this.sourceEditor.getContent(), hunk);
     this.sourceEditor.setContent(next, { addToHistory: true });
     this.deps.setContent(next);
@@ -480,6 +489,7 @@ export class ChangeViewController {
   private stageHunk(identity: Pick<GitDiffHunk, 'oldStart' | 'newStart' | 'kind'>): void {
     const hunk = this.resolveHunk(identity);
     if (!hunk) return;
+    if (this.deps.readOnly) return;
     this.deps.stageHunk(applyHunkToContent(this.deps.getBaseContent(), hunk));
   }
 
@@ -500,7 +510,7 @@ export class ChangeViewController {
     this.deps.editorElement.style.display = this.previousEditorDisplay;
     if (this.sourceContainer) this.sourceContainer.style.display = this.previousSourceDisplay;
     this.sourceContainer = null;
-    this.deps.setContent(content);
+    if (!this.deps.readOnly) this.deps.setContent(content);
     this.deps.revealSourceAnchor(anchor);
     this.deps.onStateChange(false);
     requestAnimationFrame(() => this.deps.revealSourceAnchor(anchor));
@@ -674,6 +684,7 @@ export class ChangeViewController {
   }
 
   private syncHunkActions(): void {
+    if (this.deps.readOnly) return;
     const hunk = this.activeHunk ? this.resolveHunk(this.activeHunk) : undefined;
     if (!hunk || !this.container) {
       this.hunkActions?.remove();
@@ -807,7 +818,7 @@ export class ChangeViewController {
     const content = this.sourceEditor.getContent();
     const totalLines = Math.max(1, content.split('\n').length);
     this.overview.replaceChildren();
-    for (const hunk of computeGitDiff(this.deps.getBaseContent(), content).hunks) {
+    for (const hunk of (this.deps.preparedDiff?.hunks ?? computeGitDiff(this.deps.getBaseContent(), content).hunks)) {
       const startLine = Math.max(1, hunk.newStart);
       const lineCount = Math.max(1, hunk.kind === 'removed' ? 1 : hunk.newLines.length);
       const top = Math.min(99, ((startLine - 1) / totalLines) * 100);

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 
 const LAST_ACTIVATED_VERSION_KEY = 'easyviewMd.lastActivatedVersion';
 const VIEW_RELEASE_NOTES_ACTION = 'View Release Notes';
-const RELEASE_NOTES_URL = 'https://github.com/tiantianmanmanzou/EasyView_Md/blob/main/readme.md';
+const RELEASE_NOTES_URL = 'https://github.com/tiantianmanmanzou/EasyView_Md/blob/main/README.md';
 
 /** Record the installed version and notify only when a previously installed version changed. */
 export async function notifyExtensionUpdated(

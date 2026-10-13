@@ -2,7 +2,7 @@
   "name": "easyview-md",
   "displayName": "EasyView_Md",
   "description": "A visual Markdown editor for VS Code with rich editing, document conversion, and export tools.",
-  "version": "2.0.175",
+  "version": "2.0.179",
   "publisher": "zhangxy",
   "license": "MIT",
   "private": true,
@@ -38,6 +38,7 @@
     "package": "node scripts/package-vsix.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run src",
+    "test:e2e:timeline": "npm run build && playwright test -c playwright.timeline.config.ts",
     "verify:package": "node scripts/verify-package.mjs"
   },
   "activationEvents": [
@@ -642,6 +643,7 @@
     "jszip": "^3.10.1"
   },
   "dependencies": {
-    "@easyview/editor-sync": "*"
+    "@easyview/editor-sync": "*",
+    "minimatch": "^9.0.9"
   }
 }

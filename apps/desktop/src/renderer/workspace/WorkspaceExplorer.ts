@@ -21,6 +21,8 @@ import {
 } from '@easyview/contracts';
 
 interface WorkspaceExplorerOptions {
+  footer?: HTMLElement;
+  onSelectionChanged?(filePath: string | null, visible: boolean): void;
   api: EasyViewDesktopApi;
   container: HTMLElement;
   onStateChange(state: DesktopWorkspaceState): void;
@@ -153,6 +155,7 @@ export class WorkspaceExplorer {
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
+    if (event.target instanceof Element && event.target.closest('.easyview-timeline')) return;
     const action = resolveWorkspaceTreeKeyAction(event, {
       targetIsEditable: event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement,
       hasSelection: this.selectedRelativePaths.size > 0,
@@ -251,6 +254,18 @@ export class WorkspaceExplorer {
   }
 
   private render(): void {
+    const previousTree = this.options.container.querySelector<HTMLElement>('.workspace-tree');
+    const scrollTop = previousTree?.scrollTop ?? 0, scrollLeft = previousTree?.scrollLeft ?? 0;
+    this.renderTree();
+    if (this.options.footer) this.options.container.append(this.options.footer);
+    const tree = this.options.container.querySelector<HTMLElement>('.workspace-tree');
+    if (tree) { tree.scrollTop = scrollTop; tree.scrollLeft = scrollLeft; }
+    const relative = this.selectedRelativePath;
+    const entry = this.entriesByDirectory.get(relative ? parentRelativePath(relative) : '')?.find((entry) => entry.relativePath === relative);
+    this.options.onSelectionChanged?.(this.state?.rootPath && relative && entry?.kind !== 'directory' ? `${this.state.rootPath}/${relative}` : null, this.state?.explorerVisible ?? false);
+  }
+
+  private renderTree(): void {
     const { container } = this.options;
     const state = this.state;
     const previousTree = container.querySelector<HTMLElement>('.workspace-tree');

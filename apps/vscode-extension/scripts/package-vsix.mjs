@@ -8,7 +8,7 @@ const execFileAsync = promisify(execFile);
 const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repositoryRoot = path.resolve(appDir, '../..');
 const temporaryFiles = [
-  [path.join(repositoryRoot, 'readme.md'), path.join(appDir, 'README.md')],
+  [path.join(repositoryRoot, 'README.md'), path.join(appDir, 'README.md')],
   [path.join(repositoryRoot, 'LICENSE.txt'), path.join(appDir, 'LICENSE.txt')],
 ];
 

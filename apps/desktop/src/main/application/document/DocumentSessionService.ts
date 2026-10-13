@@ -1,10 +1,11 @@
 import path from 'node:path';
+import type { LocalHistoryStore } from '@easyview/node-runtime';
 import {
   operationFailure,
   operationSuccess,
   type OperationResult,
 } from '@easyview/contracts';
-import { applyTextPatches, hashContent, validatePatches, type TextOffsetPatch } from '@easyview/editor-sync';
+import { applyTextPatches, createCanonicalDocument, hashContent, minimalTextPatch, validatePatches, type TextOffsetPatch } from '@easyview/editor-sync';
 import type { SaveDocumentResult } from '../../../contracts';
 import type { DocumentFileSystem } from './documentFileSystem';
 import type { DocumentGitContext, DocumentGitPort } from './documentGit';
@@ -41,7 +42,7 @@ export interface ApplyEditsSuccess {
 }
 
 export type DocumentSaveOutcome =
-  | { kind: 'saved'; value: SaveDocumentResult }
+  | { kind: 'saved'; value: SaveDocumentResult; historyWarning?: string }
   | { kind: 'needs-save-as'; session: DocumentSession }
   | { kind: 'error'; error: OperationResult<never> };
 
@@ -50,6 +51,9 @@ export type DocumentSaveOutcome =
  * falls back to an implicit "current" session.
  */
 export class DocumentSessionService {
+  private historyRecorder?: (filePath: string, content: string, label: string) => Promise<void>;
+  setHistoryRecorder(recorder: (filePath: string, content: string, label: string) => Promise<void>): void { this.historyRecorder = recorder; }
+
   private readonly sessions = new Map<string, DocumentSession>();
   private readonly aliases = new Map<string, string>();
   private readonly saveQueues = new Map<string, Promise<unknown>>();
@@ -309,16 +313,56 @@ export class DocumentSessionService {
     session.sync.applySnapshot(session.content, session.sync.snapshot.revision + 1);
     session.externalConflict = null;
     session.dirty = false;
+    void this.historyRecorder?.(session.filePath!, raw, '外部文件变化').catch((error) => console.warn('[Timeline]', error));
   }
 
   save(sessionId: string, content: string, options: { overwrite?: boolean } = {}): Promise<DocumentSaveOutcome> {
+    const restoreGeneration = this.get(sessionId)?.restoreGeneration ?? 0;
     return this.enqueueSession(sessionId, async () => {
       const required = this.require(sessionId);
       if (!required.ok) return { kind: 'error', error: required };
       const session = required.value;
       if (!session.filePath) return { kind: 'needs-save-as', session };
+      if ((session.restoreGeneration ?? 0) !== restoreGeneration) return { kind: 'error', error: operationFailure('CONFLICT', '文件已恢复，旧保存请求已取消') };
       if (options.overwrite) session.externalConflict = null;
       return this.writeBoundPath(session, session.filePath, content, options.overwrite === true);
+    });
+  }
+
+  restoreVersion(sessionId: string, content: string, expectedContent: string, expectedDisk: string, store: LocalHistoryStore): Promise<DocumentSaveOutcome> {
+    return this.enqueueSession(sessionId, async () => {
+      const required = this.require(sessionId);
+      if (!required.ok) return { kind: 'error', error: required };
+      const session = required.value;
+      if (!session.filePath) return { kind: 'error', error: operationFailure('NOT_FOUND', '请先保存文件') };
+      return this.enqueueFile(session.filePath, async () => {
+        const conflict = () => ({ kind: 'error' as const, error: operationFailure('CONFLICT', '文件在确认期间发生变化，恢复已停止') });
+        if (session.content !== expectedContent || await this.fileSystem.readFile(session.filePath!) !== expectedDisk) return conflict();
+        await store.preserve(session.filePath!, expectedDisk, '恢复前磁盘内容');
+        if (session.rawContent !== expectedDisk) await store.preserve(session.filePath!, session.rawContent, '恢复前未保存内容');
+        if (session.content !== expectedContent) return conflict();
+        const result = await this.fileSystem.compareAndWrite(session.filePath!, hashContent(expectedDisk), content);
+        if (result === 'conflict') return conflict();
+        const stats = await this.fileSystem.stat(session.filePath!);
+        // Check after the last filesystem await so edits made during stat
+        // remain owned by the live session too.
+        const changedDuringWrite = session.content !== expectedContent;
+        session.restoreGeneration = (session.restoreGeneration ?? 0) + 1;
+        session.diskContentHash = hashContent(content);
+        session.diskContent = createCanonicalDocument(content).content;
+        session.diskMtimeMs = stats.mtimeMs;
+        if (!changedDuringWrite) this.applyDiskReload(session, content, session.diskMtimeMs);
+        else {
+          const restored = session.documentAdapter.replaceRaw(content);
+          const rebased = session.documentAdapter.apply(minimalTextPatch(restored.canonicalContent, session.content));
+          session.rawContent = rebased.rawContent;
+          session.lineEnding = session.documentAdapter.lineEnding;
+          session.dirty = session.content !== session.diskContent;
+        }
+        let historyWarning: string | undefined;
+        try { await store.preserve(session.filePath!, content, '文件已恢复'); } catch (error) { historyWarning = `文件已恢复，但无法记录恢复后的历史：${error instanceof Error ? error.message : String(error)}`; }
+        return { kind: 'saved', historyWarning, value: { filePath: session.filePath!, fileName: session.fileName, mtimeMs: session.diskMtimeMs! } };
+      });
     });
   }
 
@@ -448,6 +492,7 @@ export class DocumentSessionService {
       session.diskMtimeMs = stats.mtimeMs;
       session.externalConflict = null;
       session.dirty = session.content !== session.diskContent;
+      await this.historyRecorder?.(filePath, raw, '文件已保存').catch((error) => console.warn('[Timeline]', error));
       return {
         kind: 'saved',
         value: { filePath, fileName: session.fileName, mtimeMs: stats.mtimeMs },
@@ -476,7 +521,9 @@ export class DocumentSessionService {
 function enqueue<T>(queues: Map<string, Promise<unknown>>, key: string, operation: () => Promise<T>): Promise<T> {
   const previous = queues.get(key) ?? Promise.resolve();
   const next = previous.then(operation, operation);
-  queues.set(key, next.then(() => undefined, () => undefined));
+  const settled = next.then(() => undefined, () => undefined);
+  queues.set(key, settled);
+  void settled.then(() => { if (queues.get(key) === settled) queues.delete(key); });
   return next;
 }
 

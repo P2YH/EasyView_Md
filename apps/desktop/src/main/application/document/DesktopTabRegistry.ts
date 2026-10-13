@@ -1,3 +1,4 @@
+import type { TimelineComparison } from '@easyview/contracts';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type {
@@ -66,13 +67,13 @@ export class DesktopTabRegistry {
   }
 
   persisted(): PersistedDesktopTab[] {
-    return this.activeGroup().tabs.map(toPersisted);
+    return this.activeGroup().tabs.filter((tab) => tab.kind !== 'history').map(toPersisted);
   }
 
   persistedGroups(): Array<{ id: string; openTabs: PersistedDesktopTab[]; activeTabId: string | null }> {
     return [...this.groups.values()].map((group) => ({
       id: group.id,
-      openTabs: group.tabs.map(toPersisted),
+      openTabs: group.tabs.filter((tab) => tab.kind !== 'history').map(toPersisted),
       activeTabId: group.activeTabId,
     }));
   }
@@ -163,6 +164,16 @@ export class DesktopTabRegistry {
     group.tabs.push(tab);
     group.activeTabId = tab.id;
     this.activeGroupId = group.id;
+    return cloneTab(tab);
+  }
+
+  openHistory(comparison: TimelineComparison): DesktopTab {
+    const id = `history:${this.windowId}:${comparison.entry.filePath}:${comparison.entry.source}:${comparison.entry.id}`;
+    const existing = this.get(id);
+    if (existing) { this.activate(id); return existing; }
+    const group = this.activeGroup();
+    const tab: DesktopTab = { id, kind: 'history', comparisonKey: id, filePath: comparison.entry.filePath, relativePath: comparison.entry.filePath, fileName: `${path.basename(comparison.entry.filePath)} · ${comparison.contentLabel}`, baseLabel: comparison.baseLabel, contentLabel: comparison.contentLabel };
+    group.tabs.push(tab); group.activeTabId = id;
     return cloneTab(tab);
   }
 

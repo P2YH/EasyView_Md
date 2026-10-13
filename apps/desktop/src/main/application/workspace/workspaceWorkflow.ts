@@ -1,3 +1,6 @@
+import { migrateRenamedHistory } from '@easyview/node-runtime';
+import { captureDesktopHistoryPath, desktopHistory } from '../document/desktopHistory';
+import { isTimelineMarkdown } from '@easyview/contracts';
 import { Menu, clipboard, dialog, shell } from 'electron';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -72,6 +75,7 @@ export function startWorkspaceWatcher(rootPath: string): void {
       runInWindowContext(context, () => {
         const affected = workspaceCore.invalidateFromWatcher(relativePaths);
         sendToWindow('workspace.changed', affected);
+        for (const relativePath of relativePaths ?? []) if (isTimelineMarkdown(relativePath)) void captureDesktopHistoryPath(path.join(rootPath, relativePath)).catch((error) => { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') console.warn('[Timeline]', error); });
       });
     },
   });
@@ -185,6 +189,7 @@ export async function renameWorkspaceEntry(request: WorkspaceRenameRequest): Pro
     syncTabState();
     if (tabRegistry.active()?.kind === 'editor') notifyActiveDocument('reload');
     sendToWindow('workspace.changed', [workspaceCore.parentRelativePath(request.relativePath), workspaceCore.parentRelativePath(entry.relativePath)]);
+    await migrateRenamedHistory((await desktopHistory()).local, oldPaths.absolutePath, nextPaths.absolutePath);
     return success(entry);
   } catch (error) {
     return failure('INVALID_ARGUMENT', desktopWorkspaceErrorMessage(error));

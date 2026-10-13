@@ -19,7 +19,7 @@
 
 https://github.com/user-attachments/assets/4b9e8d70-ff5c-41b4-ad85-2509f1e0be82
 
-[English](./readme.md) | [简体中文](./README.zh-CN.md)
+[English](./README.md) | [简体中文](./README.zh-CN.md)
 
 # Sample
 

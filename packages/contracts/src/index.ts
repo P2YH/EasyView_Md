@@ -9,3 +9,4 @@ export * from './results/operation-result';
 export * from './theme/product-theme';
 export * from './validation/runtime-validation';
 export * from './workspace/workspace';
+export * from './timeline/timeline';

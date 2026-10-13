@@ -1,3 +1,6 @@
+import { handleDesktopTimeline, getHistoryComparison, desktopTimelineDiagnostics } from '../../application/timeline/desktopTimeline';
+import { getHistorySettings, setHistorySettings } from '../../application/document/desktopHistory';
+import type { TimelineRequestMessage } from '@easyview/contracts';
 import { clipboard, dialog, ipcMain, nativeTheme, shell } from 'electron';
 import path from 'node:path';
 import { isEditorToHostMessage } from '@easyview/contracts';
@@ -111,6 +114,19 @@ function decodePreviewBytes(bytes: unknown, encoding: unknown): Buffer | null {
 }
 
 export function registerDesktopIpc(): void {
+  registerEvent('timeline.message', (event, message: TimelineRequestMessage) => {
+    if (!trustedRenderer(event)) return;
+    void handleDesktopTimeline(event.sender, message).catch((error) => { if (!event.sender.isDestroyed()) event.sender.send('timeline.message', { type: 'timeline.result', id: message && typeof message === 'object' && 'id' in message ? message.id : '', error: String(error) }); });
+  });
+  registerHandle('timeline.diagnostics', async (event) => { const denied = assertTrustedRenderer(event); if (denied) return denied; return success(await desktopTimelineDiagnostics(event.sender.id)); });
+  registerHandle('timeline.comparison', (event, tabId: string) => {
+    const denied = assertTrustedRenderer(event); if (denied) return denied;
+    if (tabRegistry.get(tabId)?.kind !== 'history') return failure('NOT_FOUND', '历史标签页不存在');
+    const comparison = getHistoryComparison(tabId); return comparison ? success(comparison) : failure('NOT_FOUND', '历史比较不存在');
+  });
+  registerHandle('timeline.settings.get', async (event) => { const denied = assertTrustedRenderer(event); if (denied) return denied; return success(await getHistorySettings()); });
+  registerHandle('timeline.settings.set', async (event, settings: unknown) => { const denied = assertTrustedRenderer(event); if (denied) return denied; await setHistorySettings(settings); return success(true); });
+
   registerHandle('document.open', async (event) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;

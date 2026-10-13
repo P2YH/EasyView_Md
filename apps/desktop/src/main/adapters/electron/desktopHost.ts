@@ -1,3 +1,4 @@
+import { disposeDesktopHistory } from '../../application/document/desktopHistory';
 import { app, BrowserWindow, nativeTheme, protocol } from 'electron';
 import squirrelStartup from 'electron-squirrel-startup';
 import { createAppStateStore } from '../../application/document/appState';
@@ -90,6 +91,8 @@ if (!hasSingleInstanceLock) {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
   });
+
+  app.on('will-quit', disposeDesktopHistory);
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();

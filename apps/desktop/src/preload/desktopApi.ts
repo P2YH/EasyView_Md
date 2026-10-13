@@ -1,3 +1,4 @@
+import type { TimelineComparison, TimelineRequestMessage, TimelineResultMessage, LocalHistorySettings } from '@easyview/contracts';
 import type {
   EditorHostTransport,
   OperationResult,
@@ -21,6 +22,15 @@ export type DesktopDocumentResult = OperationResult<DocumentOpenResult | null>;
 export type DesktopSaveResult = OperationResult<SaveDocumentResult | null>;
 
 export interface EasyViewDesktopApi {
+  timeline: {
+    post(message: TimelineRequestMessage): void;
+    subscribe(listener: (message: TimelineResultMessage) => void): { dispose(): void };
+    diagnostics(): Promise<OperationResult<{ queries: number; watchers: number; snapshots: number; requests: number; queues: number; pending: number }>>;
+    comparison(tabId: string): Promise<OperationResult<TimelineComparison>>;
+    getSettings(): Promise<OperationResult<LocalHistorySettings>>;
+    setSettings(settings: LocalHistorySettings): Promise<OperationResult<boolean>>;
+  };
+
   document: {
     open(): Promise<DesktopDocumentResult>;
     save(content: string, sessionId: string): Promise<DesktopSaveResult>;

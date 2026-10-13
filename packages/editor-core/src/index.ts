@@ -2865,3 +2865,5 @@ function initEditor() {
     },
   };
 }
+export { TimelinePanel } from './timeline/TimelinePanel';
+export { HistoryView } from './timeline/HistoryView';

@@ -34,6 +34,8 @@ const common = {
   logLevel: 'info',
 };
 
+await buildBundle('history-diff-worker', { ...common, entryPoints: [path.join(workspaceDir, 'packages/editor-core/src/timeline/history-diff-worker.ts')], outfile: path.join(distDir, 'history-diff-worker.js'), platform: 'browser', format: 'iife', target: 'chrome114' });
+
 await Promise.all([
   buildBundle('extension', {
     ...common,
@@ -46,7 +48,7 @@ await Promise.all([
   }),
   buildBundle('webview', {
     ...common,
-    entryPoints: { webview: path.join(appDir, 'src/adapters/vscode/vscodeEntry.ts') },
+    entryPoints: { webview: path.join(appDir, 'src/adapters/vscode/vscodeEntry.ts'), 'history-view': path.join(appDir, 'src/timeline/historyViewEntry.ts') },
     outdir: distDir,
     entryNames: '[name]',
     chunkNames: 'editor/chunks/[name]-[hash]',

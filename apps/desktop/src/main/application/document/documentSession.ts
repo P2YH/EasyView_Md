@@ -23,6 +23,7 @@ export interface DocumentSession {
   lineEnding: '\n' | '\r\n';
   diskMtimeMs: number | null;
   dirty: boolean;
+  restoreGeneration?: number;
   watcher?: FSWatcher;
   externalConflict: DocumentExternalConflict | null;
   readonly documentId: string;

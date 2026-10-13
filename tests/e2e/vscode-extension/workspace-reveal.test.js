@@ -20,8 +20,8 @@ suite('EasyView workspace reveal after restore', () => {
       await fs.writeFile(second.fsPath, '# Notes\n');
       // Use real tab events and file APIs, with an isolated sidebar message sink.
       const host = {
-        Uri: vscode.Uri, FileType: vscode.FileType, Disposable: vscode.Disposable, RelativePattern: vscode.RelativePattern,
-        workspace: { fs: vscode.workspace.fs, workspaceFolders: [{ name: 'Fixture', index: 0, uri: vscode.Uri.file(directory) }], onDidChangeWorkspaceFolders: vscode.workspace.onDidChangeWorkspaceFolders, createFileSystemWatcher: vscode.workspace.createFileSystemWatcher, getWorkspaceFolder: vscode.workspace.getWorkspaceFolder, getConfiguration: () => ({ get: () => false }) },
+        Uri: vscode.Uri, FileType: vscode.FileType, Disposable: vscode.Disposable, RelativePattern: vscode.RelativePattern, env: vscode.env,
+        workspace: { fs: vscode.workspace.fs, workspaceFolders: [{ name: 'Fixture', index: 0, uri: vscode.Uri.file(directory) }], onDidChangeWorkspaceFolders: vscode.workspace.onDidChangeWorkspaceFolders, onDidSaveTextDocument: vscode.workspace.onDidSaveTextDocument, onDidRenameFiles: vscode.workspace.onDidRenameFiles, createFileSystemWatcher: vscode.workspace.createFileSystemWatcher, getWorkspaceFolder: vscode.workspace.getWorkspaceFolder, getConfiguration: () => ({ get: () => false }) },
         window: { tabGroups: vscode.window.tabGroups, get activeTextEditor() { return vscode.window.activeTextEditor; }, onDidChangeActiveTextEditor: vscode.window.onDidChangeActiveTextEditor, onDidChangeWindowState: vscode.window.onDidChangeWindowState, showErrorMessage: vscode.window.showErrorMessage, registerWebviewViewProvider: (_id, value) => { provider = value; return new vscode.Disposable(() => {}); } },
         commands: { executeCommand: vscode.commands.executeCommand, registerCommand: () => new vscode.Disposable(() => {}) },
       };
@@ -30,9 +30,9 @@ suite('EasyView workspace reveal after restore', () => {
       const module = { exports: {} };
       new Function('require', 'module', 'exports', compiled.outputFiles[0].text)((name) => name === 'vscode' ? host : require(name), module, module.exports);
       await vscode.commands.executeCommand('vscode.openWith', first, 'easyviewMd.markdownEditor', { preview: false });
-      subscription = module.exports.registerWorkspaceExplorer({ extensionUri: vscode.Uri.file(path.resolve(__dirname, '../../../apps/vscode-extension')) });
+      subscription = module.exports.registerWorkspaceExplorer({ extensionUri: vscode.Uri.file(path.resolve(__dirname, '../../../apps/vscode-extension')), globalStorageUri: vscode.Uri.file(path.join(directory, 'data', 'User', 'globalStorage', 'easyview')) });
       const events = [];
-      provider.resolveWebviewView({ visible: true, webview: { options: {}, asWebviewUri: (uri) => uri, onDidReceiveMessage: () => new vscode.Disposable(() => {}), postMessage: async (event) => { events.push(event); return true; }, html: '' }, onDidDispose: () => new vscode.Disposable(() => {}) }, {}, {});
+      provider.resolveWebviewView({ visible: true, webview: { options: {}, asWebviewUri: (uri) => uri, onDidReceiveMessage: () => new vscode.Disposable(() => {}), postMessage: async (event) => { events.push(event); return true; }, html: '' }, onDidChangeVisibility: () => new vscode.Disposable(() => {}), onDidDispose: () => new vscode.Disposable(() => {}) }, {}, {});
       await provider.dispatchRequest({ type: 'ready' });
       assert.ok(events.some((event) => event.type === 'bootstrap' && event.revealRelativePath === '功能设计/设计.md'), JSON.stringify(events));
       await vscode.commands.executeCommand('vscode.openWith', second, 'easyviewMd.markdownEditor', { preview: false });

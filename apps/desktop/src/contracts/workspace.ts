@@ -60,7 +60,17 @@ export interface DesktopPreviewTab extends PersistedPreviewTab {
   route: PreviewRoute;
 }
 
-export type DesktopTab = DesktopEditorTab | DesktopPreviewTab;
+export interface DesktopHistoryTab {
+  id: string;
+  kind: 'history';
+  comparisonKey: string;
+  filePath: string;
+  fileName: string;
+  relativePath: string;
+  baseLabel: string;
+  contentLabel: string;
+}
+export type DesktopTab = DesktopEditorTab | DesktopPreviewTab | DesktopHistoryTab;
 
 export interface DesktopEditorGroupSnapshot {
   id: string;

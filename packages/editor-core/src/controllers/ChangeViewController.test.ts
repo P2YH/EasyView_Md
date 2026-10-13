@@ -274,3 +274,18 @@ it('lets the Change View host scroll horizontally when wrapping is off', () => {
   expect(css).toMatch(/\.easyview-change-view \.easyview-change-text-added \{[\s\S]*?62%/);
   expect(css).toMatch(/\.easyview-change-text-removed \{[\s\S]*?62%/);
 });
+
+it('history Change views never write content when closing or expose hunk actions', () => {
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
+  document.body.innerHTML='<div id="scroll"><div id="original"></div></div>';
+  const setContent=vi.fn(),postEdit=vi.fn(),stageHunk=vi.fn();
+  const controller=new ChangeViewController({
+    scrollArea:document.getElementById('scroll')!,editorElement:document.getElementById('original')!,
+    currentContent:()=> '# New\n',getBaseContent:()=> '# Old\n',setContent,postEdit,stageHunk,
+    readOnly:true,onStateChange:vi.fn(),getVisibleSourceAnchor:()=>({line:1,offsetFromTop:0}),revealSourceAnchor:vi.fn(),
+  });
+  controller.open();expect(document.querySelector('.cm-content')?.getAttribute('contenteditable')).toBe('false');
+  document.querySelector('.cm-line')?.dispatchEvent(new MouseEvent('click',{bubbles:true}));
+  expect(document.querySelector('.easyview-change-hunk-actions')).toBeNull();controller.dispose();
+  expect(setContent).not.toHaveBeenCalled();expect(postEdit).not.toHaveBeenCalled();expect(stageHunk).not.toHaveBeenCalled();
+});

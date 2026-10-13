@@ -1,3 +1,5 @@
+import { TimelinePanel, RpcTimelineClient, showHistorySettingsDialog } from '@easyview/editor-core/timeline';
+import type { TimelineUiState } from '@easyview/contracts';
 import type { HostToEditorMessage, EditorToHostMessage } from '@easyview/contracts';
 import { readLocalProductTheme } from '@easyview/contracts';
 import { applyDesktopProductAppearance } from './productThemeControl';
@@ -112,7 +114,17 @@ function bindActiveEditor(editor: EasyViewEditorInstance | null): void {
   });
 }
 
+const timelineClient = new RpcTimelineClient({
+  configureSettings: () => showHistorySettingsDialog(async () => { const result = await api.timeline.getSettings(); if (!result.ok) throw new Error(result.message); return result.value; }, async (settings) => { const result = await api.timeline.setSettings(settings); if (!result.ok) throw new Error(result.message); }),
+  post: (message) => api.timeline.post(message as import('@easyview/contracts').TimelineRequestMessage),
+  subscribe: (listener) => api.timeline.subscribe(listener),
+  loadState: () => { const raw = localStorage.getItem('easyview.timeline.state'); return raw ? JSON.parse(raw) as TimelineUiState : undefined; },
+  saveState: (state) => localStorage.setItem('easyview.timeline.state', JSON.stringify(state)),
+});
+const timelinePanel = new TimelinePanel(timelineClient);
 const workspaceExplorer = new WorkspaceExplorer({
+  footer: timelinePanel.element,
+  onSelectionChanged: (filePath, visible) => { timelinePanel.setVisible(visible); timelinePanel.setFile(filePath); },
   api,
   container: explorerElement,
   onStateChange: (state) => {
@@ -169,6 +181,7 @@ tabController = new TabController({
   api,
   onActiveTabChanged: (tab, snapshot) => {
     currentTab = tab;
+    document.body.classList.toggle('desktop-history-only', tab?.kind === 'history' && visibleEditorTabs(snapshot).length === 0);
     void activeView.showSnapshot(snapshot);
     bindVisibleEditors(snapshot, tab);
     if (!tab) {
@@ -179,6 +192,8 @@ tabController = new TabController({
       titleName.textContent = tab.fileName;
       titleName.dataset.filePath = tab.filePath;
       workspaceExplorer.setActiveDocument(tab.filePath);
+    } else if (tab.kind === 'history') {
+      titleName.textContent = tab.fileName; titleName.removeAttribute('data-file-path');
     } else {
       titleName.textContent = tab.fileName;
       titleName.removeAttribute('data-file-path');
@@ -326,3 +341,5 @@ window.addEventListener('unload', () => {
   activeView.dispose();
   editors.dispose();
 }, { once: true });
+
+window.addEventListener('pagehide', () => { timelinePanel.dispose(); timelineClient.dispose(); });

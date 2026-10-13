@@ -41,6 +41,15 @@ function subscription(unsubscribe: () => void): EditorHostSubscription {
 }
 
 const api: EasyViewDesktopApi = {
+  timeline: {
+    post: (message) => ipcRenderer.send('timeline.message', message),
+    subscribe: (listener) => { const handle = (_event: Electron.IpcRendererEvent, message: import('@easyview/contracts').TimelineResultMessage) => listener(message); ipcRenderer.on('timeline.message', handle); return { dispose: () => ipcRenderer.removeListener('timeline.message', handle) }; },
+    diagnostics: () => ipcRenderer.invoke('timeline.diagnostics'),
+    comparison: (tabId) => ipcRenderer.invoke('timeline.comparison', tabId),
+    getSettings: () => ipcRenderer.invoke('timeline.settings.get'),
+    setSettings: (settings) => ipcRenderer.invoke('timeline.settings.set', settings),
+  },
+
   document: {
     open: () => ipcRenderer.invoke('document.open') as Promise<OperationResult<DocumentOpenResult | null>>,
     save: (content, sessionId) => {

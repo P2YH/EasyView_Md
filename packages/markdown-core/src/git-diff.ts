@@ -31,9 +31,10 @@ function joinContent(rows: string[], endsWithNewline: boolean): string {
 }
 
 /** One Git-index-relative diff for host markers and the embedded source view. */
-export function computeGitDiff(baseContent: string, currentContent: string): { hunks: GitDiffHunk[]; lineRanges: GitDiffRange[] } {
+export function computeGitDiff(baseContent: string, currentContent: string, budget?: { timeout: number; maxEditLength: number }): { hunks: GitDiffHunk[]; lineRanges: GitDiffRange[] } {
   const hunks: GitDiffHunk[] = [];
-  const parts = diffLines(baseContent.replace(/\r\n/g, '\n'), currentContent.replace(/\r\n/g, '\n'));
+  const parts = diffLines(baseContent.replace(/\r\n/g, '\n'), currentContent.replace(/\r\n/g, '\n'), budget);
+  if (!parts) throw new Error('版本差异过于复杂，已停止计算以保护应用响应');
   let oldLine = 1;
   let newLine = 1;
   for (let i = 0; i < parts.length;) {

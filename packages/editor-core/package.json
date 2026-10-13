@@ -7,7 +7,8 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./styles": "./src/webview.css"
+    "./styles": "./src/webview.css",
+    "./timeline": "./src/timeline/index.ts"
   },
   "dependencies": {
     "@easyview/contracts": "*",

@@ -1,3 +1,6 @@
+import { VscodeTimeline } from '../timeline/vscodeTimeline';
+import type { TimelineChannel } from '@easyview/node-runtime';
+import type { TimelineRequestMessage } from '@easyview/contracts';
 import * as vscode from 'vscode';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
@@ -162,6 +165,8 @@ export function registerWorkspaceExplorer(context: vscode.ExtensionContext): vsc
 
 class WorkspaceExplorerViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   private view: vscode.WebviewView | undefined;
+  private timeline: VscodeTimeline;
+  private timelineChannel?: TimelineChannel;
   private rootFolder: vscode.WorkspaceFolder | undefined;
   private selectedRelativePaths: string[] = [];
   private primarySelectedRelativePath: string | null = null;
@@ -179,9 +184,10 @@ class WorkspaceExplorerViewProvider implements vscode.WebviewViewProvider, vscod
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly treeService: WorkspaceTreeService,
-  ) {}
+  ) { this.timeline = new VscodeTimeline(context); }
 
   dispose(): void {
+    if (this.timelineChannel) this.timeline.releaseChannel(this.timelineChannel); this.timeline.dispose();
     this.watcher?.dispose();
     if (this.revealTimer) clearTimeout(this.revealTimer);
     if (this.fileEventTimer) clearTimeout(this.fileEventTimer);
@@ -212,9 +218,17 @@ class WorkspaceExplorerViewProvider implements vscode.WebviewViewProvider, vscod
         ...workspaceFolders.map((folder) => folder.uri),
       ],
     };
+    const channelReady = this.timeline.channel(() => this.rootFolder?.uri.fsPath, (message) => { void webviewView.webview.postMessage(message); }).then((channel) => { if (this.timelineChannel) this.timeline.releaseChannel(this.timelineChannel); this.timelineChannel = channel; return channel; });
     webviewView.webview.onDidReceiveMessage((message: unknown) => {
-      void this.handleRequest(message);
+      if (message && typeof message === 'object' && String((message as { type?: string }).type).startsWith('timeline.')) {
+        void channelReady.then((channel) => channel.handle(message as TimelineRequestMessage)).catch((error) => { this.timeline.report(error); if ('id' in message) void webviewView.webview.postMessage({ type: 'timeline.result', id: message.id, error: error instanceof Error ? error.message : String(error) }); });
+      } else void this.handleRequest(message);
     });
+    webviewView.onDidChangeVisibility(() => {
+      void webviewView.webview.postMessage({ type: 'timeline.visibility', visible: webviewView.visible });
+      if (!webviewView.visible) void channelReady.then((channel) => channel.handle({ type: 'timeline.watch', filePath: null }));
+    });
+    webviewView.onDidDispose(() => { void channelReady.then((channel) => this.timeline.releaseChannel(channel)); });
     this.watchWebviewReady(webviewView);
     webviewView.webview.html = getHtmlForWebview(webviewView.webview, this.context.extensionUri);
 
@@ -432,7 +446,7 @@ class WorkspaceExplorerViewProvider implements vscode.WebviewViewProvider, vscod
       new vscode.RelativePattern(rootFolder.uri, '**/*'),
     );
     this.watcher.onDidCreate((uri) => this.queueFileEvent(uri));
-    this.watcher.onDidChange((uri) => this.queueFileEvent(uri));
+    this.watcher.onDidChange((uri) => { this.queueFileEvent(uri); if (isTimelineMarkdownPath(uri.fsPath)) void this.timeline.capture(uri.fsPath); });
     this.watcher.onDidDelete((uri) => this.queueFileEvent(uri));
   }
 
@@ -1110,3 +1124,5 @@ function getNonce(): string {
   }
   return text;
 }
+
+const isTimelineMarkdownPath = (filePath: string) => /\.(md|markdown|mdx)$/i.test(filePath);

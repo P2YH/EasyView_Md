@@ -92,4 +92,16 @@ describe('ActiveViewController split panes', () => {
     left?.dispatchEvent(new Event('mousedown', { bubbles: true }));
     expect(activate).toHaveBeenCalledWith('a');
   });
+
+  it('releases a historical view when its adopted pane is reassigned to another group', async () => {
+    const { controller } = createController();
+    await controller.showSnapshot(snapshot());
+    const views = (controller as unknown as { historyViews: Map<string, unknown> }).historyViews;
+    const dispose = vi.fn();
+    views.set('group-1', { tabId: 'history-a', view: { dispose } });
+    const group = { ...snapshot().groups[0], id: 'group-new' };
+    await controller.showSnapshot(snapshot({ groups: [group], activeGroupId: group.id, layout: { kind: 'group', groupId: group.id } }));
+    expect(dispose).toHaveBeenCalledOnce();
+    expect(views.size).toBe(0);
+  });
 });

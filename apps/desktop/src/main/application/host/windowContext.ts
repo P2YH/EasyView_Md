@@ -1,3 +1,4 @@
+import { captureDesktopHistory } from '../document/desktopHistory';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { BrowserWindow } from 'electron';
 import { TerminalService, type AiChatHost } from '@easyview/node-runtime';
@@ -37,10 +38,12 @@ const contextStorage = new AsyncLocalStorage<DesktopWindowContext>();
 
 export function createDesktopWindowContext(id: string, trash?: (absolutePath: string) => Promise<void>): DesktopWindowContext {
   const previewSessions = new PreviewSessionStore();
+  const documentSessions = new DocumentSessionService(createNodeDocumentFileSystem(), createNodeDocumentGitPort());
+  documentSessions.setHistoryRecorder(captureDesktopHistory);
   return {
     id,
     tabs: new DesktopTabRegistry(id),
-    documentSessions: new DocumentSessionService(createNodeDocumentFileSystem(), createNodeDocumentGitPort()),
+    documentSessions,
     workspaceCore: new DesktopWorkspaceCore(trash),
     previewSessions,
     archivePreviewService: new ArchivePreviewService(previewSessions),

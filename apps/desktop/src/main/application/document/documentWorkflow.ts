@@ -1,3 +1,5 @@
+import { releaseHistoryComparison, clearHistoryComparisons } from '../timeline/desktopTimeline';
+import { captureDesktopHistory, desktopHistory } from './desktopHistory';
 import { app, dialog } from 'electron';
 import { promises as fs, watch } from 'node:fs';
 import path from 'node:path';
@@ -79,6 +81,7 @@ export async function reloadIfChanged(session: DocumentSession): Promise<void> {
       const stats = await fs.stat(session.filePath);
       const raw = await fs.readFile(session.filePath, 'utf8');
       const rawHash = hashContent(raw);
+      if (rawHash !== session.diskContentHash) void captureDesktopHistory(session.filePath, raw, '外部文件变化').catch((error) => console.warn('[Timeline]', error));
       // mtime is only a cheap watcher hint. Content hash is the source of
       // truth because sync folders and coarse filesystems can preserve mtime.
       if (rawHash === session.diskContentHash) {
@@ -368,11 +371,13 @@ export async function renameSession(sessionId: string, value: unknown): Promise<
   const fileName = markdownFileName(value, session);
   if (!fileName) return failure('INVALID_ARGUMENT', '文件名必须是合法的 Markdown 文件名');
   await stopWatcher(session);
+  const oldPath = documentSessions.get(sessionId)?.filePath;
   const outcome = await documentSessions.rename(sessionId, fileName);
   if (outcome.kind !== 'saved') await watchDocumentSession(session);
   const published = await publishSaveOutcome(sessionId, outcome);
   if (!published.ok) return published;
   if (!published.value) return failure('NOT_FOUND', '当前没有已打开的文件');
+  if (oldPath && oldPath !== published.value.filePath) await (await desktopHistory()).local.migrate(oldPath, published.value.filePath);
   return success(published.value);
 }
 
@@ -475,6 +480,7 @@ export async function closeTab(tabId: string): Promise<OperationResult<DesktopTa
   const tab = tabRegistry.get(tabId);
   if (!tab) return failure('NOT_FOUND', '标签页不存在');
   if (!(await releaseEditorTabs([tabId]))) return success(null);
+  releaseHistoryComparison(tabId);
   tabRegistry.close(tabId);
   const active = tabRegistry.active();
   syncTabState();
@@ -484,7 +490,7 @@ export async function closeTab(tabId: string): Promise<OperationResult<DesktopTa
 
 export async function closeTabIds(tabIds: string[]): Promise<boolean> {
   if (!(await releaseEditorTabs(tabIds))) return false;
-  for (const tabId of tabIds) tabRegistry.close(tabId);
+  for (const tabId of tabIds) { releaseHistoryComparison(tabId); tabRegistry.close(tabId); }
   const active = tabRegistry.active();
   syncTabState();
   if (active?.kind === 'editor') notifyActiveDocument('visible');
@@ -510,6 +516,7 @@ export async function closeGroupTabs(tabId: string): Promise<OperationResult<Des
 }
 
 export async function closeAllTabResources(): Promise<void> {
+  clearHistoryComparisons(tabRegistry.snapshot().groups.flatMap((group) => group.tabs.map((tab) => tab.id)));
   for (const session of documentSessions.values()) await stopWatcher(session);
   documentSessions.clear();
   tabRegistry.clear();

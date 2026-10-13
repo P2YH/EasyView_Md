@@ -1,3 +1,4 @@
+import { HistoryView } from '@easyview/editor-core/timeline';
 import type {
   DesktopEditorGroupLayout,
   DesktopTab,
@@ -8,6 +9,7 @@ import { renderDesktopTabBar } from './renderDesktopTabBar';
 
 export type ActiveWorkspaceView =
   | { kind: 'empty' }
+  | { kind: 'history'; tabId: string; filePath: string }
   | { kind: 'editor'; tabId: string; filePath: string }
   | { kind: 'preview'; tabId: string; relativePath: string };
 
@@ -37,6 +39,7 @@ interface GroupPane {
 /** Owns every visible editor/preview pane, including split groups. */
 export class ActiveViewController {
   private state: ActiveWorkspaceView = { kind: 'empty' };
+  private readonly historyViews = new Map<string, { tabId: string; view: HistoryView }>();
   private readonly panes = new Map<string, GroupPane>();
   private readonly islands = new Map<string, PreviewIsland>();
   private readonly creatingIslands = new Map<string, Promise<PreviewIsland>>();
@@ -87,6 +90,8 @@ export class ActiveViewController {
   }
 
   dispose(): void {
+    for (const entry of this.historyViews.values()) entry.view.dispose();
+    this.historyViews.clear();
     for (const island of this.islands.values()) island.dispose();
     this.islands.clear();
     this.creatingIslands.clear();
@@ -134,7 +139,7 @@ export class ActiveViewController {
         const take = snapshot.groups.find((group) => !this.panes.has(group.id));
         if (take) {
           this.panes.delete(id);
-          this.transferIsland(id, take.id);
+          this.transferPaneResources(id, take.id);
           pane.groupId = take.id;
           pane.root.dataset.groupId = take.id;
           this.panes.set(take.id, pane);
@@ -212,6 +217,19 @@ export class ActiveViewController {
   }
 
   private async showPaneTab(pane: GroupPane, tab: DesktopTab | null, request: number): Promise<void> {
+    const history = this.historyViews.get(pane.groupId);
+    if (history && history.tabId !== tab?.id) { history.view.dispose(); this.historyViews.delete(pane.groupId); }
+    if (tab?.kind === 'history') {
+      pane.editorMount.hidden = true; pane.previewRoot.hidden = false;
+      if (history?.tabId === tab.id) return;
+      await this.islands.get(pane.groupId)?.close();
+      const result = await this.options.api.timeline.comparison(tab.id);
+      if (request !== this.previewRequest) return;
+      if (!result.ok) { pane.previewRoot.textContent = result.message; return; }
+      const view = new HistoryView(pane.previewRoot, result.value, new URL('./history-diff-worker.js', window.location.href).toString());
+      this.historyViews.set(pane.groupId, { tabId: tab.id, view });
+      return;
+    }
     if (!tab) {
       await this.islands.get(pane.groupId)?.close();
       if (request !== this.previewRequest) return;
@@ -243,7 +261,7 @@ export class ActiveViewController {
       ? { kind: 'empty' }
       : tab.kind === 'editor'
         ? { kind: 'editor', tabId: tab.id, filePath: tab.filePath }
-        : { kind: 'preview', tabId: tab.id, relativePath: tab.relativePath };
+        : tab.kind === 'history' ? { kind: 'history', tabId: tab.id, filePath: tab.filePath } : { kind: 'preview', tabId: tab.id, relativePath: tab.relativePath };
     this.options.onViewChanged(this.state);
   }
 
@@ -261,7 +279,12 @@ export class ActiveViewController {
     return created;
   }
 
-  private transferIsland(fromGroupId: string, toGroupId: string): void {
+  private transferPaneResources(fromGroupId: string, toGroupId: string): void {
+    const history = this.historyViews.get(fromGroupId);
+    if (history) {
+      this.historyViews.delete(fromGroupId);
+      this.historyViews.set(toGroupId, history);
+    }
     const island = this.islands.get(fromGroupId);
     if (island) {
       this.islands.delete(fromGroupId);
@@ -270,6 +293,7 @@ export class ActiveViewController {
   }
 
   private disposePane(groupId: string): void {
+    this.historyViews.get(groupId)?.view.dispose(); this.historyViews.delete(groupId);
     this.islands.get(groupId)?.dispose();
     this.islands.delete(groupId);
     this.creatingIslands.delete(groupId);

@@ -428,3 +428,70 @@ describe('DocumentSessionService git operations', () => {
     expect(git.committed).toEqual([]);
   });
 });
+
+describe('Timeline restore concurrency',()=>{
+  it('preserves edits accepted while restored file metadata is being read', async () => {
+    const fs = new FakeDocumentFileSystem(), service = openTwoSessions(fs);
+    const store = { preserve: async () => undefined } as unknown as import('@easyview/node-runtime').LocalHistoryStore;
+    const stat = fs.stat.bind(fs);
+    fs.stat = async (filePath) => { editSession(service, 'tab-a', '# latest edit\n'); return stat(filePath); };
+    expect((await service.restoreVersion('tab-a', '# restored\n', '# A\n', '# A\n', store)).kind).toBe('saved');
+    expect(service.get('tab-a')?.content).toBe('# latest edit\n');
+    expect(service.get('tab-a')?.dirty).toBe(true);
+    expect(await fs.readFile(p('/tmp/a.md'))).toBe('# restored\n');
+  });
+  it('uses restored canonical content and raw formatting when edits arrive during the disk write', async () => {
+    const fs = new FakeDocumentFileSystem(), service = openTwoSessions(fs);
+    const store = { preserve: async () => undefined } as unknown as import('@easyview/node-runtime').LocalHistoryStore;
+    const raw = '<!-- fullWidth: true tocVisible: false -->\r\n# restored\r\n';
+    fs.holdNextWrites();
+    const started = new Promise<void>((resolve) => { fs.writeStarted = resolve; });
+    const restoring = service.restoreVersion('tab-a', raw, '# A\n', '# A\n', store);
+    await started;
+    editSession(service, 'tab-a', '# restored\n');
+    fs.releaseWrites();
+    expect((await restoring).kind).toBe('saved');
+    const session = service.get('tab-a')!;
+    expect(session.diskContent).toBe('# restored\n');
+    expect(session.dirty).toBe(false);
+    expect(session.documentAdapter.rawContent).toBe(raw);
+    expect(session.lineEnding).toBe('\r\n');
+  });
+  it('preserves disk and unsaved versions before replacing the file',async()=>{
+    const fs=new FakeDocumentFileSystem(),service=openTwoSessions(fs);editSession(service,'tab-a','# unsaved\n');
+    const preserved:string[]=[];
+    const store={ preserve:async(_file:string,content:string)=>{preserved.push(content);} } as unknown as import('@easyview/node-runtime').LocalHistoryStore;
+    const outcome=await service.restoreVersion('tab-a','# restored\n','# unsaved\n','# A\n',store);
+    expect(outcome.kind).toBe('saved');expect(preserved).toEqual(['# A\n','# unsaved\n','# restored\n']);
+    expect(await fs.readFile(p('/tmp/a.md'))).toBe('# restored\n');expect(service.get('tab-a')?.dirty).toBe(false);
+  });
+  it('leaves the file untouched if recovery snapshot persistence fails',async()=>{
+    const fs=new FakeDocumentFileSystem(),service=openTwoSessions(fs);
+    const store={ preserve:async()=>{throw new Error('Disk full');} } as unknown as import('@easyview/node-runtime').LocalHistoryStore;
+    await expect(service.restoreVersion('tab-a','# restored\n','# A\n','# A\n',store)).rejects.toThrow('Disk full');
+    expect(await fs.readFile(p('/tmp/a.md'))).toBe('# A\n');
+  });
+  it('rejects restoration if an edit arrives while recovery snapshots are being written',async()=>{
+    const fs=new FakeDocumentFileSystem(),service=openTwoSessions(fs);
+    const store={ preserve:async()=>{editSession(service,'tab-a','# later edit\n');} } as unknown as import('@easyview/node-runtime').LocalHistoryStore;
+    const outcome=await service.restoreVersion('tab-a','# restored\n','# A\n','# A\n',store);
+    expect(outcome.kind).toBe('error');expect(await fs.readFile(p('/tmp/a.md'))).toBe('# A\n');expect(service.get('tab-a')?.content).toBe('# later edit\n');
+  });
+});
+
+describe('Timeline save persistence', () => {
+  it('waits for history capture before acknowledging a completed save', async () => {
+    const fs = new FakeDocumentFileSystem(), service = openTwoSessions(fs);
+    let release!: () => void, started!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const recording = new Promise<void>((resolve) => { started = resolve; });
+    service.setHistoryRecorder(async () => { started(); await gate; });
+    let completed = false;
+    const saving = service.save('tab-a', '# saved\n').then((result) => { completed = true; return result; });
+    await recording;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(completed).toBe(false);
+    release();
+    expect((await saving).kind).toBe('saved');
+  });
+});

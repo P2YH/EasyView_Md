@@ -1,3 +1,5 @@
+import { TimelinePanel } from '@easyview/editor-core/timeline';
+import type { TimelineClient } from '@easyview/contracts';
 import {
   describeWorkspaceEntryTimestamps,
   filterWorkspaceEntriesByDotVisibility,
@@ -59,6 +61,8 @@ function modKey(): string {
  * Talks to the host exclusively via {@link WorkspaceExplorerRequest} / {@link WorkspaceExplorerEvent}.
  */
 export class WorkspaceExplorerView {
+  private timeline?: TimelinePanel;
+  setTimelineVisible(visible: boolean): void { this.timeline?.setVisible(visible); }
   private rootName: string | null = null;
   private rootUri: string | null = null;
   private rootRevision = 0;
@@ -115,7 +119,9 @@ export class WorkspaceExplorerView {
   constructor(
     private readonly container: HTMLElement,
     private readonly vscodeApi: WorkspaceExplorerVsCodeApi,
+    timelineClient?: TimelineClient,
   ) {
+    if (timelineClient) this.timeline = new TimelinePanel(timelineClient);
     const saved = this.vscodeApi.getState() as SavedDisplayState | undefined;
     if (saved?.displayMode === 'icons') this.displayMode = 'icons';
     this.container.classList.add('workspace-explorer');
@@ -132,6 +138,7 @@ export class WorkspaceExplorerView {
   }
 
   dispose(): void {
+    this.timeline?.dispose();
     this.container.removeEventListener('keydown', this.handleKeyDown, true);
     this.container.removeEventListener('dragover', this.handleContainerDragOver);
     this.container.removeEventListener('dragleave', this.handleContainerDragLeave);
@@ -520,6 +527,20 @@ export class WorkspaceExplorerView {
   }
 
   private render(): void {
+    const previousTree = this.container.querySelector<HTMLElement>('.workspace-tree');
+    const scrollTop = previousTree?.scrollTop ?? 0, scrollLeft = previousTree?.scrollLeft ?? 0;
+    this.renderTree();
+    if (this.timeline) {
+      this.container.append(this.timeline.element);
+      const tree = this.container.querySelector<HTMLElement>('.workspace-tree');
+      if (tree) { tree.scrollTop = scrollTop; tree.scrollLeft = scrollLeft; }
+      const selected = this.primarySelected;
+      const entry = this.entriesByDirectory.get(selected?.includes('/') ? selected.slice(0, selected.lastIndexOf('/')) : '')?.find((entry) => entry.relativePath === selected);
+      this.timeline.setFile(this.hasRoot() && selected && entry?.kind !== 'directory' ? selected : null);
+    }
+  }
+
+  private renderTree(): void {
     const previousTree = this.container.querySelector<HTMLElement>('.workspace-tree');
     const previousScrollTop = previousTree?.scrollTop ?? 0;
     const previousScrollLeft = previousTree?.scrollLeft ?? 0;

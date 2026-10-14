@@ -154,6 +154,24 @@ export class WorkspaceExplorer {
     }
   }
 
+  /** Reveal in IndexArea: open the panel, expand parents, select and scroll to the node. */
+  async revealRelativePath(relativePath: string): Promise<void> {
+    if (!this.state?.rootPath) return;
+    const expanded = new Set(this.state.expandedRelativePaths);
+    const segments = relativePath.split('/');
+    segments.pop();
+    const parents: string[] = [];
+    for (let index = 1; index <= segments.length; index += 1) parents.push(segments.slice(0, index).join('/'));
+    parents.forEach((parent) => expanded.add(parent));
+    this.updateState({ explorerVisible: true, expandedRelativePaths: [...expanded] });
+    await Promise.all(['', ...parents].map((parent) => this.loadDirectory(parent)));
+    this.selectionFollowsActive = true;
+    this.select(relativePath);
+    const row = [...this.options.container.querySelectorAll<HTMLElement>('.workspace-entry')]
+      .find((element) => element.dataset.relativePath === relativePath);
+    row?.scrollIntoView({ block: 'center' });
+  }
+
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (event.target instanceof Element && event.target.closest('.easyview-timeline')) return;
     const action = resolveWorkspaceTreeKeyAction(event, {

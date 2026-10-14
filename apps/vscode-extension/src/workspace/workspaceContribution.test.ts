@@ -85,7 +85,10 @@ describe('workspace explorer contribution', () => {
     const fileMenus = manifest.contributes.menus?.['view/item/context'] ?? [];
     expect(fileMenus).toEqual([]);
     expect(manifest.contributes.customEditors?.some(({ viewType }) => viewType === 'easyviewMd.filePreview')).toBe(true);
-    expect(manifest.contributes.menus?.['editor/title/context']).toBeUndefined();
+    // Only Reveal in IndexArea is contributed to the editor tab context menu.
+    expect(manifest.contributes.menus?.['editor/title/context']?.map(({ command }) => command)).toEqual([
+      'easyviewMd.workspace.revealInIndexArea',
+    ]);
   });
 
   it('retains multiple editor support for the EasyView custom editor', () => {

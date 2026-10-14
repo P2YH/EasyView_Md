@@ -6,6 +6,7 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { resolveMarkdownDiskUri } from '../application/document/openMarkdownEditor';
+import { indexAreaRelativePath } from './indexAreaPath';
 import { resolvePreviewRoute } from '@easyview/contracts/preview';
 import { isPhase1PreviewRoute } from '@easyview/preview-ui/phase1';
 import {
@@ -87,6 +88,9 @@ export function registerWorkspaceExplorer(context: vscode.ExtensionContext): vsc
     }),
     vscode.commands.registerCommand('easyviewMd.workspace.revealCurrentFile', () => {
       provider.revealActive(true);
+    }),
+    vscode.commands.registerCommand('easyviewMd.workspace.revealInIndexArea', async (target?: unknown) => {
+      await provider.revealInIndexArea(target);
     }),
     vscode.commands.registerCommand('easyviewMd.workspace.openPreview', async () => {
       const uri = provider.resolveSelectedFileUri();
@@ -361,6 +365,43 @@ class WorkspaceExplorerViewProvider implements vscode.WebviewViewProvider, vscod
     const relativePath = workspaceRelativePath(root, resource);
     if (!relativePath) return;
     this.postEvent({ type: 'reveal', relativePath });
+  }
+
+  async revealInIndexArea(target?: unknown): Promise<void> {
+    // Tab/explorer menus pass the tab resource. EasyView custom editor tabs use the
+    // `easyviewMd:` mirror scheme, so map back to the on-disk file before matching.
+    const candidates: vscode.Uri[] = [];
+    const targetUri = toUri(target);
+    if (targetUri) candidates.push(resolveMarkdownDiskUri(targetUri));
+    const active = resolveActiveResourceUri();
+    if (active) candidates.push(active);
+    if (candidates.length === 0) {
+      void vscode.window.showInformationMessage('No file to reveal in IndexArea.');
+      return;
+    }
+    this.updateRoot({ bootstrap: false });
+    const root = this.rootFolder?.uri;
+    let relativePath: string | undefined;
+    if (root) {
+      for (const candidate of candidates) {
+        relativePath = workspaceRelativePath(root, candidate)
+          ?? (candidate.scheme === 'file' && root.scheme === 'file'
+            ? indexAreaRelativePath(root.fsPath, candidate.fsPath, {
+              caseInsensitive: process.platform === 'darwin' || process.platform === 'win32',
+            })
+            : undefined);
+        if (relativePath) break;
+      }
+    }
+    if (!relativePath) {
+      void vscode.window.showInformationMessage(`${workspaceBasename(candidates[0]!)} is not in IndexArea.`);
+      return;
+    }
+    await vscode.commands.executeCommand(`${VIEW_ID}.focus`);
+    for (let attempt = 0; attempt < 40 && !this.view; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    this.postEvent({ type: 'reveal', relativePath, force: true });
   }
 
   private postEvent(event: WorkspaceExplorerEvent): void {
@@ -1083,6 +1124,18 @@ function scheduleFocusWorkspacePanelOnStartup(): NodeJS.Timeout | undefined {
     }
     void vscode.commands.executeCommand(VIEW_CONTAINER_COMMAND);
   }, FOCUS_ON_STARTUP_DELAY_MS);
+}
+
+function toUri(value: unknown): vscode.Uri | undefined {
+  if (value instanceof vscode.Uri) return value;
+  if (value && typeof value === 'object') {
+    const record = value as { scheme?: unknown; path?: unknown; authority?: unknown; resourceUri?: unknown };
+    if (record.resourceUri) return toUri(record.resourceUri);
+    if (typeof record.scheme === 'string' && typeof record.path === 'string') {
+      return vscode.Uri.from({ scheme: record.scheme, authority: typeof record.authority === 'string' ? record.authority : '', path: record.path });
+    }
+  }
+  return undefined;
 }
 
 function resolveActiveResourceUri(): vscode.Uri | undefined {

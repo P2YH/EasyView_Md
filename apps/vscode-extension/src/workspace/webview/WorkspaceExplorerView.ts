@@ -172,7 +172,7 @@ export class WorkspaceExplorerView {
         this.render();
         break;
       case 'reveal':
-        void this.onReveal(event.relativePath);
+        void this.onReveal(event.relativePath, event.force === true);
         break;
       case 'sortConfig':
         this.applySortConfig(event.sort);
@@ -306,9 +306,9 @@ export class WorkspaceExplorerView {
     await Promise.all(targets.map((relativePath) => this.loadDirectory(relativePath)));
   }
 
-  private async onReveal(relativePath: string): Promise<void> {
+  private async onReveal(relativePath: string, force = false): Promise<void> {
     if (!this.hasRoot() || !relativePath) return;
-    if (this.activeRelativePath === relativePath
+    if (!force && this.activeRelativePath === relativePath
       && (this.displayMode !== 'icons' || this.iconDirectory === parentRelativePath(relativePath))) return;
     this.activeRelativePath = relativePath;
     if (this.displayMode === 'icons') {
@@ -333,7 +333,7 @@ export class WorkspaceExplorerView {
     requestAnimationFrame(() => {
       const row = [...this.container.querySelectorAll<HTMLElement>('.workspace-entry')]
         .find((el) => el.dataset.relativePath === relativePath);
-      row?.scrollIntoView({ block: 'nearest' });
+      row?.scrollIntoView({ block: force ? 'center' : 'nearest' });
     });
   }
 

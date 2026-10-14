@@ -155,6 +155,15 @@ export async function executeTabContextCommand(tabId: string, command: DesktopTa
     clipboard.writeText(command === 'copyPath' ? paths.absolutePath : paths.relativePath);
     return success(tabSnapshot());
   }
+  if (command === 'revealInIndexArea') {
+    const paths = tabResourcePaths(tab);
+    const rootPath = workspaceRoot();
+    if (!paths || !rootPath || paths.relativePath.startsWith('..') || path.isAbsolute(paths.relativePath)) {
+      return failure('NOT_FOUND', '当前文件不在 IndexArea 中');
+    }
+    sendToWindow('workspace.revealInIndexArea', paths.relativePath);
+    return success(tabSnapshot());
+  }
   if (command === 'splitUp' || command === 'splitDown' || command === 'splitLeft' || command === 'splitRight') {
     const direction = command === 'splitUp' ? 'up' : command === 'splitDown' ? 'down' : command === 'splitLeft' ? 'left' : 'right';
     const group = tabRegistry.split(tabId, direction);
@@ -444,6 +453,8 @@ export function showTabContextMenu(sender: Electron.WebContents, tabId: string):
     { type: 'separator' },
     { label: 'Copy Path', click: () => run('copyPath') },
     { label: 'Copy Relative Path', click: () => run('copyRelativePath') },
+    { type: 'separator' },
+    { label: 'Reveal in IndexArea', click: () => run('revealInIndexArea') },
     { type: 'separator' },
     { label: 'Split & Move', submenu: [
       { label: 'Split Up', enabled: splitEnabled, click: () => run('splitUp') },

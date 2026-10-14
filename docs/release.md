@@ -31,7 +31,7 @@ VSIX 与桌面端走同一条 Desktop Release 流程，但版本独立：tag 只
 - `easyview-md.vsix` 与四个安装包一起进入 Release 附件、`SHA256SUMS`、`release.json`（新增 `extensionVersion` 字段）和服务器同步。
 - 官网更新同时改写扩展卡片的 `vX.Y.Z · .vsix` 文字和 `easyview-md.vsix?v=X.Y.Z`（`data-easyview-extension-version` / `data-easyview-extension-download` 标记）。
 - 扩展版本没变时也会重新打包并上传同版本 VSIX，内容来自该 tag 的源码。
-- 本流程不发布到 VS Code Marketplace 或 Open VSX，商店发布仍需单独操作。
+- 本流程不发布到 VS Code Marketplace 或 Open VSX，商店发布仍需单独操作（微软商店见下文，已自动提交）。
 
 ## 微软商店（MSIX / AppX）
 
@@ -41,7 +41,15 @@ VSIX 与桌面端走同一条 Desktop Release 流程，但版本独立：tag 只
 - **身份信息：** 与 Partner Center 预留一致：`identityName` `wonderxy.EasyViewMd`、`publisher` `CN=19709C1F-89CA-4443-8E7F-815C01CEC37E`、`publisherDisplayName` `wonderxy`、显示名 `EasyView_Md`，Store ID `9MTQTBP489CN`，PFN `wonderxy.EasyViewMd_aeg7cng3hy970`。不要改这些值。
 - **不签名：** 商店提交不需要自己签名，Partner Center 会用微软证书重新签名。配置里没有证书，脚本在检测到 `CSC_LINK` / `WIN_CSC_LINK` / `CSC_NAME` 时直接失败。未签名的包不能直接双击安装，本地测试需开启开发者模式后用 `Add-AppxPackage` 安装。
 - **磁贴图标：** 在 `apps/desktop/build/appx/`，由 `node tooling/brand/generate-appx-assets.mjs`（macOS）从 `resources/brand/logo.png` 生成。换品牌图后重新生成并提交。
-- **提交商店：** 发版后在 Release 下载 `EasyView_Md-win-x64-store.appx`（或 Actions 运行里的 `store-win32-x64` artifact），打开 [Partner Center](https://partner.microsoft.com/dashboard/apps-and-games/overview) → EasyView_Md（9MTQTBP489CN）→ 新建提交 → 程序包，上传后补齐商店信息（描述、截图、分类、年龄分级）再提交审核。每次提交的版本号必须比上一次大（`X.Y.Z` 会成为 `X.Y.Z.0`）。
+- **自动提交：** Release 发布后 `store` job（windows-latest）用 `microsoft/microsoft-store-apppublisher@v1.1` 安装 `msstore`，执行 `msstore publish --inputFile …appx --appId 9MTQTBP489CN`：以上次已发布的提交为底新建提交，只替换程序包，商店信息不变，并直接提交认证。缺任一 secret 时只给 warning 跳过，不影响发版。关闭：仓库变量 `STORE_SUBMIT=false`，或手动运行时取消 `store_submit`。
+- **注意：** 版本号必须比商店现有版本大（`X.Y.Z` → `X.Y.Z.0`）；上一个提交还在认证中时新提交会失败或覆盖草稿，需等完成或在 Partner Center 处理；客户端密码过期后要更新 secret；更改描述/截图仍需在 Partner Center 手动做。
+- **一次性配置（自动提交前）：**
+  1. Partner Center → 右上角齿轮“帐户设置” → 用户管理 → **Microsoft Entra 应用程序**：关联已有 Entra 租户或新建，再“添加 Microsoft Entra 应用程序”（新建或选已注册的应用），角色选 **Manager**。
+  2. 在 [Entra 管理中心](https://entra.microsoft.com/) → 应用注册 → 该应用 → 证书和密码 → 新建客户端密码，**立即复制值**（只显示一次，记下过期时间）。
+  3. 记下 ID：租户 ID（Entra → 概述）、客户端 ID（应用注册 → 应用程序(客户端) ID）、Seller ID（Partner Center → 帐户设置 → 开发者设置或“标识符” → Seller ID / Publisher ID）。
+  4. GitHub 仓库 Settings → Secrets and variables → Actions 新增 `PARTNER_CENTER_TENANT_ID`、`PARTNER_CENTER_SELLER_ID`、`PARTNER_CENTER_CLIENT_ID`、`PARTNER_CENTER_CLIENT_SECRET`。
+  - 官方说明：[GitHub Actions 发布](https://learn.microsoft.com/windows/apps/publish/msstore-dev-cli/github-actions)、[关联 Entra 应用](https://learn.microsoft.com/windows/apps/publish/partner-center/add-users-groups-and-azure-ad-applications)、[提交 API 前置条件](https://learn.microsoft.com/windows/uwp/monetize/create-and-manage-submissions-using-windows-store-services)、[msstore 命令](https://learn.microsoft.com/windows/apps/publish/msstore-dev-cli/commands)。
+- **手动提交（备用）：** 发版后在 Release 下载 `EasyView_Md-win-x64-store.appx`（或 Actions 运行里的 `store-win32-x64` artifact），打开 [Partner Center](https://partner.microsoft.com/dashboard/apps-and-games/overview) → EasyView_Md（9MTQTBP489CN）→ 新建提交 → 程序包，上传后补齐商店信息（描述、截图、分类、年龄分级）再提交审核。每次提交的版本号必须比上一次大（`X.Y.Z` 会成为 `X.Y.Z.0`）。
 - **隐私政策：** 商店要求填写隐私政策链接，需先在官网放一页（例如 `https://easyview.wonderxy.art/privacy.html`）再提交。
 - **不自动更新：** 应用目前没有内置自动更新（不使用 electron-updater，Squirrel 只负责官网 setup.exe 的安装）。商店版的更新只由微软商店完成，以后若加入应用内更新，需在 `process.windowsStore === true` 时跳过。
 

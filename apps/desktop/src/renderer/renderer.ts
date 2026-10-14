@@ -288,6 +288,10 @@ window.addEventListener('easyview-toc-width-change', (event) => {
   });
 });
 
+api.menu.onRevealInIndexArea((relativePath) => {
+  void workspaceExplorer.revealRelativePath(relativePath);
+});
+
 api.menu.onCommand((command) => {
   if (command === 'toggleTheme') {
     productAppearance.cycleMode();

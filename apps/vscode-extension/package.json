@@ -2,7 +2,7 @@
   "name": "easyview-md",
   "displayName": "EasyView_Md",
   "description": "A visual Markdown editor for VS Code with rich editing, document conversion, and export tools.",
-  "version": "2.0.179",
+  "version": "2.0.183",
   "publisher": "zhangxy",
   "license": "MIT",
   "private": true,
@@ -57,6 +57,7 @@
     "onCommand:easyviewMd.workspace.newFile",
     "onCommand:easyviewMd.workspace.newFolder",
     "onCommand:easyviewMd.workspace.revealCurrentFile",
+    "onCommand:easyviewMd.workspace.revealInIndexArea",
     "onCommand:easyviewMd.workspace.openPreview",
     "onCommand:easyviewMd.workspace.openExternal",
     "onCommand:easyviewMd.workspace.copyResourceUri",
@@ -362,6 +363,11 @@
         "icon": "$(target)"
       },
       {
+        "command": "easyviewMd.workspace.revealInIndexArea",
+        "title": "Reveal in IndexArea",
+        "category": "EasyView_Md"
+      },
+      {
         "command": "easyviewMd.workspace.openPreview",
         "title": "Open Preview",
         "category": "EasyView_Md"
@@ -436,7 +442,18 @@
           "group": "navigation@-100"
         }
       ],
+      "editor/title/context": [
+        {
+          "command": "easyviewMd.workspace.revealInIndexArea",
+          "group": "2_files@2"
+        }
+      ],
       "explorer/context": [
+        {
+          "command": "easyviewMd.workspace.revealInIndexArea",
+          "when": "!explorerResourceIsFolder",
+          "group": "navigation@90"
+        },
         {
           "command": "easyviewMd.openEditor",
           "when": "resourceExtname == .md || resourceExtname == .markdown || resourceExtname == .mdx",
@@ -604,7 +621,7 @@
       "activitybar": [
         {
           "id": "easyviewMd-workspacePanel",
-          "title": "EasyView_Md",
+          "title": "IndexArea",
           "icon": "dist/brand/easyview-editor-dark.svg"
         }
       ]
@@ -615,7 +632,7 @@
           "type": "webview",
           "id": "easyviewMd.workspaceFiles",
           "name": "Files",
-          "contextualTitle": "EasyView_Md"
+          "contextualTitle": "IndexArea"
         }
       ]
     }

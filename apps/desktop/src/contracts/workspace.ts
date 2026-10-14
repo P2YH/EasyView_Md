@@ -159,6 +159,7 @@ export type DesktopTabContextCommand =
   | 'closeAll'
   | 'copyPath'
   | 'copyRelativePath'
+  | 'revealInIndexArea'
   | 'splitUp'
   | 'splitDown'
   | 'splitLeft'

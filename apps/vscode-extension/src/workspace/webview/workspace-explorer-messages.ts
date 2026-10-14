@@ -83,7 +83,7 @@ export type WorkspaceExplorerEvent =
     }
   | { type: 'fsChanged'; relativePaths: string[] }
   | { type: 'entriesDeleted'; relativePaths: string[] }
-  | { type: 'reveal'; relativePath: string }
+  | { type: 'reveal'; relativePath: string; force?: boolean }
   | { type: 'rootChanged' }
   | { type: 'sortConfig'; sort: WorkspaceExplorerSortConfig }
   | { type: 'clipboardChanged'; hasClipboard: boolean }

@@ -293,8 +293,9 @@ body {
 }
 
 .workspace-entry {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 24px;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   box-sizing: border-box;
   width: 100%;
@@ -303,7 +304,7 @@ body {
 }
 
 .workspace-entry.has-timestamps {
-  grid-template-columns: minmax(0, 1fr) max-content 24px;
+  grid-template-columns: minmax(0, 1fr) max-content;
 }
 
 .workspace-entry:hover {
@@ -470,21 +471,37 @@ body {
   line-height: 22px;
 }
 
+/* Overlays the row tail on hover so no width is permanently reserved for it. */
 .workspace-entry-create {
+  position: absolute;
+  top: 0;
+  right: 0;
   display: none;
   width: 24px;
   height: 26px;
   margin: 0;
   padding: 0;
+  background:
+    linear-gradient(var(--vscode-list-hoverBackground), var(--vscode-list-hoverBackground)),
+    var(--vscode-sideBar-background, var(--vscode-editorWidget-background));
+}
+
+.workspace-entry.selected .workspace-entry-create {
+  background: var(--easyview-list-selection-background);
 }
 
 .workspace-entry:hover .workspace-entry-create {
   display: block;
 }
 
+.workspace-entry .workspace-entry-create:hover {
+  background:
+    linear-gradient(var(--vscode-toolbar-hoverBackground), var(--vscode-toolbar-hoverBackground)),
+    var(--vscode-sideBar-background, var(--vscode-editorWidget-background));
+}
+
 .workspace-entry-create-spacer {
-  width: 24px;
-  height: 26px;
+  display: none;
 }
 
 .workspace-create-row {

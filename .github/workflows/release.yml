@@ -9,6 +9,11 @@ on:
         description: 'Existing stable release tag (vX.Y.Z)'
         required: true
         type: string
+      store_submit:
+        description: 'Submit the AppX to Microsoft Store (9MTQTBP489CN)'
+        required: false
+        type: boolean
+        default: true
 
 # All versions share one queue because the website uses fixed download names.
 concurrency:
@@ -230,3 +235,57 @@ jobs:
             git commit -m "Update EasyView downloads to $RELEASE_TAG (extension v$EXTENSION_VERSION)"
             git push origin HEAD:main
           fi
+
+  # Microsoft Store submission: replaces only the package of product 9MTQTBP489CN,
+  # reusing the current listing, then commits the submission for certification.
+  # Disable with repo variable STORE_SUBMIT=false or the store_submit dispatch input.
+  # Missing Partner Center secrets only emit a warning so releases keep working.
+  store:
+    needs: [version, publish]
+    if: >-
+      vars.STORE_SUBMIT != 'false' &&
+      (github.event_name != 'workflow_dispatch' || inputs.store_submit)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      STORE_PRODUCT_ID: 9MTQTBP489CN
+      PC_TENANT_ID: ${{ secrets.PARTNER_CENTER_TENANT_ID }}
+      PC_SELLER_ID: ${{ secrets.PARTNER_CENTER_SELLER_ID }}
+      PC_CLIENT_ID: ${{ secrets.PARTNER_CENTER_CLIENT_ID }}
+      PC_CLIENT_SECRET: ${{ secrets.PARTNER_CENTER_CLIENT_SECRET }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check Partner Center credentials
+        id: creds
+        run: |
+          if ($env:PC_TENANT_ID -and $env:PC_SELLER_ID -and $env:PC_CLIENT_ID -and $env:PC_CLIENT_SECRET) {
+            "ready=true" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Output "::warning title=Microsoft Store skipped::PARTNER_CENTER_* secrets are not set; upload the AppX in Partner Center manually."
+            "ready=false" >> $env:GITHUB_OUTPUT
+          }
+      - uses: actions/download-artifact@v4
+        if: steps.creds.outputs.ready == 'true'
+        with:
+          name: store-win32-x64
+          path: store-assets
+      - name: Setup Microsoft Store Developer CLI
+        if: steps.creds.outputs.ready == 'true'
+        uses: microsoft/microsoft-store-apppublisher@v1.1
+      - name: Configure Microsoft Store Developer CLI
+        if: steps.creds.outputs.ready == 'true'
+        run: msstore reconfigure --tenantId $env:PC_TENANT_ID --sellerId $env:PC_SELLER_ID --clientId $env:PC_CLIENT_ID --clientSecret $env:PC_CLIENT_SECRET
+      - name: Submit package to Microsoft Store
+        if: steps.creds.outputs.ready == 'true'
+        run: |
+          $appx = Join-Path $env:GITHUB_WORKSPACE 'store-assets/EasyView_Md-win-x64-store.appx'
+          if (-not (Test-Path $appx)) { throw "Missing $appx" }
+          # publish starts a new submission from the last published one (listing kept),
+          # replaces the package and commits it for certification.
+          msstore publish (Split-Path $appx) --inputFile $appx --appId $env:STORE_PRODUCT_ID
+          if ($LASTEXITCODE -ne 0) { throw "msstore publish failed ($LASTEXITCODE)" }
+          msstore submission status $env:STORE_PRODUCT_ID

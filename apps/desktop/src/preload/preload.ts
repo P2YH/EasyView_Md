@@ -304,6 +304,13 @@ const api: EasyViewDesktopApi = {
       ipcRenderer.on('desktop.menuCommand', handler);
       return subscription(() => ipcRenderer.removeListener('desktop.menuCommand', handler));
     },
+    onRevealInIndexArea: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, relativePath: unknown) => {
+        if (typeof relativePath === 'string') listener(relativePath);
+      };
+      ipcRenderer.on('workspace.revealInIndexArea', handler);
+      return subscription(() => ipcRenderer.removeListener('workspace.revealInIndexArea', handler));
+    },
   },
   editor: {
     postMessage: (message: EditorToHostMessage) => ipcRenderer.send('editor.message', message),

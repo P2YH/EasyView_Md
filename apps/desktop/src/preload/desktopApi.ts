@@ -74,6 +74,7 @@ export interface EasyViewDesktopApi {
   menu: {
     publishState(state: DesktopMenuState): void;
     onCommand(listener: (command: DesktopMenuCommand) => void): { unsubscribe(): void };
+    onRevealInIndexArea(listener: (relativePath: string) => void): { unsubscribe(): void };
   };
   editor: {
     postMessage(message: Parameters<EditorHostTransport['postMessage']>[0]): void | Promise<void>;

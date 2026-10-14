@@ -1,0 +1,48 @@
+name: 问题反馈 / Bug Report
+description: 报告 EasyView 的问题 / Report a problem with EasyView
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！请尽量提供复现步骤和截图。
+        Thanks for reporting! Please include steps to reproduce and screenshots if possible.
+  - type: dropdown
+    id: product
+    attributes:
+      label: 产品 / Product
+      options:
+        - 桌面端 / Desktop App
+        - VS Code / Cursor 扩展 / Extension
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述 / Description
+      description: 发生了什么？/ What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤 / Steps to Reproduce
+      placeholder: |
+        1.
+        2.
+        3.
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望结果 / Expected Behavior
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境信息 / Environment
+      description: 从应用「帮助 → 问题反馈」打开时会自动填写 / Auto-filled when opened from Help → Report an Issue
+      render: markdown
+  - type: textarea
+    id: extra
+    attributes:
+      label: 截图或附加信息 / Screenshots & Additional Context

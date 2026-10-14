@@ -16,6 +16,7 @@ dist/
 .github/workflows/*
 !.github/workflows/release.yml
 !.github/workflows/desktop-build.yml
+!.github/ISSUE_TEMPLATE/
 .cursor/
 .vscode-test/
 .easyview/

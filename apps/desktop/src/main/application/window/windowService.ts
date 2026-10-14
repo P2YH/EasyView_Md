@@ -10,6 +10,10 @@ import { randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { requestRestart } from '../document/appLifecycle';
+import { anonymizePath, buildFeedbackMailto, buildIssueUrl, FEEDBACK_REPO_URL, type FeedbackEnvironment } from '../help/feedbackLinks';
+import os from 'node:os';
+import { getLogsDirectory, log as appLog } from '../help/appLogger';
+import { cancelUpdateDownload, checkForUpdates, getUpdateSettings, isDownloadingUpdate, setAutoCheck, setUpdateMenuRefresher, updatesDisabled } from '../update/updateService';
 import {
   WINDOW_ZOOM_LEVEL_MAX,
   WINDOW_ZOOM_LEVEL_MIN,
@@ -124,6 +128,17 @@ function isCurrentRendererUrl(value: string): boolean {
   }
 }
 
+function feedbackEnvironment(): FeedbackEnvironment {
+  return {
+    appVersion: app.getVersion(),
+    platform: process.platform,
+    osVersion: typeof process.getSystemVersion === 'function' ? process.getSystemVersion() : os.release(),
+    arch: process.arch,
+    electronVersion: process.versions.electron,
+    logsDirectory: anonymizePath(getLogsDirectory(), { platform: process.platform, homeDir: os.homedir(), appData: process.env.APPDATA, userProfile: process.env.USERPROFILE }),
+  };
+}
+
 export function createMenu(): void {
   const context = getWindowContext();
   const inContext = (operation: () => void): (() => void) => () => runInWindowContext(context, operation);
@@ -176,7 +191,7 @@ export function createMenu(): void {
     {
       label: '视图',
       submenu: [
-        { label: '目录树', type: 'checkbox', checked: getWorkspaceState().explorerVisible, click: inContext(() => publishMenuCommand('toggleExplorer')) },
+        { label: 'IndexArea', type: 'checkbox', checked: getWorkspaceState().explorerVisible, click: inContext(() => publishMenuCommand('toggleExplorer')) },
         command('文档目录', 'toggleOutline', { type: 'checkbox', checked: menuState.outlineVisible }),
         command('源码模式', 'toggleSourceMode', { type: 'checkbox', checked: menuState.sourceMode }),
         command('全宽', 'toggleFullWidth', { type: 'checkbox', checked: menuState.fullWidth }),
@@ -195,6 +210,23 @@ export function createMenu(): void {
     { label: '导出', submenu: [command('HTML（明亮）', 'exportHtmlLight'), command('HTML（暗色）', 'exportHtmlDark'), command('PDF（明亮）', 'exportPdfLight'), command('PDF（暗色）', 'exportPdfDark'), command('DOCX', 'exportDocx')] },
     { label: 'Git', submenu: [command('暂存', 'stageFile'), command('提交', 'openCommit'), command('同步', 'syncGit')] },
     { label: '工具', submenu: [command('AI 对话', 'toggleAiChat', { accelerator: 'Alt+I', enabled: true }), command('内置终端', 'openTerminal')] },
+    {
+      label: '帮助',
+      role: 'help',
+      submenu: [
+        { label: '问题反馈 / Report an Issue…', click: () => { void shell.openExternal(buildIssueUrl(feedbackEnvironment())); } },
+        { label: '邮件反馈 / Email Feedback…', click: () => { void shell.openExternal(buildFeedbackMailto(feedbackEnvironment())); } },
+        { label: '打开日志文件夹 / Open Logs Folder', click: () => { const dir = getLogsDirectory(); void mkdir(dir, { recursive: true }).then(() => shell.openPath(dir)); } },
+        { type: 'separator' },
+        ...(updatesDisabled() ? [] : [
+          { label: '检查更新… / Check for Updates…', click: () => { void checkForUpdates(true); } },
+          { label: '自动检查更新 / Check Automatically', type: 'checkbox' as const, checked: getUpdateSettings().autoCheck, click: (item: Electron.MenuItem) => { void setAutoCheck(item.checked); } },
+          { label: '取消更新下载 / Cancel Update Download', visible: isDownloadingUpdate(), click: () => cancelUpdateDownload() },
+          { type: 'separator' as const },
+        ]),
+        { label: '项目主页 / GitHub', click: () => { void shell.openExternal(FEEDBACK_REPO_URL); } },
+      ],
+    },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   syncShellRestartMenu();
@@ -204,6 +236,7 @@ export function createWindow(context: DesktopWindowContext = getWindowContext())
   return runInWindowContext(context, () => {
   setActiveWindowContext(context);
   const bounds = getAppStateStore().getWindowBounds();
+  appLog('info', 'window', 'creating window');
   const window = new BrowserWindow({
     width: bounds?.width ?? 1440,
     height: bounds?.height ?? 960,
@@ -306,3 +339,4 @@ export function findMarkdownArgument(argv: string[]): string | undefined {
 }
 
 hostHooks.createMenu = createMenu;
+setUpdateMenuRefresher(() => createMenu());

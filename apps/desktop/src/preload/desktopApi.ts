@@ -58,6 +58,8 @@ export interface EasyViewDesktopApi {
     /** True when this window was created for a document opened by the launch (argv / Finder). */
     readonly openedFileAtLaunch: boolean;
     onThemeChanged(listener: (theme: DesktopThemeMode) => void): { unsubscribe(): void };
+    /** Fired when the user explicitly opened a document (Finder / Explorer, Open…, recent files). */
+    onRevealDocument(listener: () => void): { unsubscribe(): void };
   };
   workspace: WorkspaceApi;
   tabs: DesktopTabsApi;

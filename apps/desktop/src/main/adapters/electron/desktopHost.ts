@@ -1,12 +1,17 @@
 import { disposeDesktopHistory } from '../../application/document/desktopHistory';
 import { app, BrowserWindow, nativeTheme, protocol } from 'electron';
-import squirrelStartup from 'electron-squirrel-startup';
 import { resolveLocalePreference, setLocale } from '@easyview/contracts';
 import { loadLanguagePreference } from '../../application/settings/languageSettings';
 import { createAppStateStore } from '../../application/document/appState';
 import { createDesktopAiChatHost } from '../../application/ai/createDesktopAiChatHost';
 import { initRecentFolderStore } from '../../application/workspace/recentFolders';
-import { readDocument, requestOpenDocument, restoreWorkspace } from '../../application/document/documentWorkflow';
+import {
+  closeAllTabResources,
+  readDocument,
+  requestOpenDocument,
+  restoreWorkspace,
+  showOperationError,
+} from '../../application/document/documentWorkflow';
 import {
   getMainWindow,
   getPendingOpenPath,
@@ -29,11 +34,68 @@ import {
 } from '../../application/window/windowService';
 import { registerDesktopIpc } from './registerDesktopIpc';
 import { registerPreviewProtocol, registerPreviewScheme } from './previewProtocol';
+import { handleSquirrelEvent } from './squirrelEvents';
 
+const squirrelStartup = handleSquirrelEvent();
 if (!squirrelStartup) registerPreviewScheme();
 
 const languagePreference = loadLanguagePreference(app.getPath('userData'));
 if (languagePreference !== 'system') app.commandLine.appendSwitch('lang', languagePreference);
+
+let startupComplete = false;
+let reopening: Promise<void> | undefined;
+let resolveDesktopStarted: () => void = () => {};
+/** Resolves once the stores are loaded and the first window exists; menu refreshes before that would fail. */
+export const desktopStarted = new Promise<void>((resolve) => { resolveDesktopStarted = resolve; });
+
+function hasOpenWindow(): boolean {
+  return BrowserWindow.getAllWindows().some((window) => !window.isDestroyed());
+}
+
+function focusMainWindow(): void {
+  const window = getMainWindow();
+  if (!window || window.isDestroyed()) return;
+  if (window.isMinimized()) window.restore();
+  window.focus();
+}
+
+/** Builds the main window from saved state, opening `filePath` on top of the restored tabs. */
+async function openMainWindow(filePath?: string): Promise<void> {
+  await restoreWorkspace();
+  createMenu();
+  const result = filePath ? await readDocument(filePath) : undefined;
+  if (result?.ok) markOpenedFileAtLaunch();
+  createWindow();
+  if (result && !result.ok) {
+    console.error('[EasyView_Md] Failed to open startup file:', result.message);
+    void showOperationError(result);
+  }
+}
+
+/** macOS keeps the app alive after its last window closes; the next open request rebuilds the window. */
+function reopenMainWindow(filePath?: string): Promise<void> {
+  reopening ??= (async () => {
+    await closeAllTabResources();
+    await openMainWindow(filePath);
+  })().finally(() => { reopening = undefined; });
+  return reopening;
+}
+
+/** Finder "Open With", double-click, Dock drop, Explorer "Open with" and command-line paths all land here. */
+function openDocumentFromSystem(filePath: string): void {
+  if (!startupComplete) {
+    setPendingOpenPath(filePath);
+    return;
+  }
+  const opening = hasOpenWindow()
+    ? requestOpenDocument(filePath).then(focusMainWindow)
+    : (reopening ?? Promise.resolve()).then(() => (
+      hasOpenWindow() ? requestOpenDocument(filePath) : reopenMainWindow(filePath)
+    ));
+  void opening.catch((error) => {
+    console.error('[EasyView_Md] Failed to open document:', error);
+  });
+}
 
 const hasSingleInstanceLock = !squirrelStartup && app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {
@@ -50,27 +112,20 @@ if (!hasSingleInstanceLock) {
     }
     const filePath = findMarkdownArgument(argv);
     if (filePath) {
-      void requestOpenDocument(filePath).catch((error) => {
-        console.error('[EasyView_Md] Failed to open document from second instance:', error);
-      });
+      openDocumentFromSystem(filePath);
+      return;
     }
-    const window = getMainWindow();
-    if (window && !window.isDestroyed()) {
-      if (window.isMinimized()) window.restore();
-      window.focus();
+    if (startupComplete && !hasOpenWindow()) {
+      void reopenMainWindow();
+      return;
     }
+    focusMainWindow();
   });
 
   app.on('open-file', (event, filePath) => {
     event.preventDefault();
     if (!isMarkdownPath(filePath)) return;
-    if (!getMainWindow()) {
-      setPendingOpenPath(filePath);
-      return;
-    }
-    void requestOpenDocument(filePath).catch((error) => {
-      console.error('[EasyView_Md] Failed to open file:', error);
-    });
+    openDocumentFromSystem(filePath);
   });
 
   app.whenReady().then(async () => {
@@ -87,16 +142,14 @@ if (!hasSingleInstanceLock) {
     setAiChatHost(createDesktopAiChatHost());
     registerPreviewProtocol(protocol, previewProtocolSessions);
     registerDesktopIpc();
-    await restoreWorkspace();
-    createMenu();
-    if (getPendingOpenPath()) {
-      const filePath = getPendingOpenPath()!;
-      setPendingOpenPath(undefined);
-      const result = await readDocument(filePath);
-      if (result.ok) markOpenedFileAtLaunch();
-      if (!result.ok) console.error('[EasyView_Md] Failed to open startup file:', result.message);
-    }
-    createWindow();
+    const startupFile = getPendingOpenPath();
+    setPendingOpenPath(undefined);
+    await openMainWindow(startupFile);
+    startupComplete = true;
+    resolveDesktopStarted();
+    const lateFile = getPendingOpenPath();
+    setPendingOpenPath(undefined);
+    if (lateFile) openDocumentFromSystem(lateFile);
     nativeTheme.on('updated', () => {
       sendToWindow(
         'app.themeChanged',
@@ -104,7 +157,7 @@ if (!hasSingleInstanceLock) {
       );
     });
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+      if (!hasOpenWindow() && !reopening) void reopenMainWindow();
     });
   });
 

@@ -633,6 +633,7 @@ export async function showOperationError(result: OperationResult<unknown>): Prom
 
 export async function requestOpenDocument(filePath?: string): Promise<void> {
   const result = filePath ? await readDocument(filePath) : await chooseAndReadDocument();
+  if (result.ok && result.value) sendToWindow('app.revealDocument');
   await showOperationError(result);
 }
 

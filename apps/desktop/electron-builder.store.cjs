@@ -22,6 +22,10 @@ module.exports = {
   // Electron version from apps/desktop/node_modules, so pin it explicitly.
   electronVersion,
   npmRebuild: false,
+  // Lists EasyView_Md under Explorer's "Open with" for Markdown (uap:FileTypeAssociation).
+  fileAssociations: [
+    { ext: ['md', 'markdown', 'mdx'], name: 'markdown', description: 'Markdown Document' },
+  ],
   directories: {
     // AppX tile assets live in build/appx/ (tooling/brand/generate-appx-assets.mjs).
     buildResources: 'build',

@@ -1,6 +1,5 @@
 import { installAppLogger } from '../application/help/appLogger';
 installAppLogger();
-import '../adapters/electron/desktopHost';
-import { app } from 'electron';
+import { desktopStarted } from '../adapters/electron/desktopHost';
 import { startUpdateService } from '../application/update/updateService';
-void app.whenReady().then(() => startUpdateService());
+void desktopStarted.then(() => startUpdateService());

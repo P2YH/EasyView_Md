@@ -30,11 +30,9 @@
     "@electron-forge/maker-zip": "^7.8.3",
     "@electron/asar": "^3.4.1",
     "@playwright/test": "^1.58.2",
-    "@types/electron-squirrel-startup": "^1.0.2",
     "@types/node": "^22.0.0",
     "electron": "^37.0.0",
     "electron-builder": "26.15.3",
-    "electron-squirrel-startup": "^1.0.1",
     "esbuild": "^0.24.0",
     "typescript": "^5.7.0"
   },

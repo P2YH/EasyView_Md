@@ -203,6 +203,8 @@ function dismissStartupWelcome(): void {
   if (lastTabSnapshot) syncWelcome(lastTabSnapshot);
 }
 
+api.app.onRevealDocument(() => dismissStartupWelcome());
+
 window.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape' || !welcomePage.isVisible()) return;
   if (welcomeRequested) {

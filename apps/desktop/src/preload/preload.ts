@@ -111,6 +111,11 @@ const api: EasyViewDesktopApi = {
       ipcRenderer.on('app.themeChanged', handler);
       return subscription(() => ipcRenderer.removeListener('app.themeChanged', handler));
     },
+    onRevealDocument: (listener) => {
+      const handler = () => listener();
+      ipcRenderer.on('app.revealDocument', handler);
+      return subscription(() => ipcRenderer.removeListener('app.revealDocument', handler));
+    },
   },
   workspace: {
     openFolder: () => ipcRenderer.invoke('workspace.openFolder'),

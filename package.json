@@ -31,7 +31,7 @@
     "start:desktop": "npm run start --workspace @easyview/desktop",
     "verify:desktop-package": "npm run verify:package --workspace @easyview/desktop",
     "verify:desktop-runtime": "npm run verify:runtime --workspace @easyview/desktop",
-    "verify:quick": "npm run typecheck && npm run lint && npm run check:architecture && npm run verify:brand && npm run check:editor-cycles && npm run build && npm run test:unit",
+    "verify:quick": "npm run typecheck && npm run lint && npm run check:architecture && npm run check:i18n && npm run verify:brand && npm run check:editor-cycles && npm run build && npm run test:unit",
     "verify:editor": "npm run typecheck --workspace @easyview/editor-core && npm test --workspace @easyview/editor-core",
     "verify:vscode": "npm run build && npm run test:e2e && npm run package:vscode && npm run verify:vscode-package",
     "verify:desktop": "npm run typecheck --workspace @easyview/desktop && vitest run apps/desktop/src && npm run build:desktop",
@@ -39,6 +39,7 @@
     "check:editor-cycles": "node tooling/verify/check-editor-cycles.mjs",
     "verify:vscode-package": "npm run verify:package --workspace easyview-md",
     "check:architecture": "node tooling/verify/check-architecture.mjs",
+    "check:i18n": "node tooling/verify/check-i18n.mjs",
     "generate:brand-icons": "node tooling/brand/generate-icons.mjs",
     "verify:brand": "node tooling/brand/verify-assets.mjs"
   },

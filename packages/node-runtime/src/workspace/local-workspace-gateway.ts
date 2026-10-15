@@ -19,6 +19,7 @@ import {
   parentWorkspaceRelativePath,
   validateWorkspaceEntryName,
 } from './workspace-path';
+import { tWorkspaceError } from './workspace.i18n';
 
 export interface LocalWorkspaceRootRegistration {
   id: string;
@@ -104,7 +105,7 @@ export class LocalWorkspaceGateway implements WorkspaceGateway {
         }
         return this.toEntry(root.id, entryRelativePath, entry.name, kind, createdAt, updatedAt);
       }));
-    }, `Unable to list workspace directory: ${relativePath}`);
+    }, tWorkspaceError('listFailed', { path: relativePath }));
   }
 
   async create(rootId: string, request: WorkspaceCreateRequest): Promise<WorkspaceEntry> {
@@ -125,14 +126,14 @@ export class LocalWorkspaceGateway implements WorkspaceGateway {
 
       const relativePath = joinWorkspaceRelativePath(parentRelativePath, request.name);
       return this.toEntry(root.id, relativePath, request.name, request.kind);
-    }, `Unable to create workspace entry: ${request.name}`);
+    }, tWorkspaceError('createFailed', { path: request.name }));
   }
 
   async rename(rootId: string, request: WorkspaceRenameRequest): Promise<WorkspaceEntry> {
     return this.withFilesystemErrors(async () => {
       validateWorkspaceEntryName(request.newName);
       const relativePath = normalizeWorkspaceRelativePath(request.relativePath);
-      if (!relativePath) throw new WorkspaceOperationError('INVALID_PATH', 'Workspace root cannot be renamed');
+      if (!relativePath) throw new WorkspaceOperationError('INVALID_PATH', tWorkspaceError('rootCannotRename'));
 
       const root = await this.resolveRoot(rootId);
       const parentRelativePath = parentWorkspaceRelativePath(relativePath);
@@ -155,13 +156,13 @@ export class LocalWorkspaceGateway implements WorkspaceGateway {
         resolveCreatedAtMs(sourceStat),
         Number.isFinite(sourceStat.mtimeMs) ? Math.trunc(sourceStat.mtimeMs) : undefined,
       );
-    }, `Unable to rename workspace entry: ${request.relativePath}`);
+    }, tWorkspaceError('renameFailed', { path: request.relativePath }));
   }
 
   async move(rootId: string, request: WorkspaceMoveRequest): Promise<WorkspaceEntry> {
     return this.withFilesystemErrors(async () => {
       const relativePath = normalizeWorkspaceRelativePath(request.relativePath);
-      if (!relativePath) throw new WorkspaceOperationError('INVALID_PATH', 'Workspace root cannot be moved');
+      if (!relativePath) throw new WorkspaceOperationError('INVALID_PATH', tWorkspaceError('rootCannotMove'));
 
       const root = await this.resolveRoot(rootId);
       const sourceParentRelativePath = parentWorkspaceRelativePath(relativePath);
@@ -179,7 +180,7 @@ export class LocalWorkspaceGateway implements WorkspaceGateway {
       if (sourceStat.isDirectory() && !sourceStat.isSymbolicLink()) {
         const realSource = await fs.realpath(sourcePath);
         if (realTargetParent === realSource || realTargetParent.startsWith(`${realSource}${path.sep}`)) {
-          throw new WorkspaceOperationError('INVALID_PATH', 'Cannot move a folder into itself or its descendants');
+          throw new WorkspaceOperationError('INVALID_PATH', tWorkspaceError('moveIntoSelf'));
         }
       }
 
@@ -197,13 +198,13 @@ export class LocalWorkspaceGateway implements WorkspaceGateway {
         resolveCreatedAtMs(sourceStat),
         Number.isFinite(sourceStat.mtimeMs) ? Math.trunc(sourceStat.mtimeMs) : undefined,
       );
-    }, `Unable to move workspace entry: ${request.relativePath}`);
+    }, tWorkspaceError('moveFailed', { path: request.relativePath }));
   }
 
   async delete(rootId: string, request: WorkspaceDeleteRequest): Promise<void> {
     await this.withFilesystemErrors(async () => {
       const relativePath = normalizeWorkspaceRelativePath(request.relativePath);
-      if (!relativePath) throw new WorkspaceOperationError('INVALID_PATH', 'Workspace root cannot be deleted');
+      if (!relativePath) throw new WorkspaceOperationError('INVALID_PATH', tWorkspaceError('rootCannotDelete'));
 
       const root = await this.resolveRoot(rootId);
       const parentRelativePath = parentWorkspaceRelativePath(relativePath);
@@ -214,7 +215,7 @@ export class LocalWorkspaceGateway implements WorkspaceGateway {
 
       if (request.options?.useTrash) {
         if (!this.trash) {
-          throw new WorkspaceOperationError('TRASH_UNAVAILABLE', 'No workspace trash handler is configured');
+          throw new WorkspaceOperationError('TRASH_UNAVAILABLE', tWorkspaceError('trashUnavailable'));
         }
         await this.trash({
           rootId: root.id,
@@ -234,7 +235,7 @@ export class LocalWorkspaceGateway implements WorkspaceGateway {
       } else {
         await fs.unlink(targetPath);
       }
-    }, `Unable to delete workspace entry: ${request.relativePath}`);
+    }, tWorkspaceError('deleteFailed', { path: request.relativePath }));
   }
 
   private async resolveRoot(rootId: string): Promise<ResolvedLocalWorkspaceRoot> {
@@ -242,12 +243,12 @@ export class LocalWorkspaceGateway implements WorkspaceGateway {
     if (cached) return cached;
 
     const registration = this.roots.get(rootId);
-    if (!registration) throw new WorkspaceOperationError('ROOT_NOT_FOUND', `Unknown workspace root: ${rootId}`);
+    if (!registration) throw new WorkspaceOperationError('ROOT_NOT_FOUND', tWorkspaceError('unknownRoot', { rootId }));
 
     const resolving = this.withFilesystemErrors(async () => {
       const stat = await fs.stat(registration.rootPath);
       if (!stat.isDirectory()) {
-        throw new WorkspaceOperationError('NOT_DIRECTORY', `Workspace root is not a directory: ${registration.rootPath}`);
+        throw new WorkspaceOperationError('NOT_DIRECTORY', tWorkspaceError('rootNotDirectory', { path: registration.rootPath }));
       }
       const rootPath = await fs.realpath(registration.rootPath);
       return {
@@ -255,7 +256,7 @@ export class LocalWorkspaceGateway implements WorkspaceGateway {
         name: registration.name ?? path.basename(rootPath),
         rootPath,
       };
-    }, `Unable to resolve workspace root: ${registration.rootPath}`).catch((error) => {
+    }, tWorkspaceError('resolveRootFailed', { path: registration.rootPath })).catch((error) => {
       this.resolvedRoots.delete(rootId);
       throw error;
     });
@@ -276,11 +277,11 @@ export class LocalWorkspaceGateway implements WorkspaceGateway {
       if (segmentStat.isSymbolicLink()) {
         throw new WorkspaceOperationError(
           'SYMLINK_NOT_TRAVERSABLE',
-          `Symbolic links are leaf nodes: ${normalizedPath}`,
+          tWorkspaceError('symlinkLeaf', { path: normalizedPath }),
         );
       }
       if (!segmentStat.isDirectory()) {
-        throw new WorkspaceOperationError('NOT_DIRECTORY', `Workspace entry is not a directory: ${normalizedPath}`);
+        throw new WorkspaceOperationError('NOT_DIRECTORY', tWorkspaceError('entryNotDirectory', { path: normalizedPath }));
       }
     }
     const realDirectoryPath = await fs.realpath(currentPath);
@@ -292,14 +293,14 @@ export class LocalWorkspaceGateway implements WorkspaceGateway {
     const root = path.resolve(rootPath);
     const candidate = path.resolve(candidatePath);
     if (candidate !== root && !candidate.startsWith(`${root}${path.sep}`)) {
-      throw new WorkspaceOperationError('ROOT_ESCAPE', 'Workspace path cannot escape the root');
+      throw new WorkspaceOperationError('ROOT_ESCAPE', tWorkspaceError('escapeRoot'));
     }
   }
 
   private async assertMissing(targetPath: string): Promise<void> {
     try {
       await fs.lstat(targetPath);
-      throw new WorkspaceOperationError('ALREADY_EXISTS', 'A file or directory with the same name already exists');
+      throw new WorkspaceOperationError('ALREADY_EXISTS', tWorkspaceError('alreadyExists'));
     } catch (error) {
       if (isWorkspaceOperationError(error)) throw error;
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;

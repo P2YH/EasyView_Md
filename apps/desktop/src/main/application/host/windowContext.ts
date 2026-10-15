@@ -56,6 +56,9 @@ export function createDesktopWindowContext(id: string, trash?: (absolutePath: st
       fullWidth: true,
       tableWrap: false,
       hasActiveDocument: false,
+      themeMode: 'light',
+      themeDepth: 50,
+      accent: 'default',
     },
   };
 }

@@ -24,6 +24,7 @@ import { RowHeightController } from './controllers/RowHeightController';
 import { NestedTableScrollController } from './controllers/NestedTableScrollController';
 import { closeTableCellContentPopup, showTableCellContentPopup } from './TableCellContentPopup';
 import type { EditorHostTransport } from '@easyview/contracts';
+import { tTable } from './table.i18n';
 
 let tableViewportStyleSequence = 0;
 
@@ -609,7 +610,7 @@ export class TableView extends ProsemirrorTableView {
     // header so the table-level entry point stays visible while scrolling.
     const stickyGrip = document.createElement('div');
     stickyGrip.className = `${TableStyleHelper.tableGrip} easyview-sticky-table-grip`;
-    stickyGrip.setAttribute('aria-label', 'Table actions');
+    stickyGrip.setAttribute('aria-label', tTable('grip.tableActions'));
     stickyGrip.contentEditable = 'false';
     stickyGrip.addEventListener('mousedown', (event) => {
       event.preventDefault();

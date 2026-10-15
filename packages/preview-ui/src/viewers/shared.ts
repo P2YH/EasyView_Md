@@ -3,13 +3,14 @@ import { createPortal } from 'react-dom';
 import type { FileViewerProps, ViewerOptions } from '@file-viewer/react-full';
 import type { PreviewDescriptor } from '@easyview/contracts';
 import { EASYVIEW_THEME_PALETTE } from '@easyview/contracts';
+import { getLocale } from '@easyview/contracts/i18n';
 import { usePreviewAssets } from '../assets';
 import {
   PREVIEW_THEME_ICONS,
-  PREVIEW_THEME_TITLES,
   createLocalPreviewThemeStorage,
   cyclePreviewThemeMode,
   previewThemeCssVars,
+  previewThemeTitle,
   previewThemeToViewerTheme,
   resolvePreviewThemeMode,
   useLiftPreviewThemeSurface,
@@ -17,6 +18,7 @@ import {
   type PreviewThemeStorage,
 } from '../theme';
 import { revokeSameOriginWorkerUrl, toSameOriginWorkerUrl } from '../workers/sameOriginWorker';
+import { tPreview } from '../preview.i18n';
 
 export type { PreviewDescriptor };
 
@@ -67,17 +69,17 @@ export function formatBytes(bytes: number): string {
   return `${value.toFixed(value >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
 }
 
-export function Loading({ label = '正在加载预览…' }: { label?: string }): React.ReactElement {
+export function Loading({ label = tPreview('common.loading') }: { label?: string }): React.ReactElement {
   return h('div', { className: 'preview-viewer-message' }, label);
 }
 
 /** Prefer this over createElement(Loading) — React 19 typings reject loose FC createElement calls. */
-export function loadingElement(label = '正在加载预览…'): React.ReactElement {
+export function loadingElement(label = tPreview('common.loading')): React.ReactElement {
   return Loading({ label });
 }
 
 export function ViewerError({ error }: { error: unknown }): React.ReactElement {
-  const message = error instanceof Error ? error.message : '预览失败';
+  const message = error instanceof Error ? error.message : tPreview('common.failed');
   return h('div', { className: 'preview-viewer-message preview-viewer-error', role: 'alert' }, message);
 }
 
@@ -307,7 +309,7 @@ function useFileViewerToolbarChromeSlot(
       el.setAttribute('data-easyview-toolbar-slot', 'chrome');
       el.className = 'file-viewer-web-toolbar-group preview-file-viewer-chrome-slot';
       el.setAttribute('role', 'group');
-      el.setAttribute('aria-label', 'EasyView 工具');
+      el.setAttribute('aria-label', tPreview('toolbar.group'));
       hostRef.current = el;
       setHost(el);
     }
@@ -359,7 +361,7 @@ function useFileViewerToolbarChromeSlot(
   return host;
 }
 
-export function UniversalFilePreview({ descriptor, loadingLabel = '正在加载文件预览器…' }: ViewerProps & { loadingLabel?: string }): React.ReactElement {
+export function UniversalFilePreview({ descriptor, loadingLabel = tPreview('common.loadingFileViewer') }: ViewerProps & { loadingLabel?: string }): React.ReactElement {
   const assets = usePreviewAssets();
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   const themeStorage = React.useMemo(
@@ -487,6 +489,7 @@ export function UniversalFilePreview({ descriptor, loadingLabel = '正在加载�
 
   const options: ViewerOptions = {
     theme: appearance.theme,
+    locale: getLocale() === 'en' ? 'en-US' : 'zh-CN',
     styleIsolation: 'none',
     toolbar: pinnedOpen ? { theme: false, position: 'top' } : false,
     pdf: { toolbar: false },
@@ -529,8 +532,8 @@ export function UniversalFilePreview({ descriptor, loadingLabel = '正在加载�
           h('button', {
             type: 'button',
             className: 'preview-chrome-btn preview-chrome-btn--icon preview-toolbar-theme',
-            title: PREVIEW_THEME_TITLES[themeMode],
-            'aria-label': PREVIEW_THEME_TITLES[themeMode],
+            title: previewThemeTitle(themeMode),
+            'aria-label': previewThemeTitle(themeMode),
             'data-mode': themeMode,
             onClick: cycleTheme,
             dangerouslySetInnerHTML: { __html: PREVIEW_THEME_ICONS[themeMode] },
@@ -538,8 +541,8 @@ export function UniversalFilePreview({ descriptor, loadingLabel = '正在加载�
           h('button', {
             type: 'button',
             className: 'preview-chrome-btn preview-chrome-btn--icon preview-toolbar-toggle preview-toolbar-collapse-dock',
-            title: '收起预览工具栏',
-            'aria-label': '收起预览工具栏',
+            title: tPreview('toolbar.collapse'),
+            'aria-label': tPreview('toolbar.collapse'),
             'aria-expanded': true,
             onClick: togglePinned,
           }, h(PreviewToolbarPinIcon, { expand: false })),
@@ -567,8 +570,8 @@ export function UniversalFilePreview({ descriptor, loadingLabel = '正在加载�
       : h('button', {
           type: 'button',
           className: 'preview-chrome-btn preview-chrome-btn--icon preview-toolbar-toggle preview-toolbar-expand-dock',
-          'data-tooltip': '展开预览工具栏',
-          'aria-label': '展开预览工具栏',
+          'data-tooltip': tPreview('toolbar.expand'),
+          'aria-label': tPreview('toolbar.expand'),
           'aria-expanded': false,
           onClick: togglePinned,
         }, h(PreviewToolbarPinIcon, { expand: true })),

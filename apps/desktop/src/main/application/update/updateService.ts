@@ -5,11 +5,12 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { log } from '../help/appLogger';
 import {
-  compareVersions, DEFAULT_UPDATE_SETTINGS, isUpdateDisabled, LATEST_RELEASE_API, normalizeUpdateSettings,
-  parseGitHubRelease, parseSha256Sums, type ReleaseAsset, type ReleaseInfo, selectInstallerAsset, shouldPrompt,
+  compareVersions, DEFAULT_UPDATE_SETTINGS, isUpdateDisabled, LATEST_RELEASE_API, LATEST_RELEASE_PAGE, normalizeUpdateSettings,
+  parseGitHubRelease, parseReleaseFromTagUrl, parseSha256Sums, type ReleaseAsset, type ReleaseInfo, selectInstallerAsset, shouldPrompt,
   trimNotes, type UpdateSettings, WEBSITE_URL,
 } from './updateCore';
 import { cleanupUpdateDirectory, findVerifiedDownload } from './updateStorage';
+import { tUpdate } from './updateService.i18n';
 
 const FIRST_CHECK_DELAY_MS = 10_000;
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -68,10 +69,26 @@ async function fetchWithTimeout(url: string, accept: string): Promise<Response> 
 }
 
 async function fetchLatestRelease(): Promise<ReleaseInfo> {
-  const response = await fetchWithTimeout(LATEST_RELEASE_API, 'application/vnd.github+json');
-  const release = parseGitHubRelease(await response.json());
-  if (!release) throw new Error('latest release is missing, a draft/prerelease, or has an invalid tag');
-  return release;
+  let apiError: unknown;
+  try {
+    const response = await fetchWithTimeout(LATEST_RELEASE_API, 'application/vnd.github+json');
+    const release = parseGitHubRelease(await response.json());
+    if (release) return release;
+    apiError = new Error('latest release is missing, a draft/prerelease, or has an invalid tag');
+  } catch (error) {
+    apiError = error;
+  }
+  ulog('warn', `release API unavailable, falling back to release page: ${String(apiError)}`);
+  try {
+    const response = await fetchWithTimeout(LATEST_RELEASE_PAGE, 'text/html');
+    void response.body?.cancel();
+    const release = parseReleaseFromTagUrl(response.url);
+    if (release) return release;
+    throw new Error(`unexpected release page url ${response.url}`);
+  } catch (error) {
+    ulog('warn', `release page fallback failed: ${String(error)}`);
+    throw apiError;
+  }
 }
 
 function windowsInstalled(): boolean {
@@ -90,12 +107,12 @@ async function showBox(options: Electron.MessageBoxOptions): Promise<Electron.Me
 
 export async function checkForUpdates(manual: boolean): Promise<void> {
   if (updatesDisabled()) {
-    if (manual) await showBox({ type: 'info', message: '此版本由应用商店更新 / Updates are managed by the store.' });
+    if (manual) await showBox({ type: 'info', message: tUpdate('storeManaged') });
     return;
   }
   if (checking) return;
   if (download) {
-    if (manual) await showBox({ type: 'info', message: `正在下载 v${download.version}… / Downloading v${download.version}…` });
+    if (manual) await showBox({ type: 'info', message: tUpdate('downloading', { version: download.version }) });
     return;
   }
   checking = true;
@@ -107,13 +124,13 @@ export async function checkForUpdates(manual: boolean): Promise<void> {
     ulog('info', `latest release ${release.version}`);
     if (!shouldPrompt(release, current, settings, manual)) {
       if (compareVersions(release.version, current) > 0) ulog('info', `version ${release.version} skipped by user`);
-      if (manual) await showBox({ type: 'info', message: '已是最新版本 / You are up to date', detail: `EasyView ${current}` });
+      if (manual) await showBox({ type: 'info', message: tUpdate('upToDate'), detail: `EasyView ${current}` });
       return;
     }
     await promptForRelease(release, current);
   } catch (error) {
     ulog(manual ? 'warn' : 'info', `update check failed: ${String(error)}`);
-    if (manual) await showBox({ type: 'error', message: '检查更新失败 / Update check failed', detail: String(error instanceof Error ? error.message : error) });
+    if (manual) await showBox({ type: 'error', message: tUpdate('checkFailed'), detail: String(error instanceof Error ? error.message : error) });
   } finally {
     checking = false;
   }
@@ -121,22 +138,22 @@ export async function checkForUpdates(manual: boolean): Promise<void> {
 
 async function promptForRelease(release: ReleaseInfo, current: string): Promise<void> {
   const asset = selectInstallerAsset(release.assets, { platform: process.platform, arch: process.arch, windowsInstalled: windowsInstalled() });
-  const buttons = [...(asset ? ['下载并安装 / Download'] : []), '打开官网 / Website', '稍后提醒 / Later', '跳过此版本 / Skip'];
+  const choices = [...(asset ? ['download' as const] : []), 'website' as const, 'later' as const, 'skip' as const];
   const { response } = await showBox({
     type: 'info',
-    title: 'EasyView 更新 / Update',
-    message: `发现新版本 v${release.version}（当前 v${current}）\nNew version v${release.version} is available`,
+    title: tUpdate('prompt.title'),
+    message: tUpdate('prompt.message', { version: release.version, current }),
     detail: trimNotes(release.notes) || release.htmlUrl,
-    buttons,
+    buttons: choices.map((choice) => tUpdate(`prompt.${choice}`)),
     defaultId: 0,
-    cancelId: buttons.indexOf('稍后提醒 / Later'),
+    cancelId: choices.indexOf('later'),
     noLink: true,
   });
-  const choice = buttons[response];
+  const choice = choices[response];
   ulog('info', `user chose "${choice}" for ${release.version}`);
-  if (choice.startsWith('下载') && asset) void downloadUpdate(release, asset);
-  else if (choice.startsWith('打开官网')) void shell.openExternal(WEBSITE_URL);
-  else if (choice.startsWith('跳过')) await saveSettings({ skippedVersion: release.version });
+  if (choice === 'download' && asset) void downloadUpdate(release, asset);
+  else if (choice === 'website') void shell.openExternal(WEBSITE_URL);
+  else if (choice === 'skip') await saveSettings({ skippedVersion: release.version });
 }
 
 function setProgress(value: number): void {
@@ -212,10 +229,8 @@ async function downloadUpdate(release: ReleaseInfo, asset: ReleaseAsset): Promis
     if (openError) throw new Error(`failed to open installer: ${openError}`);
     await showBox({
       type: 'info',
-      message: `v${release.version} 安装包已打开 / Installer opened`,
-      detail: process.platform === 'darwin'
-        ? '请退出 EasyView，将新版本拖入「应用程序」覆盖安装。\nQuit EasyView and drag the new app into Applications.'
-        : '请按安装程序提示完成安装，安装时会关闭 EasyView。\nFollow the installer; EasyView will be closed during setup.',
+      message: tUpdate('installer.opened', { version: release.version }),
+      detail: tUpdate(process.platform === 'darwin' ? 'installer.macDetail' : 'installer.detail'),
     });
   } catch (error) {
     const cancelled = controller.signal.aborted && String(controller.signal.reason).includes('cancelled');
@@ -223,7 +238,7 @@ async function downloadUpdate(release: ReleaseInfo, asset: ReleaseAsset): Promis
     await rm(partPath, { force: true });
     setProgress(-1);
     if (!cancelled) {
-      const { response } = await showBox({ type: 'error', message: '更新下载失败 / Download failed', detail: String(error instanceof Error ? error.message : error), buttons: ['打开官网 / Website', '关闭 / Close'], defaultId: 0, cancelId: 1 });
+      const { response } = await showBox({ type: 'error', message: tUpdate('download.failed'), detail: String(error instanceof Error ? error.message : error), buttons: [tUpdate('prompt.website'), tUpdate('download.close')], defaultId: 0, cancelId: 1 });
       if (response === 0) void shell.openExternal(WEBSITE_URL);
     }
   } finally {

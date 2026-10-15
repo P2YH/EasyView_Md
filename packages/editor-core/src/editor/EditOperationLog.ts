@@ -1,3 +1,5 @@
+import { tEditOperation } from './editOperation.i18n';
+
 export type EditOperationMode = 'wysiwyg' | 'source';
 
 export interface EditOperationEntry {
@@ -34,7 +36,7 @@ export class EditOperationLog {
       for (let index = 0; index < added; index++) {
         const isLatest = index === added - 1;
         this.undoEntries.push({
-          label: isLatest && this.pendingLabel ? this.pendingLabel : '编辑文档',
+          label: isLatest && this.pendingLabel ? this.pendingLabel : tEditOperation('editDocument'),
           mode: isLatest && this.pendingLabel ? this.pendingMode : mode,
         });
       }
@@ -61,13 +63,13 @@ export class EditOperationLog {
       this.undoEntries.pop();
     }
     while (this.undoEntries.length < undoDepth) {
-      this.undoEntries.push({ label: '编辑文档', mode });
+      this.undoEntries.push({ label: tEditOperation('editDocument'), mode });
     }
     while (this.redoEntries.length > redoDepth) {
       this.redoEntries.pop();
     }
     while (this.redoEntries.length < redoDepth) {
-      this.redoEntries.push({ label: '重做', mode });
+      this.redoEntries.push({ label: tEditOperation('redo'), mode });
     }
 
     this.lastUndoDepth = undoDepth;

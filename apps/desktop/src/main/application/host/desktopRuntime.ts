@@ -38,6 +38,7 @@ import {
   runInDesktopWindowContext,
   type DesktopWindowContext,
 } from './windowContext';
+import { tRuntime } from './desktopRuntime.i18n';
 
 const defaultContext = createDesktopWindowContext('main-window', async (absolutePath) => {
   await shell.trashItem(absolutePath);
@@ -81,7 +82,7 @@ export let tableFirstRowStickyDefault = false;
 
 export const hostHooks = {
   createMenu(): void {
-    throw new Error('createMenu 尚未绑定');
+    throw new Error('createMenu is not bound yet');
   },
 };
 
@@ -157,7 +158,7 @@ export function setWorkspaceWatcher(value: WorkspaceWatcher | undefined): void {
 
 export function getAppStateStore(): AppStateStore {
   const store = getWindowContext().appStateStore;
-  if (!store) throw new Error('应用状态尚未初始化');
+  if (!store) throw new Error('App state store is not initialized');
   return store;
 }
 
@@ -180,7 +181,7 @@ export function previewFailure(error: unknown): OperationResult<never> {
   if (error instanceof HttpPreviewError) {
     return failure(error.kind === 'permission' ? 'PERMISSION_DENIED' : error.kind === 'invalid' ? 'INVALID_ARGUMENT' : 'UNKNOWN', error.message);
   }
-  return failure('UNKNOWN', error instanceof Error ? error.message : '预览操作失败');
+  return failure('UNKNOWN', error instanceof Error ? error.message : tRuntime('preview.failed'));
 }
 
 export function trustedRenderer(event: { sender: Electron.WebContents }): boolean {
@@ -208,7 +209,7 @@ export function sendEditorMessage(message: HostToEditorMessage): void {
 }
 
 export function assertTrustedRenderer(event: { sender: Electron.WebContents }): OperationResult<never> | null {
-  return trustedRenderer(event) ? null : failure('UNKNOWN', '拒绝非当前窗口的请求');
+  return trustedRenderer(event) ? null : failure('UNKNOWN', tRuntime('request.untrustedWindow'));
 }
 
 export function isMarkdownPath(filePath: string): boolean {
@@ -283,13 +284,18 @@ export function publishTabs(): DesktopTabSnapshot {
 }
 
 export function updateWindowTitle(): void {
-  const active = tabRegistry.active();
-  if (!active) {
-    getMainWindow()?.setTitle('EasyView_Md');
-    return;
-  }
+  const window = getMainWindow();
+  if (!window || window.isDestroyed()) return;
+  window.setTitle(desktopWindowTitle(tabRegistry.active(), workspaceRoot()));
+}
+
+/** Titles feed the macOS Dock / Window menu lists, so they name both the file and its folder. */
+export function desktopWindowTitle(active: DesktopTab | null, rootPath: string | null): string {
+  const folderName = rootPath ? rootPath.split(/[\\/]/).filter(Boolean).at(-1) ?? rootPath : null;
+  const suffix = folderName ?? 'EasyView_Md';
+  if (!active) return tRuntime('window.welcomeTitle', { suffix });
   const dirtyMarker = active.kind === 'editor' && active.dirty ? ' •' : '';
-  getMainWindow()?.setTitle(`${active.fileName}${dirtyMarker} — EasyView_Md`);
+  return `${active.fileName}${dirtyMarker} — ${suffix}`;
 }
 
 export function syncTabState(): DesktopTabSnapshot {

@@ -52,6 +52,30 @@ export function parseGitHubRelease(payload: unknown): ReleaseInfo | undefined {
   };
 }
 
+export const LATEST_RELEASE_PAGE = `https://github.com/${UPDATE_REPO}/releases/latest`;
+const KNOWN_RELEASE_ASSETS = ['EasyView_Md-mac-arm64.dmg', 'EasyView_Md-win-x64-setup.exe', 'SHA256SUMS'];
+
+/**
+ * Fallback for when the REST API is rate limited (60 req/h per IP when unauthenticated):
+ * builds ReleaseInfo from the URL that github.com/<repo>/releases/latest redirects to.
+ * Notes and asset sizes are unavailable on this path.
+ */
+export function parseReleaseFromTagUrl(url: string): ReleaseInfo | undefined {
+  const match = /\/releases\/tag\/([^/?#]+)/.exec(url);
+  if (!match) return undefined;
+  const tag = decodeURIComponent(match[1]);
+  const parsed = parseVersion(tag);
+  if (!parsed || parsed.pre) return undefined;
+  const base = `https://github.com/${UPDATE_REPO}/releases`;
+  return {
+    version: parsed.core.join('.'),
+    tag,
+    notes: '',
+    htmlUrl: `${base}/tag/${encodeURIComponent(tag)}`,
+    assets: KNOWN_RELEASE_ASSETS.map((name) => ({ name, url: `${base}/download/${encodeURIComponent(tag)}/${name}`, size: 0 })),
+  };
+}
+
 export interface PlatformInfo { platform: string; arch: string; windowsInstalled: boolean }
 
 /** Picks the installer asset for this platform; undefined means "open the website instead". */

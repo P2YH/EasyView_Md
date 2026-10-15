@@ -7,6 +7,7 @@
 
 import type { EditorView } from 'prosemirror-view';
 import { schema } from '../../../editor/EditorSchema';
+import { tSlashMenu } from './slashMenu.i18n';
 
 export function showImageUrlPopup(view: EditorView, from: number, to: number) {
   const overlay = document.createElement('div');
@@ -19,12 +20,12 @@ export function showImageUrlPopup(view: EditorView, from: number, to: number) {
   const input = document.createElement('input');
   input.className = 'link-edit-input';
   input.type = 'url';
-  input.placeholder = 'Enter image URL...';
+  input.placeholder = tSlashMenu('imagePopup.placeholder');
   input.spellcheck = false;
 
   const submitBtn = document.createElement('button');
   submitBtn.className = 'link-edit-btn';
-  submitBtn.title = 'Insert';
+  submitBtn.title = tSlashMenu('imagePopup.insert');
   submitBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
 
   function insertImage() {

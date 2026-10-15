@@ -6,6 +6,7 @@ import {
   rewriteExtractedMediaPaths,
 } from '@easyview/node-runtime';
 import { openMarkdownInEasyViewEditor } from './openMarkdownEditor';
+import { tDocument } from './document.i18n';
 
 export { flattenPngWithWhiteBackground, rewriteExtractedMediaPaths };
 
@@ -18,12 +19,13 @@ async function convertWithOverwritePrompt(sourcePath: string) {
       path.dirname(sourcePath),
       `${path.basename(sourcePath, path.extname(sourcePath))}.md`,
     );
+    const replaceAction = tDocument('convert.replace');
     const selection = await vscode.window.showWarningMessage(
-      `${path.basename(outputPath)} already exists. Replace it?`,
+      tDocument('convert.outputExists', { name: path.basename(outputPath) }),
       { modal: true },
-      'Replace',
+      replaceAction,
     );
-    if (selection !== 'Replace') return null;
+    if (selection !== replaceAction) return null;
     return convertWordToMarkdown({ sourcePath, overwrite: true });
   }
 }
@@ -32,7 +34,7 @@ export function registerWordToMarkdownCommand(context: vscode.ExtensionContext):
   return vscode.commands.registerCommand('easyviewMd.convertWordToMarkdown', async (uri?: vscode.Uri) => {
     const targetUri = uri ?? vscode.window.activeTextEditor?.document.uri;
     if (!targetUri || targetUri.scheme !== 'file') {
-      vscode.window.showErrorMessage('Select a DOCX or DOC file first.');
+      vscode.window.showErrorMessage(tDocument('convertWord.selectFirst'));
       return;
     }
 
@@ -40,22 +42,23 @@ export function registerWordToMarkdownCommand(context: vscode.ExtensionContext):
       const result = await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: 'Converting Word document to Markdown',
+          title: tDocument('convertWord.progress'),
           cancellable: false,
         },
         () => convertWithOverwritePrompt(targetUri.fsPath),
       );
       if (!result) return;
       const outputUri = vscode.Uri.file(result.outputPath);
+      const openAction = tDocument('convert.openMarkdown');
       const selection = await vscode.window.showInformationMessage(
-        `Converted to ${path.basename(result.outputPath)}`,
-        'Open Markdown',
+        tDocument('convert.converted', { name: path.basename(result.outputPath) }),
+        openAction,
       );
-      if (selection === 'Open Markdown') {
+      if (selection === openAction) {
         await openMarkdownInEasyViewEditor(outputUri, context);
       }
     } catch (error: any) {
-      vscode.window.showErrorMessage(`Word to Markdown conversion failed: ${error?.message || String(error)}`);
+      vscode.window.showErrorMessage(tDocument('convertWord.failed', { message: error?.message || String(error) }));
     }
   });
 }

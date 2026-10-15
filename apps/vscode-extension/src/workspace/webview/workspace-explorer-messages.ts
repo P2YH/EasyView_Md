@@ -17,6 +17,7 @@ export type WorkspaceExplorerRequest =
   | { type: 'ready' }
   | { type: 'focusContextMenu'; requestId: string }
   | { type: 'listChildren'; requestId: string; relativePath: string }
+  | { type: 'search'; requestId: string; query: string }
   | { type: 'setExpanded'; relativePath: string; expanded: boolean }
   | { type: 'setSelection'; relativePaths: string[]; anchorRelativePath: string | null }
   | { type: 'setInputFocus'; focused: boolean }
@@ -81,13 +82,15 @@ export type WorkspaceExplorerEvent =
       message: string;
       missing?: boolean;
     }
+  | { type: 'searchResult'; requestId: string; ok: true; entries: WorkspaceExplorerEntry[]; truncated: boolean }
+  | { type: 'searchResult'; requestId: string; ok: false; message: string }
   | { type: 'fsChanged'; relativePaths: string[] }
   | { type: 'entriesDeleted'; relativePaths: string[] }
   | { type: 'reveal'; relativePath: string; force?: boolean }
   | { type: 'rootChanged' }
   | { type: 'sortConfig'; sort: WorkspaceExplorerSortConfig }
   | { type: 'clipboardChanged'; hasClipboard: boolean }
-  | { type: 'contextCommand'; command: 'rename' | 'paste' | 'beginCreateFile' | 'beginCreateFolder' | 'toggleSortMenu' | 'refresh' | 'collapseAll'; relativePath?: string }
+  | { type: 'contextCommand'; command: 'rename' | 'paste' | 'beginCreateFile' | 'beginCreateFolder' | 'toggleSortMenu' | 'toggleSearch' | 'refresh' | 'collapseAll'; relativePath?: string }
   | {
       type: 'opResult';
       requestId: string;

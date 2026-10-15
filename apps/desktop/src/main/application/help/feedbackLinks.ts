@@ -1,3 +1,5 @@
+import { tFeedback } from './feedbackLinks.i18n';
+
 export const FEEDBACK_REPO_URL = 'https://github.com/tiantianmanmanzou/EasyView_Md';
 export const FEEDBACK_EMAIL = 'zalmanzxy@gmail.com';
 
@@ -34,16 +36,16 @@ export function buildIssueUrl(env: FeedbackEnvironment): string {
 }
 
 export function buildFeedbackMailto(env: FeedbackEnvironment): string {
-  const subject = `EasyView 反馈 / Feedback (v${env.appVersion})`;
+  const subject = tFeedback('mail.subject', { version: env.appVersion });
   const body = [
-    '请描述问题或建议 / Please describe the issue or suggestion:',
+    tFeedback('mail.describe'),
     '',
     '',
-    '复现步骤 / Steps to reproduce:',
+    tFeedback('mail.steps'),
     '1. ',
     '',
     '---',
-    '环境信息 / Environment:',
+    tFeedback('mail.environment'),
     formatEnvironment(env),
   ].join('\n');
   return `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;

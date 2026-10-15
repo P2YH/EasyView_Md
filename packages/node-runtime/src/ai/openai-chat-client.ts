@@ -8,6 +8,7 @@
 
 import { APICallError, generateText, stepCountIs, streamText, type ModelMessage, type ToolSet } from 'ai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
+import { tAi } from './ai.i18n';
 
 export interface OpenAiChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -84,7 +85,7 @@ function toAiSdkMessages(messages: readonly OpenAiChatMessage[]): ModelMessage[]
     }
 
     if (message.role !== 'user') {
-      throw new OpenAiChatError('PROTOCOL', '仅用户消息支持多模态内容');
+      throw new OpenAiChatError('PROTOCOL', tAi('client.multimodalUserOnly'));
     }
 
     return {
@@ -92,7 +93,7 @@ function toAiSdkMessages(messages: readonly OpenAiChatMessage[]): ModelMessage[]
       content: message.content.map((part) => {
         if (part.type === 'text') return { type: 'text', text: part.text ?? '' };
         const url = part.image_url?.url;
-        if (!url) throw new OpenAiChatError('PROTOCOL', '图片消息缺少 URL');
+        if (!url) throw new OpenAiChatError('PROTOCOL', tAi('client.imageUrlMissing'));
         return {
           type: 'file',
           mediaType: imageMediaType(url),
@@ -122,24 +123,24 @@ function errorDetail(error: APICallError): string {
 
 function classifyError(error: unknown, aborted: boolean, timedOut: boolean, totalTimeoutMs: number): OpenAiChatError {
   if (timedOut) {
-    return new OpenAiChatError('TIMEOUT', `请求超时（总时长超过 ${Math.round(totalTimeoutMs / 1000)}s）`);
+    return new OpenAiChatError('TIMEOUT', tAi('client.timeout', { seconds: Math.round(totalTimeoutMs / 1000) }));
   }
   if (aborted || (error instanceof DOMException && error.name === 'AbortError')) {
-    return new OpenAiChatError('ABORTED', '已停止生成');
+    return new OpenAiChatError('ABORTED', tAi('client.aborted'));
   }
   if (APICallError.isInstance(error)) {
     const detail = errorDetail(error);
     if (error.statusCode === 401 || error.statusCode === 403) {
-      return new OpenAiChatError('AUTH', `API Key 无效或无权限 (HTTP ${error.statusCode}): ${detail}`, error.statusCode);
+      return new OpenAiChatError('AUTH', tAi('client.auth', { status: error.statusCode, detail }), error.statusCode);
     }
     if (error.statusCode === 429) {
-      return new OpenAiChatError('RATE_LIMIT', `请求过于频繁或额度不足 (HTTP 429): ${detail}`, error.statusCode);
+      return new OpenAiChatError('RATE_LIMIT', tAi('client.rateLimit', { detail }), error.statusCode);
     }
-    return new OpenAiChatError('HTTP', `请求失败 (HTTP ${error.statusCode}): ${detail}`, error.statusCode);
+    return new OpenAiChatError('HTTP', tAi('client.httpFailed', { status: String(error.statusCode), detail }), error.statusCode);
   }
   if (error instanceof OpenAiChatError) return error;
   const message = error instanceof Error ? error.message : String(error);
-  return new OpenAiChatError('NETWORK', `网络请求失败: ${message}`);
+  return new OpenAiChatError('NETWORK', tAi('client.network', { detail: message }));
 }
 
 function createRequestAbortController(
@@ -185,11 +186,11 @@ function createRequestAbortController(
 function buildAiSdkRequest(options: OpenAiChatRequestOptions, signal: AbortSignal) {
   const systemMessages = options.messages.filter((message) => message.role === 'system');
   if (systemMessages.length > 1) {
-    throw new OpenAiChatError('PROTOCOL', '每次请求最多允许一条系统消息');
+    throw new OpenAiChatError('PROTOCOL', tAi('client.multipleSystemMessages'));
   }
   const system = systemMessages[0]?.content;
   if (system !== undefined && typeof system !== 'string') {
-    throw new OpenAiChatError('PROTOCOL', '系统消息必须是纯文本');
+    throw new OpenAiChatError('PROTOCOL', tAi('client.systemMessageNotText'));
   }
   const provider = createOpenAICompatible({
     name: 'easyview',
@@ -226,7 +227,7 @@ export async function streamOpenAiChat(
 
   try {
     if (options.signal?.aborted) {
-      throw new OpenAiChatError('ABORTED', '已停止生成');
+      throw new OpenAiChatError('ABORTED', tAi('client.aborted'));
     }
     if (options.stream === false) {
       const result = await generateText(buildAiSdkRequest(options, request.controller.signal));

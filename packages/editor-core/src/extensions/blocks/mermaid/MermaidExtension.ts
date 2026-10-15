@@ -12,6 +12,7 @@ import {
   type SerializerNodeHandler,
 } from '../../../editor/EditorExtension';
 import Mermaid, { type MermaidOpenExternalLink } from './MermaidPlugin';
+import { tBlocks } from '../blocks.i18n';
 
 // ─── Mermaid Extension ───────────────────────────────────────────────────────
 
@@ -58,7 +59,7 @@ export class MermaidExtension extends Extension {
               class: 'mermaid-block',
               contenteditable: 'false',
             },
-            ['div', { class: 'mermaid-block-label' }, 'Mermaid Diagram'],
+            ['div', { class: 'mermaid-block-label' }, tBlocks('mermaid.diagram')],
             ['pre', { class: 'mermaid-block-code' }, node.attrs.content || 'graph TD\n  A-->B'],
           ];
         },

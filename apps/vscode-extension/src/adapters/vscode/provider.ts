@@ -10,6 +10,8 @@ import {
   toDiskFileUri,
   toEasyViewMarkdownUri,
 } from '../../application/document/markdownUri';
+import { getLocale } from '@easyview/contracts/i18n';
+import { tProvider } from './provider.i18n';
 
 /**
  * CustomTextEditorProvider for WYSIWYG Markdown editing.
@@ -46,7 +48,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
       if (provider.activePanel) {
         provider.activePanel.webview.postMessage({ type: 'requestExportHtml', theme: 'light' });
       } else {
-        vscode.window.showInformationMessage('Open a Markdown file in EasyView_Md first.');
+        vscode.window.showInformationMessage(tProvider('export.openMarkdownFirst'));
       }
     });
 
@@ -54,7 +56,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
       if (provider.activePanel) {
         provider.activePanel.webview.postMessage({ type: 'requestExportHtml', theme: 'dark' });
       } else {
-        vscode.window.showInformationMessage('Open a Markdown file in EasyView_Md first.');
+        vscode.window.showInformationMessage(tProvider('export.openMarkdownFirst'));
       }
     });
 
@@ -62,7 +64,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
       if (provider.activePanel) {
         provider.activePanel.webview.postMessage({ type: 'requestExportPdf', theme: 'light' });
       } else {
-        vscode.window.showInformationMessage('Open a Markdown file in EasyView_Md first.');
+        vscode.window.showInformationMessage(tProvider('export.openMarkdownFirst'));
       }
     });
 
@@ -70,7 +72,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
       if (provider.activePanel) {
         provider.activePanel.webview.postMessage({ type: 'requestExportPdf', theme: 'dark' });
       } else {
-        vscode.window.showInformationMessage('Open a Markdown file in EasyView_Md first.');
+        vscode.window.showInformationMessage(tProvider('export.openMarkdownFirst'));
       }
     });
 
@@ -275,7 +277,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
     }
 
     return /* html */ `<!DOCTYPE html>
-<html lang="en" data-easyview-theme="${readProductTheme(this.context)}">
+<html lang="${getLocale()}" data-easyview-theme="${readProductTheme(this.context)}">
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="Content-Security-Policy"

@@ -8,8 +8,10 @@ import { isTimelineMarkdown } from '@easyview/contracts';
 import { LocalHistoryStore } from './local-history';
 import { type HostHistoryRoot, hostHistoryHash, hostHistoryUri } from './history-roots';
 import { listGitHistory, readGitVersion } from './git-history';
+import { tTimeline } from './timeline.i18n';
+import { getLocale } from '@easyview/contracts/i18n';
 interface HostIndex { version: number; resource: string; entries: Array<{ id: string; timestamp: number; source?: string; sourceDescription?: string }> }
-const sourceLabel = (source?: string) => source === 'undoRedo.source' ? '撤销 / 重做' : source === 'localHistoryRestore.source' ? '文件已恢复' : source === 'default.source' || !source ? '文件已保存' : source;
+const sourceLabel = (source?: string) => source === 'undoRedo.source' ? tTimeline('label.undoRedo') : source === 'localHistoryRestore.source' ? tTimeline('label.restored') : source === 'default.source' || !source ? tTimeline('label.saved') : source;
 /** Stateless queries: no whole-library cache and no snapshot bodies in the list. */
 export class TimelineService {
   readonly local: LocalHistoryStore;
@@ -23,12 +25,12 @@ export class TimelineService {
     return this.queryQueue.run(() => this.listPage(filePath, sources, cursor, signal), signal);
   }
   private async listPage(filePath: string, sources: TimelineSource[], cursor?: string, signal?: AbortSignal): Promise<TimelinePage> {
-    if (this.disposed) throw new Error('Timeline 已关闭');
+    if (this.disposed) throw new Error(tTimeline('error.closed'));
     this.queries++;
     signal?.throwIfAborted();
     if (!isTimelineMarkdown(filePath)) return { entries: [], errors: [] };
     const paging = cursor ? JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as { offsets: Record<string, number>; git?: { revision: string; path: string } | null } : { offsets: {} as Record<string, number>, git: undefined };
-    if (!paging.offsets || Object.values(paging.offsets).some((n) => !Number.isSafeInteger(n) || n < 0)) throw new Error('历史分页参数无效');
+    if (!paging.offsets || Object.values(paging.offsets).some((n) => !Number.isSafeInteger(n) || n < 0)) throw new Error(tTimeline('error.invalidPaging'));
     const all: Array<{ key: string; entry: TimelineEntry }> = [], errors: TimelinePage['errors'] = [];
     const query = async (key: string, source: TimelineSource, load: () => Promise<TimelineEntry[]>) => {
       try {
@@ -61,27 +63,27 @@ export class TimelineService {
     if (entry.source === 'git') return readGitVersion(entry, false, signal);
     if (entry.source === 'local') return this.local.read(entry, signal);
     const match = /^([^:]+):(.+)$/.exec(entry.id);
-    if (!match) throw new Error('宿主版本无效');
+    if (!match) throw new Error(tTimeline('error.invalidHostVersion'));
     const root = this.hostRoots[Number(match[1])];
-    if (!root || root.source !== entry.source) throw new Error('宿主版本来源无效');
+    if (!root || root.source !== entry.source) throw new Error(tTimeline('error.invalidHostSource'));
     const index = await this.listHost(entry.filePath, root);
-    if (!index.some((item) => item.id === entry.id && item.timestamp === entry.timestamp)) throw new Error('宿主历史版本已不存在或已被合并更新，请刷新后重试');
-    if (path.basename(match[2]) !== match[2]) throw new Error('宿主历史路径无效');
+    if (!index.some((item) => item.id === entry.id && item.timestamp === entry.timestamp)) throw new Error(tTimeline('error.hostVersionGone'));
+    if (path.basename(match[2]) !== match[2]) throw new Error(tTimeline('error.invalidHostPath'));
     return readHistoryText(path.join(this.hostDirectory(entry.filePath, root), match[2]), signal);
   }
   async compare(entry: TimelineEntry, current: string, signal?: AbortSignal): Promise<TimelineComparison> {
-    if (Buffer.byteLength(current) > MAX_HISTORY_READ_BYTES) throw new Error('当前正文超过 32 MiB 比较上限');
+    if (Buffer.byteLength(current) > MAX_HISTORY_READ_BYTES) throw new Error(tTimeline('error.currentTooLarge'));
     const version = await this.read(entry, signal);
     const base = entry.source === 'git' ? await readGitVersion(entry, true, signal) : version;
     signal?.throwIfAborted();
     return {
       entry, base, content: entry.source === 'git' ? version : current,
-      baseLabel: entry.source === 'git' ? entry.previousRevision?.slice(0, 8) ?? '空文件' : new Date(entry.timestamp).toLocaleString(),
-      contentLabel: entry.source === 'git' ? entry.revision!.slice(0, 8) : '当前文件（打开时）',
+      baseLabel: entry.source === 'git' ? entry.previousRevision?.slice(0, 8) ?? tTimeline('label.emptyFile') : new Date(entry.timestamp).toLocaleString(getLocale()),
+      contentLabel: entry.source === 'git' ? entry.revision!.slice(0, 8) : tTimeline('label.currentFile'),
     };
   }
   watch(filePath: string, changed: () => void): { dispose(): void } {
-    if (this.disposed) throw new Error('Timeline 已关闭');
+    if (this.disposed) throw new Error(tTimeline('error.closed'));
     const owned: FSWatcher[] = [];
     const localSubscription = this.local.subscribe(filePath, changed);
     for (const directory of this.hostRoots.filter((root) => !root.error).map((root) => this.hostDirectory(filePath, root))) {
@@ -102,12 +104,12 @@ export class TimelineService {
     let index: HostIndex;
     try {
       const info = await stat(path.join(directory, 'entries.json'));
-      if (info.size > 4 * 1024 * 1024) throw new Error('宿主历史索引过大');
+      if (info.size > 4 * 1024 * 1024) throw new Error(tTimeline('error.hostIndexTooLarge'));
       index = JSON.parse(await readFile(path.join(directory, 'entries.json'), 'utf8')) as HostIndex;
     } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error; }
-    if (index.version !== 1 || index.resource !== hostHistoryUri(filePath) || !Array.isArray(index.entries)) throw new Error('宿主历史索引格式或资源身份不匹配');
+    if (index.version !== 1 || index.resource !== hostHistoryUri(filePath) || !Array.isArray(index.entries)) throw new Error(tTimeline('error.hostIndexMismatch'));
     return index.entries.map((entry) => {
-      if (!entry || typeof entry.id !== 'string' || path.basename(entry.id) !== entry.id || !Number.isFinite(entry.timestamp)) throw new Error('宿主历史条目无效');
+      if (!entry || typeof entry.id !== 'string' || path.basename(entry.id) !== entry.id || !Number.isFinite(entry.timestamp)) throw new Error(tTimeline('error.invalidHostEntry'));
       return { id: `${this.hostRoots.indexOf(root)}:${entry.id}`, source: root.source, filePath, timestamp: entry.timestamp, label: entry.sourceDescription ?? sourceLabel(entry.source) };
     });
   }

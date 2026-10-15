@@ -1,3 +1,5 @@
+import { tPreview } from '../preview.i18n';
+
 /** Cache blob: Worker URLs created for cross-origin vscode-resource scripts. */
 const managedBlobUrls = new Set<string>();
 
@@ -21,7 +23,7 @@ export async function toSameOriginWorkerUrl(workerUrl: string): Promise<string> 
 
   const response = await fetch(absolute.href);
   if (!response.ok) {
-    throw new Error(`无法加载 Worker（HTTP ${response.status}）`);
+    throw new Error(tPreview('worker.loadFailed', { status: response.status }));
   }
   const source = await response.blob();
   // Force a JS MIME type so classic Workers accept blob: URLs from hosts that

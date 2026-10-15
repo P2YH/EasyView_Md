@@ -46,7 +46,7 @@ export function resolveHtmlPreviewRoot(fileUri: vscode.Uri): vscode.Uri {
 }
 
 export async function startHtmlPreviewServer(rootUri: vscode.Uri): Promise<HtmlPreviewServer> {
-  if (rootUri.scheme !== 'file') throw new Error('HTML 预览服务仅支持本地文件');
+  if (rootUri.scheme !== 'file') throw new Error('HTML preview server only supports local files');
   const root = await fsp.realpath(rootUri.fsPath);
   const token = randomBytes(16).toString('hex');
 
@@ -58,7 +58,7 @@ export async function startHtmlPreviewServer(rootUri: vscode.Uri): Promise<HtmlP
     server.listen(0, '127.0.0.1', () => {
       const address = server.address();
       if (address && typeof address === 'object') resolve(address.port);
-      else reject(new Error('HTML 预览服务启动失败'));
+      else reject(new Error('HTML preview server failed to start'));
     });
     server.on('error', reject);
   });
@@ -70,7 +70,7 @@ export async function startHtmlPreviewServer(rootUri: vscode.Uri): Promise<HtmlP
     async contentUrlFor(fileUri: vscode.Uri): Promise<string> {
       const relative = path.relative(root, fileUri.fsPath);
       if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
-        throw new Error('HTML 不在预览根目录内');
+        throw new Error('HTML file is outside the preview root');
       }
       const encoded = relative.split(path.sep).map(encodeURIComponent).join('/');
       const local = `${origin}/${token}/${encoded}`;

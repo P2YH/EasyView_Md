@@ -1,4 +1,5 @@
 /** Platform-neutral contracts for workspace trees and file operations. */
+import { tWorkspaceTree } from './workspace.i18n';
 
 export type WorkspaceEntryKind = 'directory' | 'file' | 'symlink';
 
@@ -20,6 +21,12 @@ export interface WorkspaceEntry {
   createdAt?: number;
   /** Last modification time in milliseconds since epoch when the host can provide it. */
   updatedAt?: number;
+}
+
+/** Name search over the whole tree; `truncated` means more matches may exist. */
+export interface WorkspaceSearchResult {
+  entries: WorkspaceEntry[];
+  truncated: boolean;
 }
 
 /** How the workspace tree orders siblings within each directory. */
@@ -144,8 +151,8 @@ export function describeWorkspaceEntryTimestamps(
   const created = formatWorkspaceTimestamp(entry.createdAt);
   const updated = formatWorkspaceTimestamp(entry.updatedAt);
   const titleLines: string[] = [];
-  if (created) titleLines.push(`Created ${created}`);
-  if (updated) titleLines.push(`Updated ${updated}`);
+  if (created) titleLines.push(tWorkspaceTree('timestamp.created', { time: created }));
+  if (updated) titleLines.push(tWorkspaceTree('timestamp.updated', { time: updated }));
   if (titleLines.length === 0) return undefined;
 
   const parts: WorkspaceEntryTimestampPart[] = [];
@@ -161,7 +168,7 @@ export function formatWorkspaceEntryTimestamps(
   const display = describeWorkspaceEntryTimestamps(entry, options);
   if (!display || display.parts.length === 0) return undefined;
   return display.parts
-    .map((part) => `${part.kind === 'created' ? 'Created' : 'Updated'} ${part.value}`)
+    .map((part) => tWorkspaceTree(part.kind === 'created' ? 'timestamp.created' : 'timestamp.updated', { time: part.value }))
     .join(' · ');
 }
 

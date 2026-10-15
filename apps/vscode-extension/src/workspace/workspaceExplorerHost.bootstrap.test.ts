@@ -151,7 +151,7 @@ describe('workspace explorer startup', () => {
       expect(loads).toBe(1);
       await vi.advanceTimersByTimeAsync(15_000);
       expect(loads).toBe(3);
-      expect(mock.errors).toContain('EasyView_Md Files could not load its view. Reload the window to retry.');
+      expect(mock.errors).toContain('EasyView_Md 文件视图加载失败。请重新加载窗口后重试。');
       subscription.dispose();
     } finally {
       vi.useRealTimers();

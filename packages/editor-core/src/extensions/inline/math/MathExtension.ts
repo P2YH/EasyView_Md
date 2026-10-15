@@ -10,6 +10,7 @@
  */
 
 import { InputRule } from 'prosemirror-inputrules';
+import { tMath } from './math.i18n';
 import type { Schema } from 'prosemirror-model';
 import type { Plugin, Command } from 'prosemirror-state';
 import { TextSelection } from 'prosemirror-state';
@@ -91,7 +92,7 @@ export class MathExtension extends Extension {
   get slashMenuItems(): SlashMenuItem[] {
     return [
       {
-        label: 'Math (inline)',
+        label: tMath('slash.inline'),
         keywords: ['math', 'formula', 'equation', 'latex', 'katex', 'inline'],
         icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>',
         group: 'insert',
@@ -103,7 +104,7 @@ export class MathExtension extends Extension {
         },
       },
       {
-        label: 'Math block',
+        label: tMath('slash.block'),
         keywords: ['math', 'formula', 'equation', 'latex', 'katex', 'block', 'display'],
         icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M7 8l3 4-3 4"/><path d="M14 8h3"/><path d="M14 16h3"/></svg>',
         group: 'insert',

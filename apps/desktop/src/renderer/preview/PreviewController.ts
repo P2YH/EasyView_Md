@@ -1,6 +1,7 @@
 import type { ArchiveEntry, ArchiveEntryPreview, HttpPreviewRequest, HttpPreviewResponse, PreviewDescriptor, PreviewTextResult, PreviewWriteResult } from '@easyview/contracts';
 import type { PreviewHost, PreviewState, PreviewStatus } from '@easyview/preview-ui';
 import type { EasyViewDesktopApi } from '../../preload/desktopApi';
+import { tPreview } from './preview.i18n';
 
 export type { PreviewState, PreviewStatus };
 
@@ -28,7 +29,7 @@ export class PreviewController implements PreviewHost {
         if (result.ok) void this.api.preview.close(result.value.sessionId);
         return null;
       }
-      if (!result.ok) throw new Error(result.message || '无法打开预览文件');
+      if (!result.ok) throw new Error(result.message || tPreview('error.open'));
       this.update({ descriptor: result.value, status: 'ready', error: null });
       return result.value;
     } catch (error) {
@@ -46,14 +47,14 @@ export class PreviewController implements PreviewHost {
 
   async readText(sessionId: string): Promise<PreviewTextResult> {
     const result = await this.api.preview.readText(sessionId);
-    if (!result.ok) throw new Error(result.message || '文本读取失败');
+    if (!result.ok) throw new Error(result.message || tPreview('error.readText'));
     return result.value;
   }
 
   async writeBytes(sessionId: string, bytes: Uint8Array): Promise<PreviewWriteResult> {
     const bytesBase64 = uint8ToBase64(bytes);
     const result = await this.api.preview.writeBytes(sessionId, bytesBase64);
-    if (!result.ok) throw new Error(result.message || '表格保存失败');
+    if (!result.ok) throw new Error(result.message || tPreview('error.saveSpreadsheet'));
     const current = this.state.descriptor;
     if (current && current.sessionId === sessionId) {
       this.update({
@@ -70,30 +71,30 @@ export class PreviewController implements PreviewHost {
 
   async listArchive(sessionId: string): Promise<ArchiveEntry[]> {
     const result = await this.api.archive.list(sessionId);
-    if (!result.ok) throw new Error(result.message || '压缩包目录读取失败');
+    if (!result.ok) throw new Error(result.message || tPreview('error.listArchive'));
     return result.value;
   }
 
   async openArchiveEntry(sessionId: string, path: string): Promise<ArchiveEntryPreview> {
     const result = await this.api.archive.readEntry(sessionId, path);
-    if (!result.ok) throw new Error(result.message || '压缩包条目读取失败');
+    if (!result.ok) throw new Error(result.message || tPreview('error.readArchiveEntry'));
     return result.value;
   }
 
   async exportArchiveEntry(sessionId: string, path: string): Promise<void> {
     const result = await this.api.archive.exportEntry(sessionId, path);
-    if (!result.ok) throw new Error(result.message || '压缩包条目导出失败');
+    if (!result.ok) throw new Error(result.message || tPreview('error.exportArchiveEntry'));
   }
 
   async decompileJava(sessionId: string): Promise<string> {
     const result = await this.api.preview.decompileJava(sessionId);
-    if (!result.ok) throw new Error(result.message || 'Java 反编译失败');
+    if (!result.ok) throw new Error(result.message || tPreview('error.decompileJava'));
     return result.value.output;
   }
 
   async sendHttp(request: HttpPreviewRequest): Promise<HttpPreviewResponse> {
     const result = await this.api.preview.sendHttp(request);
-    if (!result.ok) throw new Error(result.message || 'HTTP 请求失败');
+    if (!result.ok) throw new Error(result.message || tPreview('error.http'));
     return result.value;
   }
 
@@ -115,7 +116,7 @@ export class PreviewController implements PreviewHost {
 }
 
 function toMessage(error: unknown): string {
-  return error instanceof Error ? error.message : '预览加载失败';
+  return error instanceof Error ? error.message : tPreview('error.load');
 }
 
 function uint8ToBase64(bytes: Uint8Array): string {

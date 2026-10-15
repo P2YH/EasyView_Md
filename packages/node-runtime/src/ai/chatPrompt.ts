@@ -5,6 +5,7 @@
 
 import type { AiChatAttachment, AiChatHistoryEntry } from '@easyview/contracts';
 import type { OpenAiChatMessage, OpenAiChatContentPart } from './openai-chat-client';
+import { tAi } from './ai.i18n';
 
 export interface BuildAiChatMessagesOptions {
   systemPrompt: string;
@@ -51,8 +52,8 @@ export function buildAiChatMessages(options: BuildAiChatMessagesOptions): OpenAi
     systemParts.push(systemPrompt.trim());
   }
   if (mode === 'agent' && documentContent !== undefined) {
-    const label = documentFileName ? `当前打开文档: ${documentFileName}` : '当前打开文档';
-    systemParts.push(`${label}。修改它前必须调用不带 path 的 inspect_file 建立编辑基线。`);
+    const label = documentFileName ? tAi('prompt.activeDocumentNamed', { name: documentFileName }) : tAi('prompt.activeDocument');
+    systemParts.push(tAi('prompt.activeDocumentInstruction', { label }));
   }
   messages.push({ role: 'system', content: systemParts.join('\n\n') });
 

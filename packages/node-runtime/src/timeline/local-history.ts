@@ -6,6 +6,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, unlink, copyFile, rm } from 'node:fs/promises';
 import { DEFAULT_LOCAL_HISTORY_SETTINGS, isTimelineMarkdown, type LocalHistorySettings, type TimelineEntry } from '@easyview/contracts';
 import { writeFileAtomically } from '../filesystem/file-write';
+import { tTimeline } from './timeline.i18n';
 interface Snapshot extends TimelineEntry { hash: string; snapshot: string }
 interface Index { version: 1; filePath: string; entries: Snapshot[]; maxFileEntries: number }
 export const contentHash = (content: string): string => createHash('sha256').update(content).digest('hex');
@@ -26,14 +27,14 @@ export class LocalHistoryStore {
   async list(filePath: string): Promise<TimelineEntry[]> { return (await this.index(filePath)).entries.map(({ hash: _hash, snapshot: _snapshot, ...entry }) => entry); }
   async read(entry: TimelineEntry, signal?: AbortSignal): Promise<string> {
     const found = (await this.index(entry.filePath)).entries.find((item) => item.id === entry.id);
-    if (!found) throw new Error('历史版本已不存在');
+    if (!found) throw new Error(tTimeline('error.versionGone'));
     signal?.throwIfAborted();
     return readHistoryText(path.join(this.directory(entry.filePath), found.snapshot), signal);
   }
-  capture(filePath: string, content: string, label = '文件已保存', settings = DEFAULT_LOCAL_HISTORY_SETTINGS): Promise<void> {
+  capture(filePath: string, content: string, label = tTimeline('label.saved'), settings = DEFAULT_LOCAL_HISTORY_SETTINGS): Promise<void> {
     if (!isTimelineMarkdown(filePath) || !settings.enabled || settings.maxFileEntries === 0 || Buffer.byteLength(content) > settings.maxFileSize * 1024) return Promise.resolve();
     const key = path.resolve(filePath);
-    if (!this.pending.has(key) && this.pending.size >= 64) return Promise.reject(new Error('历史采集繁忙，请稍后重试'));
+    if (!this.pending.has(key) && this.pending.size >= 64) return Promise.reject(new Error(tTimeline('error.captureBusy')));
     this.pending.set(key, { content, label, settings });
     const scheduled = this.captureTasks.get(key); if (scheduled) return scheduled;
     const capture = this.enqueue(key, async () => {
@@ -64,7 +65,7 @@ export class LocalHistoryStore {
       const migrated: Snapshot[] = [];
       for (const entry of source.entries) {
         const duplicate = target.entries.find((candidate) => candidate.id === entry.id);
-        if (duplicate && duplicate.hash !== entry.hash) throw new Error('历史迁移遇到版本标识冲突');
+        if (duplicate && duplicate.hash !== entry.hash) throw new Error(tTimeline('error.migrationConflict'));
         if (!duplicate) {
           await copyFile(path.join(this.directory(oldPath), entry.snapshot), path.join(destination, entry.snapshot));
           migrated.push({ ...entry, filePath: nextPath });
@@ -92,8 +93,8 @@ export class LocalHistoryStore {
   private async index(filePath: string): Promise<Index> {
     try {
       const index = JSON.parse(await readFile(path.join(this.directory(filePath), 'entries.json'), 'utf8')) as Index;
-      if (index.version !== 1 || index.filePath !== filePath || !Array.isArray(index.entries) || !Number.isInteger(index.maxFileEntries) || index.maxFileEntries < 0) throw new Error('本地历史索引无效');
-      if (index.entries.some((entry) => !entry || typeof entry.id !== 'string' || typeof entry.snapshot !== 'string' || path.basename(entry.snapshot) !== entry.snapshot || entry.snapshot !== `${entry.id}.md` || entry.filePath !== filePath || !Number.isFinite(entry.timestamp))) throw new Error('本地历史条目无效');
+      if (index.version !== 1 || index.filePath !== filePath || !Array.isArray(index.entries) || !Number.isInteger(index.maxFileEntries) || index.maxFileEntries < 0) throw new Error(tTimeline('error.invalidLocalIndex'));
+      if (index.entries.some((entry) => !entry || typeof entry.id !== 'string' || typeof entry.snapshot !== 'string' || path.basename(entry.snapshot) !== entry.snapshot || entry.snapshot !== `${entry.id}.md` || entry.filePath !== filePath || !Number.isFinite(entry.timestamp))) throw new Error(tTimeline('error.invalidLocalEntry'));
       return index;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { version: 1, filePath, entries: [], maxFileEntries: DEFAULT_LOCAL_HISTORY_SETTINGS.maxFileEntries };

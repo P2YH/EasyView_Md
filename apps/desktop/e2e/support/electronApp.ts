@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import type { ElectronApplication } from '@playwright/test';
+import type { ElectronApplication, Page } from '@playwright/test';
 
 const EXIT_TIMEOUT_MS = 30_000;
 
@@ -39,4 +39,9 @@ export async function terminateElectron(application: ElectronApplication | undef
     ]).finally(() => clearTimeout(timer));
   }
   await application.close();
+}
+
+/** Launch shows the welcome page over restored tabs; enter the restored session like a user would. */
+export async function resumeRestoredSession(page: Page): Promise<void> {
+  await page.locator('#desktop-welcome [data-action="resume"]').click();
 }

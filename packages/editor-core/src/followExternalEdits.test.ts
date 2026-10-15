@@ -30,23 +30,24 @@ it('keeps the page still and omits the jump prompt for external edits when Follo
     const followButton = document.querySelector<HTMLButtonElement>('[data-action="toggleExternalFollow"]')!;
     followButton.click();
     const navigator = document.querySelector<HTMLElement>('.ai-changes-toast.visible')!;
-    expect(navigator.querySelector('.ai-changes-toast-summary')?.textContent).toBe('Loading Git changes…');
+    expect(navigator.querySelector('.ai-changes-toast-summary')?.textContent).toBe('正在加载 Git 变更…');
     expect(navigator.querySelector('.ai-changes-toast-count')?.textContent).toBe('0/0');
     expect(navigator.querySelector<HTMLButtonElement>('.ai-changes-toast-prev')?.disabled).toBe(true);
     expect(navigator.querySelector<HTMLButtonElement>('.ai-changes-toast-next')?.disabled).toBe(true);
     expect(scrollArea.scrollTop).toBe(50);
     receive({ type: 'gitRefreshStatus', documentId: 'follow-test', revision: 1, status: 'error' });
-    expect(navigator.querySelector('.ai-changes-toast-summary')?.textContent).toBe('Git read failed');
+    expect(navigator.querySelector('.ai-changes-toast-summary')?.textContent).toBe('Git 读取失败');
     receive({ type: 'gitRefreshStatus', documentId: 'follow-test', revision: 1, status: 'loading' });
-    expect(navigator.querySelector('.ai-changes-toast-summary')?.textContent).toBe('Loading Git changes…');
+    expect(navigator.querySelector('.ai-changes-toast-summary')?.textContent).toBe('正在加载 Git 变更…');
     receive({ type: 'gitStatusChanged', documentId: 'follow-test', revision: 1,
       lineRanges: [], snapshot: { baseContent: before, indexObjectId: 'test', currentContentHash: hashContent(before), isUntracked: false },
     });
-    expect(navigator.querySelector('.ai-changes-toast-summary')?.textContent).toBe('No changes');
+    expect(navigator.classList.contains('visible')).toBe(false);
     receive({ type: 'gitStatusChanged', documentId: 'follow-test', revision: 1,
       lineRanges: [{ startLine: 1, endLine: 1, kind: 'modified' }],
       snapshot: { baseContent: '# Earlier\n\nParagraph' },
     } as HostToEditorMessage);
+    expect(navigator.classList.contains('visible')).toBe(true);
     expect(navigator.querySelector<HTMLElement>('.ai-changes-toast-summary')?.hidden).toBe(true);
     expect(navigator.querySelector('.ai-changes-toast-count')?.textContent).toBe('1/1');
     followButton.click();

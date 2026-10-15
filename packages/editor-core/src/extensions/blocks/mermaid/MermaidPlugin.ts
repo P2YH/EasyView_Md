@@ -23,6 +23,7 @@ import {
 } from "./MermaidRenderScheduler";
 import { withMermaidRuntimeLock } from "./MermaidRuntimeLock";
 import { MermaidVisibilityController } from "./MermaidVisibilityController";
+import { tBlocks } from "../blocks.i18n";
 
 export const pluginKey = new PluginKey("mermaid");
 
@@ -95,7 +96,7 @@ export class MermaidRenderer {
     this.element = element ?? document.createElement("div");
     this.element.id = this.elementId;
     this.element.classList.add("mermaid-diagram-wrapper");
-    this.showPlaceholder("Mermaid diagram");
+    this.showPlaceholder(tBlocks("mermaid.diagram"));
   }
 
   mount(block: { node: Node; pos: number }, isDark: boolean): HTMLElement {
@@ -180,7 +181,7 @@ export class MermaidRenderer {
       if (Number.isFinite(height) && height > 0)
         this.retainedHeight = Math.max(120, Math.ceil(height));
     }
-    this.showPlaceholder("Mermaid diagram");
+    this.showPlaceholder(tBlocks("mermaid.diagram"));
   }
 
   private resetZoomPan(): void {
@@ -209,7 +210,7 @@ export class MermaidRenderer {
     const zoomIn = document.createElement("button");
     zoomIn.className = "mermaid-zoom-btn";
     zoomIn.textContent = "+";
-    zoomIn.title = "Zoom in";
+    zoomIn.title = tBlocks("zoom.in");
     zoomIn.addEventListener("click", (event) => {
       event.stopPropagation();
       if (!this.viewport) return;
@@ -227,7 +228,7 @@ export class MermaidRenderer {
     const zoomOut = document.createElement("button");
     zoomOut.className = "mermaid-zoom-btn";
     zoomOut.textContent = "−";
-    zoomOut.title = "Zoom out";
+    zoomOut.title = tBlocks("zoom.out");
     zoomOut.addEventListener("click", (event) => {
       event.stopPropagation();
       if (!this.viewport) return;
@@ -245,7 +246,7 @@ export class MermaidRenderer {
     const zoomReset = document.createElement("button");
     zoomReset.className = "mermaid-zoom-btn";
     zoomReset.textContent = "1:1";
-    zoomReset.title = "Reset zoom";
+    zoomReset.title = tBlocks("zoom.reset");
     zoomReset.addEventListener("click", (event) => {
       event.stopPropagation();
       this.resetZoomPan();

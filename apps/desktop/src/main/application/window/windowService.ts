@@ -1,6 +1,7 @@
 import {
   app,
   BrowserWindow,
+  dialog,
   Menu,
   nativeTheme,
   shell,
@@ -24,12 +25,14 @@ import {
   openFromMenu,
   requestOpenDocument,
   saveFromMenu,
+  showOperationError,
   stopWatcher,
   watchDocumentSession,
   restoreWorkspace,
 } from '../document/documentWorkflow';
 import { createAppStateStore } from '../document/appState';
 import { openWorkspaceFolder } from '../workspace/workspaceWorkflow';
+import { recentFolderStore } from '../workspace/recentFolders';
 import {
   documentSessions,
   getAppStateStore,
@@ -56,12 +59,49 @@ import {
 } from '../host/desktopRuntime';
 import type { DesktopWindowContext } from '../host/windowContext';
 import { createDesktopWindowContext } from '../host/windowContext';
-import type { DesktopMenuCommand } from '../../../contracts';
+import { DESKTOP_ACCENTS, DESKTOP_APPEARANCE_MODES, DESKTOP_LOCALE_ARGUMENT_PREFIX as LOCALE_ARGUMENT_PREFIX, DESKTOP_THEME_DEPTH_STEPS } from '../../../contracts';
+import type { DesktopAccent, DesktopAppearanceMode, DesktopMenuCommand, DesktopThemeDepthStep } from '../../../contracts';
+import { getLocale, type LocalePreference } from '@easyview/contracts';
+import { getSelectedLanguagePreference, saveLanguagePreference } from '../settings/languageSettings';
+import { tMenu } from './windowService.i18n';
+
+const appearanceModeLabel = (mode: DesktopAppearanceMode) => tMenu(`appearance.${mode}`);
+const themeDepthLabel = (step: DesktopThemeDepthStep) => tMenu(`depth.${step}`);
+const accentLabel = (accent: DesktopAccent) => tMenu(`accent.${accent}`);
+const LANGUAGE_OPTIONS: readonly LocalePreference[] = ['system', 'zh-CN', 'en'];
+// Language names stay in their own language so users can always find their way back.
+const languageLabel = (preference: LocalePreference) =>
+  preference === 'system' ? tMenu('view.languageSystem') : preference === 'zh-CN' ? '简体中文' : 'English'; // i18n-ignore
+
+async function chooseLanguage(preference: LocalePreference): Promise<void> {
+  if (preference === getSelectedLanguagePreference()) return;
+  await saveLanguagePreference(app.getPath('userData'), preference);
+  createMenu();
+  const window = getMainWindow();
+  const options: Electron.MessageBoxOptions = {
+    type: 'info',
+    title: tMenu('language.restartTitle'),
+    message: tMenu('language.restartMessage'),
+    detail: tMenu('language.restartDetail'),
+    buttons: [tMenu('language.restartNow'), tMenu('language.restartLater')],
+    defaultId: 0,
+    cancelId: 1,
+  };
+  const { response } = window && !window.isDestroyed()
+    ? await dialog.showMessageBox(window, options)
+    : await dialog.showMessageBox(options);
+  if (response === 0) await restartApp();
+}
 
 const RESTART_FLAG = '--easyview-restart';
+const NEW_WINDOW_FLAG = '--easyview-new-window';
 
 export function argvRequestsRestart(argv: string[]): boolean {
   return argv.includes(RESTART_FLAG);
+}
+
+export function argvRequestsNewWindow(argv: string[]): boolean {
+  return argv.includes(NEW_WINDOW_FLAG);
 }
 
 export function applyWindowZoomLevel(level: number): void {
@@ -93,11 +133,14 @@ export async function restartApp(): Promise<void> {
   });
 }
 
-export function syncShellRestartMenu(): void {
+export function syncShellMenu(): void {
   const context = getWindowContext();
   if (process.platform === 'darwin' && app.dock) {
+    // macOS appends the open-window list (key window checked) above these items.
     app.dock.setMenu(Menu.buildFromTemplate([
-      { label: '重启', click: () => runInWindowContext(context, () => { void restartApp(); }) },
+      { label: tMenu('shell.newWindow'), click: () => { void createNewWindow(); } },
+      { type: 'separator' },
+      { label: tMenu('shell.restart'), click: () => runInWindowContext(context, () => { void restartApp(); }) },
     ]));
     return;
   }
@@ -106,11 +149,19 @@ export function syncShellRestartMenu(): void {
     app.setUserTasks([
       {
         program: process.execPath,
+        arguments: NEW_WINDOW_FLAG,
+        iconPath: process.execPath,
+        iconIndex: 0,
+        title: tMenu('shell.newWindow'),
+        description: tMenu('shell.newWindowDescription'),
+      },
+      {
+        program: process.execPath,
         arguments: RESTART_FLAG,
         iconPath: process.execPath,
         iconIndex: 0,
-        title: '重启',
-        description: '重启 EasyView_Md',
+        title: tMenu('shell.restart'),
+        description: tMenu('shell.restartDescription'),
       },
     ]);
   }
@@ -139,6 +190,11 @@ function feedbackEnvironment(): FeedbackEnvironment {
   };
 }
 
+async function openRecentFolderFromMenu(folderPath: string): Promise<void> {
+  const result = await openWorkspaceFolder(folderPath);
+  if (!result.ok) await showOperationError(result);
+}
+
 export function createMenu(): void {
   const context = getWindowContext();
   const inContext = (operation: () => void): (() => void) => () => runInWindowContext(context, operation);
@@ -149,87 +205,127 @@ export function createMenu(): void {
     click: inContext(() => publishMenuCommand(value)),
     ...options,
   });
+  const appearanceItem = (id: string, label: string, value: DesktopMenuCommand, checked: boolean): Electron.MenuItemConstructorOptions => ({
+    id, label, type: 'radio', checked, click: inContext(() => publishMenuCommand(value)),
+  });
+  const nearestDepth = DESKTOP_THEME_DEPTH_STEPS.reduce((best, step) =>
+    Math.abs(step - menuState.themeDepth) < Math.abs(best - menuState.themeDepth) ? step : best);
   const recentFiles = getAppStateStore().getRecentFiles();
+  const recentFolders = recentFolderStore().snapshot();
   const template: Electron.MenuItemConstructorOptions[] = [
     {
-      label: '文件',
+      label: tMenu('file'),
       submenu: [
-        { label: '打开文件…', accelerator: 'CmdOrCtrl+O', click: inContext(() => { void openFromMenu(); }) },
-        { label: '打开文件夹…', accelerator: 'CmdOrCtrl+Shift+O', click: inContext(() => { void openWorkspaceFolder(); }) },
+        { label: tMenu('file.open'), accelerator: 'CmdOrCtrl+O', click: inContext(() => { void openFromMenu(); }) },
+        { label: tMenu('file.openFolder'), accelerator: 'CmdOrCtrl+Shift+O', click: inContext(() => { void openWorkspaceFolder(); }) },
         {
-          label: '最近打开',
+          label: tMenu('file.recent'),
           submenu: recentFiles.length > 0
             ? recentFiles.map((filePath) => ({ label: path.basename(filePath), sublabel: filePath, click: inContext(() => { void requestOpenDocument(filePath); }) }))
-            : [{ label: '暂无最近文件', enabled: false }],
+            : [{ label: tMenu('file.noRecentFiles'), enabled: false }],
+        },
+        {
+          label: tMenu('file.recentFolders'),
+          submenu: recentFolders.length > 0
+            ? recentFolders.map((folderPath) => ({ label: path.basename(folderPath) || folderPath, sublabel: folderPath, click: inContext(() => { void openRecentFolderFromMenu(folderPath); }) }))
+            : [{ label: tMenu('file.noRecentFolders'), enabled: false }],
         },
         { type: 'separator' },
-        { label: '重命名…', enabled: menuState.hasActiveDocument, click: inContext(() => publishMenuCommand('rename')) },
-        { label: '导入 Word…', click: inContext(() => { void importDocument(['docx', 'doc'], 'Word Document'); }) },
-        { label: '导入 PDF…', click: inContext(() => { void importDocument(['pdf'], 'PDF Document'); }) },
-        { label: '保存', accelerator: 'CmdOrCtrl+S', enabled: menuState.hasActiveDocument, click: inContext(() => { void saveFromMenu(false); }) },
-        { label: '另存为…', accelerator: 'CmdOrCtrl+Shift+S', enabled: menuState.hasActiveDocument, click: inContext(() => { void saveFromMenu(true); }) },
+        { label: tMenu('file.rename'), enabled: menuState.hasActiveDocument, click: inContext(() => publishMenuCommand('rename')) },
+        { label: tMenu('file.importWord'), click: inContext(() => { void importDocument(['docx', 'doc'], tMenu('file.wordFilter')); }) },
+        { label: tMenu('file.importPdf'), click: inContext(() => { void importDocument(['pdf'], tMenu('file.pdfFilter')); }) },
+        { label: tMenu('file.save'), accelerator: 'CmdOrCtrl+S', enabled: menuState.hasActiveDocument, click: inContext(() => { void saveFromMenu(false); }) },
+        { label: tMenu('file.saveAs'), accelerator: 'CmdOrCtrl+Shift+S', enabled: menuState.hasActiveDocument, click: inContext(() => { void saveFromMenu(true); }) },
         { type: 'separator' },
-        { label: '重启', click: inContext(() => { void restartApp(); }) },
-        { label: '新建窗口', click: inContext(() => { void createNewWindow(); }) },
-        { role: 'quit' },
+        { label: tMenu('file.restart'), click: inContext(() => { void restartApp(); }) },
+        { label: tMenu('file.newWindow'), click: () => { void createNewWindow(); } },
+        { role: 'quit', label: tMenu('file.quit') },
       ],
     },
     {
-      label: '编辑',
+      label: tMenu('edit'),
       submenu: [
-        { role: 'undo' },
-        { role: 'redo' },
+        { role: 'undo', label: tMenu('edit.undo') },
+        { role: 'redo', label: tMenu('edit.redo') },
         { type: 'separator' },
-        { role: 'cut' },
-        { role: 'copy' },
-        { role: 'paste' },
-        { role: 'selectAll' },
+        { role: 'cut', label: tMenu('edit.cut') },
+        { role: 'copy', label: tMenu('edit.copy') },
+        { role: 'paste', label: tMenu('edit.paste') },
+        { role: 'selectAll', label: tMenu('edit.selectAll') },
         { type: 'separator' },
-        command('查找和替换…', 'findReplace', { accelerator: 'CmdOrCtrl+H' }),
+        command(tMenu('edit.findReplace'), 'findReplace', { accelerator: 'CmdOrCtrl+H' }),
       ],
     },
     {
-      label: '视图',
+      label: tMenu('view'),
       submenu: [
+        {
+          label: tMenu('view.themeMode'),
+          submenu: [
+            ...DESKTOP_APPEARANCE_MODES.map((mode) => appearanceItem(`appearance-mode-${mode}`, appearanceModeLabel(mode), `setThemeMode:${mode}`, menuState.themeMode === mode)),
+            { type: 'separator' },
+            { label: tMenu('view.cycleTheme'), click: inContext(() => publishMenuCommand('toggleTheme')) },
+          ],
+        },
+        {
+          label: tMenu('view.themeDepth'),
+          submenu: DESKTOP_THEME_DEPTH_STEPS.map((step) => appearanceItem(`appearance-depth-${step}`, themeDepthLabel(step), `setThemeDepth:${step}`, nearestDepth === step)),
+        },
+        {
+          label: tMenu('view.accent'),
+          submenu: DESKTOP_ACCENTS.map((accent) => appearanceItem(`appearance-accent-${accent}`, accentLabel(accent), `setAccent:${accent}`, menuState.accent === accent)),
+        },
+        {
+          label: tMenu('view.language'),
+          submenu: LANGUAGE_OPTIONS.map((preference) => ({
+            id: `language-${preference}`,
+            label: languageLabel(preference),
+            type: 'radio' as const,
+            checked: getSelectedLanguagePreference() === preference,
+            click: () => { void chooseLanguage(preference); },
+          })),
+        },
+        { type: 'separator' },
         { label: 'IndexArea', type: 'checkbox', checked: getWorkspaceState().explorerVisible, click: inContext(() => publishMenuCommand('toggleExplorer')) },
-        command('文档目录', 'toggleOutline', { type: 'checkbox', checked: menuState.outlineVisible }),
-        command('源码模式', 'toggleSourceMode', { type: 'checkbox', checked: menuState.sourceMode }),
-        command('全宽', 'toggleFullWidth', { type: 'checkbox', checked: menuState.fullWidth }),
-        command('表格换行', 'toggleTableWrap', { type: 'checkbox', checked: menuState.tableWrap }),
+        command(tMenu('view.outline'), 'toggleOutline', { type: 'checkbox', checked: menuState.outlineVisible }),
+        command(tMenu('view.sourceMode'), 'toggleSourceMode', { type: 'checkbox', checked: menuState.sourceMode }),
+        command(tMenu('view.fullWidth'), 'toggleFullWidth', { type: 'checkbox', checked: menuState.fullWidth }),
+        command(tMenu('view.tableWrap'), 'toggleTableWrap', { type: 'checkbox', checked: menuState.tableWrap }),
         { type: 'separator' },
-        { label: '放大', accelerator: 'CmdOrCtrl+=', registerAccelerator: true, click: inContext(() => zoomWindowBy(1)) },
-        { label: '放大', accelerator: 'CmdOrCtrl+Plus', visible: false, acceleratorWorksWhenHidden: true, click: inContext(() => zoomWindowBy(1)) },
-        { label: '缩小', accelerator: 'CmdOrCtrl+-', click: inContext(() => zoomWindowBy(-1)) },
-        { label: '重置缩放', accelerator: 'CmdOrCtrl+0', click: inContext(() => resetWindowZoom()) },
+        { label: tMenu('view.zoomIn'), accelerator: 'CmdOrCtrl+=', registerAccelerator: true, click: inContext(() => zoomWindowBy(1)) },
+        { label: tMenu('view.zoomIn'), accelerator: 'CmdOrCtrl+Plus', visible: false, acceleratorWorksWhenHidden: true, click: inContext(() => zoomWindowBy(1)) },
+        { label: tMenu('view.zoomOut'), accelerator: 'CmdOrCtrl+-', click: inContext(() => zoomWindowBy(-1)) },
+        { label: tMenu('view.resetZoom'), accelerator: 'CmdOrCtrl+0', click: inContext(() => resetWindowZoom()) },
         { type: 'separator' },
-        command('回到顶部', 'scrollTop'),
-        command('回到底部', 'scrollBottom'),
+        command(tMenu('view.scrollTop'), 'scrollTop'),
+        command(tMenu('view.scrollBottom'), 'scrollBottom'),
       ],
     },
-    { label: '文档', submenu: [command('全部展开/折叠标题', 'toggleHeadingCollapse'), command('历史记录', 'toggleHistory'), command('便签', 'toggleStickyNote')] },
-    { label: '导出', submenu: [command('HTML（明亮）', 'exportHtmlLight'), command('HTML（暗色）', 'exportHtmlDark'), command('PDF（明亮）', 'exportPdfLight'), command('PDF（暗色）', 'exportPdfDark'), command('DOCX', 'exportDocx')] },
-    { label: 'Git', submenu: [command('暂存', 'stageFile'), command('提交', 'openCommit'), command('同步', 'syncGit')] },
-    { label: '工具', submenu: [command('AI 对话', 'toggleAiChat', { accelerator: 'Alt+I', enabled: true }), command('内置终端', 'openTerminal')] },
+    { label: tMenu('document'), submenu: [command(tMenu('document.toggleHeadings'), 'toggleHeadingCollapse'), command(tMenu('document.history'), 'toggleHistory'), command(tMenu('document.stickyNote'), 'toggleStickyNote')] },
+    { label: tMenu('export'), submenu: [command(tMenu('export.htmlLight'), 'exportHtmlLight'), command(tMenu('export.htmlDark'), 'exportHtmlDark'), command(tMenu('export.pdfLight'), 'exportPdfLight'), command(tMenu('export.pdfDark'), 'exportPdfDark'), command('DOCX', 'exportDocx')] },
+    { label: 'Git', submenu: [command(tMenu('git.stage'), 'stageFile'), command(tMenu('git.commit'), 'openCommit'), command(tMenu('git.sync'), 'syncGit')] },
+    { role: 'windowMenu', label: tMenu('window') },
+    { label: tMenu('tools'), submenu: [command(tMenu('tools.aiChat'), 'toggleAiChat', { accelerator: 'Alt+I', enabled: true }), command(tMenu('tools.terminal'), 'openTerminal')] },
     {
-      label: '帮助',
+      label: tMenu('help'),
       role: 'help',
       submenu: [
-        { label: '问题反馈 / Report an Issue…', click: () => { void shell.openExternal(buildIssueUrl(feedbackEnvironment())); } },
-        { label: '邮件反馈 / Email Feedback…', click: () => { void shell.openExternal(buildFeedbackMailto(feedbackEnvironment())); } },
-        { label: '打开日志文件夹 / Open Logs Folder', click: () => { const dir = getLogsDirectory(); void mkdir(dir, { recursive: true }).then(() => shell.openPath(dir)); } },
+        { label: tMenu('help.reportIssue'), click: () => { void shell.openExternal(buildIssueUrl(feedbackEnvironment())); } },
+        { label: tMenu('help.emailFeedback'), click: () => { void shell.openExternal(buildFeedbackMailto(feedbackEnvironment())); } },
+        { label: tMenu('help.openLogs'), click: () => { const dir = getLogsDirectory(); void mkdir(dir, { recursive: true }).then(() => shell.openPath(dir)); } },
         { type: 'separator' },
         ...(updatesDisabled() ? [] : [
-          { label: '检查更新… / Check for Updates…', click: () => { void checkForUpdates(true); } },
-          { label: '自动检查更新 / Check Automatically', type: 'checkbox' as const, checked: getUpdateSettings().autoCheck, click: (item: Electron.MenuItem) => { void setAutoCheck(item.checked); } },
-          { label: '取消更新下载 / Cancel Update Download', visible: isDownloadingUpdate(), click: () => cancelUpdateDownload() },
+          { label: tMenu('help.checkUpdates'), click: () => { void checkForUpdates(true); } },
+          { label: tMenu('help.autoCheckUpdates'), type: 'checkbox' as const, checked: getUpdateSettings().autoCheck, click: (item: Electron.MenuItem) => { void setAutoCheck(item.checked); } },
+          { label: tMenu('help.cancelUpdateDownload'), visible: isDownloadingUpdate(), click: () => cancelUpdateDownload() },
           { type: 'separator' as const },
         ]),
-        { label: '项目主页 / GitHub', click: () => { void shell.openExternal(FEEDBACK_REPO_URL); } },
+        { label: tMenu('help.homepage'), click: () => { void shell.openExternal(FEEDBACK_REPO_URL); } },
       ],
     },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
-  syncShellRestartMenu();
+  syncShellMenu();
 }
 
 export function createWindow(context: DesktopWindowContext = getWindowContext()): BrowserWindow {
@@ -244,10 +340,12 @@ export function createWindow(context: DesktopWindowContext = getWindowContext())
     minWidth: 960,
     minHeight: 640,
     show: false,
-    ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset' as const } : {}),
+    // Traffic lights are centered on the 32px renderer title bar (#desktop-title-bar in desktop.css).
+    ...(process.platform === 'darwin' ? { titleBarStyle: 'hidden' as const, trafficLightPosition: { x: 12, y: 8 } } : {}),
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#1e1e1e' : '#ffffff',
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
+      additionalArguments: [`${LOCALE_ARGUMENT_PREFIX}${getLocale()}`],
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
@@ -262,6 +360,8 @@ export function createWindow(context: DesktopWindowContext = getWindowContext())
   applyWindowZoomLevel(getAppStateStore().getZoomLevel());
   updateWindowTitle();
   for (const session of documentSessions.values()) void watchDocumentSession(session);
+  // The renderer's <title> would otherwise replace the file/folder title the Dock and Window menu list.
+  window.on('page-title-updated', (event) => event.preventDefault());
   window.once('ready-to-show', () => {
     if (!window.isDestroyed()) window.show();
   });
@@ -324,7 +424,7 @@ export async function createNewWindow(): Promise<BrowserWindow> {
   const stateDirectory = path.join(app.getPath('userData'), 'windows', id);
   await mkdir(stateDirectory, { recursive: true });
   context.appStateStore = createAppStateStore(stateDirectory, {
-    onSaveError: (error) => console.warn(`[EasyView_Md] 窗口 ${id} 状态保存失败:`, error),
+    onSaveError: (error) => console.warn(`[EasyView_Md] failed to save state for window ${id}:`, error),
   });
   await context.appStateStore.load();
   return runInWindowContext(context, async () => {

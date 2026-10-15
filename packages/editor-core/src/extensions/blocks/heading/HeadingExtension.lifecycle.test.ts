@@ -38,12 +38,12 @@ describe('HeadingExtension instance callbacks', () => {
     try {
       dispatchMouseDown(first.mount, '.heading-anchor');
       await Promise.resolve();
-      expect(firstToast).toHaveBeenCalledWith('Link copied');
+      expect(firstToast).toHaveBeenCalledWith('链接已复制');
       expect(secondToast).not.toHaveBeenCalled();
 
       dispatchMouseDown(second.mount, '.heading-anchor');
       await Promise.resolve();
-      expect(secondToast).toHaveBeenCalledWith('Link copied');
+      expect(secondToast).toHaveBeenCalledWith('链接已复制');
       expect(firstToast).toHaveBeenCalledTimes(1);
     } finally {
       first.view.destroy();
@@ -90,9 +90,9 @@ describe('HeadingExtension instance callbacks', () => {
     try {
       const buttons = [...mount.querySelectorAll<HTMLButtonElement>('.heading-trailing button')];
       expect(buttons.map((button) => button.dataset.tooltip)).toEqual([
-        'Copy outline path to clipboard',
-        'Copy outline path to Cursor chat',
-        'Copy outline path to iTerm2',
+        '复制大纲路径到剪贴板',
+        '复制大纲路径到 Cursor 对话',
+        '复制大纲路径到 iTerm2',
       ]);
       expect(buttons.every((button) => !button.hasAttribute('title')
         && button.getAttribute('aria-label') === button.dataset.tooltip)).toBe(true);

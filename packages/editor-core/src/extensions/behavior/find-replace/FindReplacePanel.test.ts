@@ -41,7 +41,7 @@ describe('FindAndReplacePanel layout', () => {
     expect(replaceRow?.style.display).not.toBe('none');
     expect(document.querySelector('.find-replace-toggle-btn')?.textContent).toBe('▼');
     expect(groups).toHaveLength(2);
-    expect(inputs.map((input) => input.placeholder)).toEqual(['Find', 'Replace']);
+    expect(inputs.map((input) => input.placeholder)).toEqual(['查找', '替换']);
     expect(groups[0]?.style.width || getComputedStyle(groups[0]).width).toBeTruthy();
     expect(getComputedStyle(groups[0]).width).toBe(getComputedStyle(groups[1]).width);
     expect(getComputedStyle(root!).borderTopLeftRadius).not.toBe('0px');

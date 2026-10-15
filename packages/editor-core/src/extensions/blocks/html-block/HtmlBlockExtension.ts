@@ -15,6 +15,7 @@ import {
   type SerializerNodeHandler,
 } from '../../../editor/EditorExtension';
 import { schema } from '../../../editor/EditorSchema';
+import { tBlocks } from '../blocks.i18n';
 
 /** Regex to detect HTML comment blocks */
 const COMMENT_RE = /^\s*<!--([\s\S]*?)-->\s*$/;
@@ -139,7 +140,7 @@ export class HtmlBlockExtension extends Extension {
   get slashMenuItems(): SlashMenuItem[] {
     return [
       {
-        label: 'Comment',
+        label: tBlocks('slash.comment'),
         keywords: ['comment', 'hidden', 'html', 'note', 'комментарий'],
         icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
         action: (view: EditorView) => {
@@ -203,8 +204,8 @@ function createStandardHtmlNodeView(node: ProsemirrorNode, view: EditorView, get
   // Edit button
   const editBtn = document.createElement('button');
   editBtn.className = 'html-block-edit-btn';
-  editBtn.textContent = 'Edit';
-  editBtn.title = 'Edit HTML source';
+  editBtn.textContent = tBlocks('action.edit');
+  editBtn.title = tBlocks('htmlBlock.editSource');
   dom.appendChild(editBtn);
 
   // Editing state
@@ -231,12 +232,12 @@ function createStandardHtmlNodeView(node: ProsemirrorNode, view: EditorView, get
 
     const saveBtn = document.createElement('button');
     saveBtn.className = 'html-block-editor-save';
-    saveBtn.textContent = 'Save';
+    saveBtn.textContent = tBlocks('htmlBlock.save');
     saveBtn.addEventListener('click', (e) => { e.stopPropagation(); finishEditing(); });
 
     const cancelBtn = document.createElement('button');
     cancelBtn.className = 'html-block-editor-cancel';
-    cancelBtn.textContent = 'Cancel';
+    cancelBtn.textContent = tBlocks('htmlBlock.cancel');
     cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); cancelEditing(); });
 
     btnBar.appendChild(saveBtn);
@@ -376,7 +377,7 @@ function createCommentNodeView(node: ProsemirrorNode, commentText: string, view:
     textarea.className = 'html-comment-editor';
     const currentText = extractComment(dom.getAttribute('data-html') || '') || '';
     textarea.value = currentText === 'Comment' ? '' : currentText;
-    textarea.placeholder = 'Comment text...';
+    textarea.placeholder = tBlocks('htmlBlock.commentPlaceholder');
     textarea.rows = 1;
     dom.insertBefore(textarea, tooltip);
 

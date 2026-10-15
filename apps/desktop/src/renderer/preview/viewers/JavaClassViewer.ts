@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { h, Loading, ViewerError, type ViewerProps } from './shared';
+import { tPreview } from '../preview.i18n';
 
 export interface JavaClassViewerProps extends ViewerProps { decompile(sessionId: string): Promise<string>; }
 
@@ -12,6 +13,6 @@ export function JavaClassViewer({ descriptor, decompile }: JavaClassViewerProps)
     return () => { disposed = true; };
   }, [descriptor.sessionId, decompile]);
   if (error) return h(ViewerError, { error });
-  if (content === null) return h(Loading, { label: '正在反编译 Java Class…' });
+  if (content === null) return h(Loading, { label: tPreview('java.decompiling') });
   return h('pre', { className: 'preview-text-viewer preview-code-viewer' }, content);
 }

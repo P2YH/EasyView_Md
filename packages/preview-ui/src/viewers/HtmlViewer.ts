@@ -1,6 +1,7 @@
 import * as React from 'react';
 import type { PreviewTextResult } from '@easyview/contracts';
 import { h, Loading, ViewerError, type ViewerProps } from './shared';
+import { tPreview } from '../preview.i18n';
 
 export interface HtmlViewerProps extends ViewerProps {
   readText?(sessionId: string): Promise<PreviewTextResult>;
@@ -57,7 +58,7 @@ export function htmlRewriteRelativeUrls(markup: string, baseHref: string): strin
 
 export function htmlDocumentWithBase(markup: string, baseHref: string): string {
   const rewritten = htmlRewriteRelativeUrls(markup, baseHref);
-  const inject = `<base href="${escapeHtmlAttribute(baseHref)}"><script>${HTML_PREVIEW_FRAME_BOOTSTRAP}</script>`;
+  const inject = `<base href="${escapeHtmlAttribute(baseHref)}"><script>${htmlPreviewFrameBootstrap()}</script>`;
   if (/<head\b/i.test(rewritten)) return rewritten.replace(/<head([^>]*)>/i, `<head$1>${inject}`);
   if (/<html\b/i.test(rewritten)) return rewritten.replace(/<html([^>]*)>/i, `<html$1><head>${inject}</head>`);
   return `<!doctype html><html><head>${inject}</head><body>${rewritten}</body></html>`;
@@ -72,7 +73,16 @@ function escapeHtmlAttribute(value: string): string {
  * menu) cannot use vscode-resource / custom-protocol navigation, so they ask the
  * host to fetch and then apply srcDoc.
  */
-const HTML_PREVIEW_FRAME_BOOTSTRAP = `'use strict';(function(){if(window.__easyviewHtmlFrame)return;window.__easyviewHtmlFrame=true;var pending={};function postToHost(payload){try{parent.postMessage(payload,'*');}catch(e){}try{if(window.top&&window.top!==parent)window.top.postMessage(payload,'*');}catch(e){}}function reportReady(){postToHost({source:'easyview-html',type:'ready',title:document.title||'',text:((document.body&&document.body.innerText)||'').slice(0,4000)});}window.addEventListener('message',function(event){var data=event.data;if(!data||data.source!=='easyview-html')return;if(data.type==='result'){var job=pending[data.id];if(!job)return;delete pending[data.id];if(data.ok)job.resolve(data);else job.reject(new Error(data.message||'load failed'));return;}if(data.type==='click'&&typeof data.text==='string'){var rows=document.querySelectorAll('.menu-row');for(var i=0;i<rows.length;i++){if(((rows[i].innerText)||'').indexOf(data.text)>=0){rows[i].click();break;}}}});function requestHtml(href){var id=Math.random().toString(36).slice(2);return new Promise(function(resolve,reject){pending[id]={resolve:resolve,reject:reject};try{postToHost({source:'easyview-html',type:'fetch',id:id,href:href});}catch(error){delete pending[id];reject(error);return;}setTimeout(function(){if(!pending[id])return;delete pending[id];reject(new Error('timeout'));},20000);});}function shouldProxy(value){try{var abs=new URL(String(value),document.baseURI);var base=new URL(document.baseURI);return abs.protocol===base.protocol&&abs.host===base.host;}catch(e){return false;}}function loadFrame(iframe,value){var abs=new URL(String(value),document.baseURI).href;requestHtml(abs).then(function(result){iframe.srcdoc=result.html;}).catch(function(error){iframe.srcdoc='<!doctype html><p style="font:13px sans-serif;padding:24px;color:#c00">无法加载页面：'+String(error&&error.message||error)+'</p>';});}var srcDesc=Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype,'src');if(srcDesc&&srcDesc.set){Object.defineProperty(HTMLIFrameElement.prototype,'src',{configurable:true,enumerable:true,get:function(){return srcDesc.get?srcDesc.get.call(this):this.getAttribute('src');},set:function(value){if(shouldProxy(value)){this.setAttribute('data-easyview-src',String(value));loadFrame(this,value);return;}srcDesc.set.call(this,value);}});}var setAttr=Element.prototype.setAttribute;Element.prototype.setAttribute=function(name,value){if(this instanceof HTMLIFrameElement&&String(name).toLowerCase()==='src'){this.src=value;return;}return setAttr.call(this,name,value);};if(document.readyState==='complete')reportReady();else window.addEventListener('load',reportReady);})();`;
+function htmlPreviewFrameBootstrap(): string {
+  const loadFailed = scriptStringLiteral(tPreview('html.frameRequestFailed'));
+  const timeout = scriptStringLiteral(tPreview('html.frameTimeout'));
+  const pageFailed = scriptStringLiteral(tPreview('html.frameLoadFailed'));
+  return `'use strict';(function(){if(window.__easyviewHtmlFrame)return;window.__easyviewHtmlFrame=true;var pending={};function postToHost(payload){try{parent.postMessage(payload,'*');}catch(e){}try{if(window.top&&window.top!==parent)window.top.postMessage(payload,'*');}catch(e){}}function reportReady(){postToHost({source:'easyview-html',type:'ready',title:document.title||'',text:((document.body&&document.body.innerText)||'').slice(0,4000)});}window.addEventListener('message',function(event){var data=event.data;if(!data||data.source!=='easyview-html')return;if(data.type==='result'){var job=pending[data.id];if(!job)return;delete pending[data.id];if(data.ok)job.resolve(data);else job.reject(new Error(data.message||${loadFailed}));return;}if(data.type==='click'&&typeof data.text==='string'){var rows=document.querySelectorAll('.menu-row');for(var i=0;i<rows.length;i++){if(((rows[i].innerText)||'').indexOf(data.text)>=0){rows[i].click();break;}}}});function requestHtml(href){var id=Math.random().toString(36).slice(2);return new Promise(function(resolve,reject){pending[id]={resolve:resolve,reject:reject};try{postToHost({source:'easyview-html',type:'fetch',id:id,href:href});}catch(error){delete pending[id];reject(error);return;}setTimeout(function(){if(!pending[id])return;delete pending[id];reject(new Error(${timeout}));},20000);});}function shouldProxy(value){try{var abs=new URL(String(value),document.baseURI);var base=new URL(document.baseURI);return abs.protocol===base.protocol&&abs.host===base.host;}catch(e){return false;}}function loadFrame(iframe,value){var abs=new URL(String(value),document.baseURI).href;requestHtml(abs).then(function(result){iframe.srcdoc=result.html;}).catch(function(error){iframe.srcdoc='<!doctype html><p style="font:13px sans-serif;padding:24px;color:#c00">'+${pageFailed}+String(error&&error.message||error)+'</p>';});}var srcDesc=Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype,'src');if(srcDesc&&srcDesc.set){Object.defineProperty(HTMLIFrameElement.prototype,'src',{configurable:true,enumerable:true,get:function(){return srcDesc.get?srcDesc.get.call(this):this.getAttribute('src');},set:function(value){if(shouldProxy(value)){this.setAttribute('data-easyview-src',String(value));loadFrame(this,value);return;}srcDesc.set.call(this,value);}});}var setAttr=Element.prototype.setAttribute;Element.prototype.setAttribute=function(name,value){if(this instanceof HTMLIFrameElement&&String(name).toLowerCase()==='src'){this.src=value;return;}return setAttr.call(this,name,value);};if(document.readyState==='complete')reportReady();else window.addEventListener('load',reportReady);})();`;
+}
+
+function scriptStringLiteral(value: string): string {
+  return JSON.stringify(value).replace(/</g, '\\u003c');
+}
 
 /**
  * VS Code webview iframe[src=asWebviewUri] is blank. Render the page in a blob
@@ -95,7 +105,7 @@ export function HtmlViewer({ descriptor, readText }: HtmlViewerProps): React.Rea
         return result.content;
       }
       const response = await fetch(descriptor.contentUrl);
-      if (!response.ok) throw new Error(`无法读取 HTML（HTTP ${response.status}）`);
+      if (!response.ok) throw new Error(tPreview('html.readFailed', { status: response.status }));
       return response.text();
     };
     void load().then((content) => {
@@ -143,7 +153,7 @@ export function HtmlViewer({ descriptor, readText }: HtmlViewerProps): React.Rea
       void (async () => {
         try {
           if (!isHtmlPreviewAssetHref(data.href, descriptor.contentUrl)) {
-            throw new Error('预览不允许加载该地址');
+            throw new Error(tPreview('html.addressBlocked'));
           }
           const response = await fetch(data.href);
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -161,7 +171,7 @@ export function HtmlViewer({ descriptor, readText }: HtmlViewerProps): React.Rea
             type: 'result',
             id: data.id,
             ok: false,
-            message: reason instanceof Error ? reason.message : '页面加载失败',
+            message: reason instanceof Error ? reason.message : tPreview('html.pageLoadFailed'),
           }, '*');
         }
       })();
@@ -175,8 +185,8 @@ export function HtmlViewer({ descriptor, readText }: HtmlViewerProps): React.Rea
 
   return h('section', { className: 'preview-html-viewer' },
     h('div', { className: 'preview-tabs', role: 'tablist' },
-      h('button', { type: 'button', className: tab === 'preview' ? 'active' : '', onClick: () => setTab('preview') }, '预览'),
-      h('button', { type: 'button', className: tab === 'source' ? 'active' : '', onClick: () => setTab('source') }, '源码'),
+      h('button', { type: 'button', className: tab === 'preview' ? 'active' : '', onClick: () => setTab('preview') }, tPreview('html.tabPreview')),
+      h('button', { type: 'button', className: tab === 'source' ? 'active' : '', onClick: () => setTab('source') }, tPreview('html.tabSource')),
     ),
     tab === 'preview'
       ? h('iframe', {

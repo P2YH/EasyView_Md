@@ -14,6 +14,7 @@
     "./operation-result": "./src/results/operation-result.ts",
     "./runtime-validation": "./src/validation/runtime-validation.ts",
     "./xlsx-export": "./src/export/xlsx-export.ts",
+    "./i18n": "./src/i18n/i18n.ts",
     "./workspace": "./src/workspace/workspace.ts",
     "./workspace-icons": "./src/workspace/workspace-tree-icons.ts",
     "./preview": "./src/preview/preview.ts",

@@ -10,6 +10,7 @@ import { normalizeAiChatSettings, type AiChatSettings } from '@easyview/contract
 import { buildAiChatMessages } from './chatPrompt';
 import { OpenAiChatError, streamOpenAiChat } from './openai-chat-client';
 import { createAiAgentTools } from './agent-tools';
+import { tAi } from './ai.i18n';
 
 export interface AiChatSecretStore {
   getApiKey(): Promise<string | null>;
@@ -128,7 +129,7 @@ export class AiChatHost {
         type: 'aiChat.settingsSaved',
         requestId,
         ok: true,
-        message: '已保存',
+        message: tAi('host.saved'),
       });
     } catch (error) {
       this.options.postMessage({
@@ -143,13 +144,13 @@ export class AiChatHost {
   private async saveApiKey(requestId: string, apiKey: string): Promise<void> {
     try {
       const trimmed = apiKey.trim();
-      if (!trimmed) throw new Error('API Key 不能为空');
+      if (!trimmed) throw new Error(tAi('host.apiKeyEmpty'));
       await this.options.secretStore.setApiKey(trimmed);
       this.options.postMessage({
         type: 'aiChat.settingsSaved',
         requestId,
         ok: true,
-        message: 'API Key 已保存',
+        message: tAi('host.apiKeySaved'),
       });
     } catch (error) {
       this.options.postMessage({
@@ -164,13 +165,13 @@ export class AiChatHost {
   private async saveWebSearchApiKey(requestId: string, apiKey: string): Promise<void> {
     try {
       const trimmed = apiKey.trim();
-      if (!trimmed) throw new Error('Web Search API Key 不能为空');
+      if (!trimmed) throw new Error(tAi('host.webSearchApiKeyEmpty'));
       await this.options.secretStore.setWebSearchApiKey(trimmed);
       this.options.postMessage({
         type: 'aiChat.settingsSaved',
         requestId,
         ok: true,
-        message: 'Web Search API Key 已保存',
+        message: tAi('host.webSearchApiKeySaved'),
       });
     } catch (error) {
       this.options.postMessage({
@@ -202,7 +203,7 @@ export class AiChatHost {
       const settings = await this.loadSettings();
       const apiKey = await this.options.secretStore.getApiKey();
       if (!apiKey?.trim()) {
-        throw new OpenAiChatError('AUTH', '请先配置 API Key');
+        throw new OpenAiChatError('AUTH', tAi('host.apiKeyMissing'));
       }
       const messages = buildAiChatMessages({
         systemPrompt: settings.systemPrompt,

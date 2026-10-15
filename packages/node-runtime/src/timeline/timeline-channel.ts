@@ -1,5 +1,6 @@
 import type { TimelineComparison, TimelineEntry, TimelineRequestMessage, TimelineResultMessage } from '@easyview/contracts';
 import type { TimelineService } from './timeline-service';
+import { tTimeline } from './timeline.i18n';
 export interface TimelineChannelHost {
   service: TimelineService;
   authorize(filePath: string): Promise<string>;
@@ -18,7 +19,7 @@ export class TimelineChannel {
   constructor(private host: TimelineChannelHost) {}
   async handle(message: TimelineRequestMessage): Promise<void> {
     if (this.disposed) return;
-    if (!message || typeof message !== 'object') throw new Error('Timeline 请求无效');
+    if (!message || typeof message !== 'object') throw new Error(tTimeline('error.invalidRequest'));
     if (message.type === 'timeline.cancel') { this.requests.get(message.id)?.abort(); return; }
     if (message.type === 'timeline.watch') {
       const revision = ++this.watchRevision;
@@ -29,7 +30,7 @@ export class TimelineChannel {
       }
       return;
     }
-    if (message.type !== 'timeline.request' || typeof message.id !== 'string' || !message.payload) throw new Error('Timeline 请求无效');
+    if (message.type !== 'timeline.request' || typeof message.id !== 'string' || !message.payload) throw new Error(tTimeline('error.invalidRequest'));
     this.requests.get(message.id)?.abort();
     const abort = new AbortController(); this.requests.set(message.id, abort);
     try {
@@ -39,7 +40,7 @@ export class TimelineChannel {
       let value: unknown;
       if (message.method === 'list') {
         const sources = payload.sources ?? ['local', 'vscode', 'cursor', 'git'];
-        if (!sources.every((source) => ['local','vscode','cursor','git'].includes(source))) throw new Error('历史来源无效');
+        if (!sources.every((source) => ['local','vscode','cursor','git'].includes(source))) throw new Error(tTimeline('error.invalidSource'));
         value = await this.host.service.list(filePath, sources, payload.cursor, abort.signal);
       } else if (payload.entry && payload.entry.filePath === filePath) {
         if (message.method === 'open' && this.host.reveal?.(payload.entry)) {
@@ -48,8 +49,8 @@ export class TimelineChannel {
           const comparison = await this.host.service.compare(payload.entry, payload.entry.source === 'git' ? '' : await this.host.current(filePath), abort.signal);
           abort.signal.throwIfAborted(); await this.host.open(comparison, abort.signal);
         } else if (message.method === 'restore') await this.host.restore(payload.entry, abort.signal);
-        else throw new Error('Timeline 方法无效');
-      } else throw new Error('历史版本无效');
+        else throw new Error(tTimeline('error.invalidMethod'));
+      } else throw new Error(tTimeline('error.invalidVersion'));
       if (!this.disposed && !abort.signal.aborted) this.host.post({ type: 'timeline.result', id: message.id, value });
     } catch (error) {
       if (!this.disposed && !abort.signal.aborted) this.host.post({ type: 'timeline.result', id: message.id, error: error instanceof Error ? error.message : String(error) });

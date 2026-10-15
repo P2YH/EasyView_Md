@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { isMarkdownDocument, parseMarkdownDocument } from './markdownModel';
+import { tNative } from './nativeEditor.i18n';
 
 export class NativeMarkdownHoverProvider implements vscode.HoverProvider {
   public static register(context: vscode.ExtensionContext): vscode.Disposable {
@@ -23,7 +24,7 @@ export class NativeMarkdownHoverProvider implements vscode.HoverProvider {
 
     if (link) {
       const markdown = new vscode.MarkdownString();
-      markdown.appendMarkdown(link.isImage ? '**Image**\n\n' : '**Link**\n\n');
+      markdown.appendMarkdown(`**${tNative(link.isImage ? 'hover.image' : 'hover.link')}**\n\n`);
       markdown.appendCodeblock(link.target);
       markdown.isTrusted = true;
       return new vscode.Hover(markdown, new vscode.Range(link.line, link.start, link.line, link.end));
@@ -31,17 +32,17 @@ export class NativeMarkdownHoverProvider implements vscode.HoverProvider {
 
     const task = info.tasks.find((item) => item.line === position.line);
     if (task) {
-      return new vscode.Hover(task.checked ? 'Completed task' : 'Open task');
+      return new vscode.Hover(tNative(task.checked ? 'hover.completedTask' : 'hover.openTask'));
     }
 
     const table = info.tables.find((item) => item.line === position.line);
     if (table) {
-      return new vscode.Hover(`Markdown table row, ${table.columns} columns`);
+      return new vscode.Hover(tNative('hover.tableRow', { columns: table.columns }));
     }
 
     const heading = info.headings.find((item) => item.line === position.line);
     if (heading) {
-      return new vscode.Hover(`Anchor: #${heading.anchor}`);
+      return new vscode.Hover(tNative('hover.anchor', { anchor: heading.anchor }));
     }
 
     return undefined;

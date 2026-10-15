@@ -11,8 +11,8 @@ import type { Node as ProsemirrorNode } from 'prosemirror-model';
 import { createEditorDomContext, type EditorDomContext } from '../../../runtime/editorDomContext';
 import { TextSelection } from 'prosemirror-state';
 import scrollIntoView from 'scroll-into-view-if-needed';
-import { headingPathActionLabels } from './HeadingPathActionLabels';
 import { headingPathActionIcons } from './HeadingPathActionIcons';
+import { tHeading } from './heading.i18n';
 
 // Outline: HEADING_OFFSET = 20
 const HEADING_OFFSET = 20;
@@ -29,7 +29,11 @@ interface TableOfContentsOptions {
   onCopyOutlinePath?: (headingPos: number) => void;
   onSendHeadingToChat?: (headingPos: number) => void;
   onInsertIntoITerm?: (headingPos: number) => void;
+  /** When set, a heading rail replaces the closed sidebar; hovering it shows the full outline. */
+  miniMap?: { onPin: () => void; onUnpin: () => void };
 }
+
+const MINI_MAP_MAX_DASHES = 48;
 
 type TocDropPlacement = 'before' | 'after';
 
@@ -130,6 +134,10 @@ export class TableOfContents {
   private isResizingSidebar = false;
   private currentFilePath = '';
   private contextMenu: HTMLElement | null = null;
+  private miniMap: HTMLElement | null = null;
+  private miniMapRail: HTMLElement | null = null;
+  private miniMapList: HTMLElement | null = null;
+  private miniMapActivePos = -1;
 
   private readonly hideContextMenu = (): void => {
     this.contextMenu?.remove();
@@ -305,6 +313,7 @@ export class TableOfContents {
     this.scrollAreaEl = this.dom.getById('editor-scroll-area');
     this.ensureStyles();
     this.createSidebar();
+    this.createMiniMap();
     this.attachScrollListener();
     this.dom.root.addEventListener('mousedown', this.onRootMouseDown as EventListener);
     this.dom.root.addEventListener('keydown', this.onRootKeyDown as EventListener);
@@ -318,9 +327,9 @@ export class TableOfContents {
     menu.className = 'context-menu toc-context-menu visible';
     menu.setAttribute('role', 'menu');
     const actions = [
-      { label: headingPathActionLabels.clipboard, icon: headingPathActionIcons.clipboard, run: this.options.onCopyOutlinePath },
-      { label: headingPathActionLabels.cursorChat, icon: headingPathActionIcons.cursorChat, run: this.options.onSendHeadingToChat },
-      { label: headingPathActionLabels.iTerm2, icon: headingPathActionIcons.iTerm2, run: this.options.onInsertIntoITerm },
+      { label: tHeading('pathAction.clipboard'), icon: headingPathActionIcons.clipboard, run: this.options.onCopyOutlinePath },
+      { label: tHeading('pathAction.cursorChat'), icon: headingPathActionIcons.cursorChat, run: this.options.onSendHeadingToChat },
+      { label: tHeading('pathAction.iTerm2'), icon: headingPathActionIcons.iTerm2, run: this.options.onInsertIntoITerm },
     ];
     for (const action of actions) {
       if (!action.run) continue;
@@ -642,19 +651,30 @@ export class TableOfContents {
     const detailModeBtn = this.dom.document.createElement('button');
     detailModeBtn.type = 'button';
     detailModeBtn.className = 'toc-table-mode-option';
-    detailModeBtn.textContent = '全文目录';
+    detailModeBtn.textContent = tHeading('toc.headingsMode');
     detailModeBtn.addEventListener('click', () => {
       this.setOutlineSource('headings');
     });
     this.tableModeToggleBtn = this.dom.document.createElement('button');
     this.tableModeToggleBtn.type = 'button';
     this.tableModeToggleBtn.className = 'toc-table-mode-option';
-    this.tableModeToggleBtn.textContent = '表格目录';
+    this.tableModeToggleBtn.textContent = tHeading('toc.tableMode');
     this.tableModeToggleBtn.addEventListener('click', () => {
       this.setOutlineSource('table');
     });
     modeGroup.append(detailModeBtn, this.tableModeToggleBtn);
     tableControls.append(modeGroup);
+    const miniMapOptions = this.options.miniMap;
+    if (miniMapOptions) {
+      const unpinBtn = this.dom.document.createElement('button');
+      unpinBtn.type = 'button';
+      unpinBtn.className = 'toc-sidebar-unpin';
+      unpinBtn.title = tHeading('toc.collapseToMiniMap');
+      unpinBtn.setAttribute('aria-label', unpinBtn.title);
+      unpinBtn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.2"/><path d="M15 4.5v15"/><path d="m9 9 3 3-3 3"/></svg>';
+      unpinBtn.addEventListener('click', () => miniMapOptions.onUnpin());
+      tableControls.append(unpinBtn);
+    }
     this.sidebar.appendChild(tableControls);
     this.refreshTableModeControl();
 
@@ -668,11 +688,11 @@ export class TableOfContents {
     controls.appendChild(this.levelToggleBtn);
 
     const levelOptions: Array<{ level: number; label: string; title: string }> = [
-      { level: 1, label: 'H1', title: 'Show level 1 headings only' },
-      { level: 2, label: 'H2', title: 'Show level 1-2 headings' },
-      { level: 3, label: 'H3', title: 'Show level 1-3 headings' },
-      { level: 4, label: 'H4', title: 'Show level 1-4 headings' },
-      { level: 5, label: 'H5', title: 'Show level 1-5 headings' },
+      { level: 1, label: 'H1', title: tHeading('toc.showLevel1') },
+      { level: 2, label: 'H2', title: tHeading('toc.showLevels', { level: 2 }) },
+      { level: 3, label: 'H3', title: tHeading('toc.showLevels', { level: 3 }) },
+      { level: 4, label: 'H4', title: tHeading('toc.showLevels', { level: 4 }) },
+      { level: 5, label: 'H5', title: tHeading('toc.showLevels', { level: 5 }) },
     ];
     levelOptions.forEach((option) => {
       const btn = this.dom.document.createElement('button');
@@ -720,7 +740,7 @@ export class TableOfContents {
 
     this.resizer = this.dom.document.createElement('div');
     this.resizer.className = 'toc-sidebar-resizer';
-    this.resizer.title = 'Drag to resize outline';
+    this.resizer.title = tHeading('toc.resize');
     this.resizer.addEventListener('pointerdown', (event) => this.beginSidebarResize(event));
     this.sidebar.appendChild(this.resizer);
     this.applySidebarWidth();
@@ -803,6 +823,134 @@ export class TableOfContents {
     });
   }
 
+  // ─── Mini Map ────────────────────────────────────────────────────────
+
+  private createMiniMap(): void {
+    const miniMapOptions = this.options.miniMap;
+    const editorBody = this.dom.getById('editor-body');
+    if (!miniMapOptions || !editorBody) return;
+
+    const root = this.dom.document.createElement('div');
+    root.className = 'outline-minimap';
+    root.hidden = true;
+
+    const rail = this.dom.document.createElement('div');
+    rail.className = 'outline-minimap-rail';
+    rail.setAttribute('aria-hidden', 'true');
+
+    const panel = this.dom.document.createElement('nav');
+    panel.className = 'outline-minimap-panel';
+    panel.setAttribute('aria-label', tHeading('miniMap.label'));
+    const header = this.dom.document.createElement('div');
+    header.className = 'outline-minimap-header';
+    const title = this.dom.document.createElement('span');
+    title.textContent = tHeading('miniMap.title');
+    const pinBtn = this.dom.document.createElement('button');
+    pinBtn.type = 'button';
+    pinBtn.className = 'outline-minimap-pin';
+    pinBtn.title = tHeading('miniMap.pin');
+    pinBtn.setAttribute('aria-label', pinBtn.title);
+    pinBtn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 5 3 3v2H7v-2l3-3-1-5Z"/><path d="M12 14v6"/></svg>';
+    pinBtn.addEventListener('click', () => miniMapOptions.onPin());
+    header.append(title, pinBtn);
+
+    const list = this.dom.document.createElement('ul');
+    list.className = 'outline-minimap-list';
+    panel.append(header, list);
+    root.append(rail, panel);
+    // Center the active entry each time the panel opens; scrollIntoView would also scroll the document.
+    root.addEventListener('mouseenter', () => {
+      const active = list.querySelector<HTMLElement>('.outline-minimap-item.active');
+      if (active) list.scrollTop = active.offsetTop - (list.clientHeight - active.offsetHeight) / 2;
+    });
+    editorBody.appendChild(root);
+
+    this.miniMap = root;
+    this.miniMapRail = rail;
+    this.miniMapList = list;
+  }
+
+  /** Keeps the rail readable on long documents by dropping deep levels first, then sampling. */
+  private pickMiniMapRailHeadings(minLevel: number): HeadingEntry[] {
+    for (let depth = 3; depth >= 0; depth -= 1) {
+      const candidates = this.headings.filter((heading) => heading.level - minLevel <= depth);
+      if (candidates.length <= MINI_MAP_MAX_DASHES) return candidates;
+      if (depth === 0) {
+        return Array.from({ length: MINI_MAP_MAX_DASHES }, (_, index) =>
+          candidates[Math.floor((index * candidates.length) / MINI_MAP_MAX_DASHES)]);
+      }
+    }
+    return [];
+  }
+
+  private renderMiniMap(): void {
+    if (!this.miniMap || !this.miniMapRail || !this.miniMapList) return;
+    const show = !this.isVisible && this.headings.length > 0;
+    this.miniMap.hidden = !show;
+    this.miniMapActivePos = -1;
+    this.miniMapRail.replaceChildren();
+    this.miniMapList.replaceChildren();
+    if (!show) return;
+
+    const minLevel = this.headings.reduce((min, heading) => Math.min(min, heading.level), Infinity);
+    for (const heading of this.pickMiniMapRailHeadings(minLevel)) {
+      const dash = this.dom.document.createElement('span');
+      dash.className = 'outline-minimap-dash';
+      dash.dataset.pos = String(heading.pos);
+      dash.dataset.depth = String(Math.min(3, heading.level - minLevel));
+      this.miniMapRail.appendChild(dash);
+    }
+    for (const heading of this.headings) {
+      const item = this.dom.document.createElement('li');
+      const button = this.dom.document.createElement('button');
+      button.type = 'button';
+      button.className = 'outline-minimap-item';
+      button.dataset.pos = String(heading.pos);
+      button.dataset.depth = String(Math.min(4, heading.level - minLevel));
+      button.textContent = heading.text || tHeading('toc.emptyHeading');
+      button.title = heading.text;
+      button.addEventListener('click', () => {
+        this.navigateToHeading(heading);
+        this.highlightMiniMap();
+      });
+      item.appendChild(button);
+      this.miniMapList.appendChild(item);
+    }
+    this.highlightMiniMap();
+  }
+
+  private highlightMiniMap(): void {
+    if (!this.miniMap || this.miniMap.hidden || !this.miniMapRail || !this.miniMapList) return;
+    const resolvedPos = this.resolveActiveHeadingPos();
+    if (resolvedPos === null) return;
+    // Above the first heading, the rail still marks where the reader is.
+    const activePos = resolvedPos < 0 ? (this.headings[0]?.pos ?? -1) : resolvedPos;
+    if (activePos === this.miniMapActivePos) return;
+    this.miniMapActivePos = activePos;
+    this.miniMapList.querySelectorAll<HTMLElement>('.outline-minimap-item').forEach((item) => {
+      item.classList.toggle('active', Number(item.dataset.pos) === activePos);
+    });
+    // The active dash is the nearest rail heading at or before the active heading.
+    let activeDash: HTMLElement | null = null;
+    this.miniMapRail.querySelectorAll<HTMLElement>('.outline-minimap-dash').forEach((dash) => {
+      dash.classList.remove('active');
+      if (activePos >= 0 && Number(dash.dataset.pos) <= activePos) activeDash = dash;
+    });
+    (activeDash as HTMLElement | null)?.classList.add('active');
+  }
+
+  private updateMiniMap(transaction?: { docChanged?: boolean; selectionSet?: boolean }): void {
+    if (transaction?.docChanged || !transaction) {
+      const newHeadings = this.extractHeadings(this.view.state.doc);
+      if (this.headingsChanged(this.headings, newHeadings) || (this.miniMap?.hidden && newHeadings.length > 0)) {
+        this.headings = newHeadings;
+        this.renderMiniMap();
+        return;
+      }
+    }
+    this.highlightMiniMap();
+  }
+
   // ─── Heading Extraction ──────────────────────────────────────────────
 
   /**
@@ -868,7 +1016,7 @@ export class TableOfContents {
     if (filtered.length === 0) {
       const empty = this.dom.document.createElement('li');
       empty.className = 'toc-empty';
-      empty.textContent = this.filterText ? 'No matches' : 'No headings found';
+      empty.textContent = this.filterText ? tHeading('toc.noMatches') : tHeading('toc.noHeadings');
       this.tocList.appendChild(empty);
       return;
     }
@@ -921,7 +1069,7 @@ export class TableOfContents {
         toggleBtn.classList.add('empty');
         toggleBtn.disabled = true;
         toggleBtn.textContent = '';
-        toggleBtn.title = 'No child headings';
+        toggleBtn.title = tHeading('toc.noChildHeadings');
       } else {
         const explicitCollapsed = this.isHeadingCollapsed(heading.pos);
         const levelCollapsed = this.maxVisibleLevel !== null
@@ -929,7 +1077,7 @@ export class TableOfContents {
           && !this.isHeadingExpanded(heading.pos);
         const isCollapsed = explicitCollapsed || levelCollapsed;
         toggleBtn.textContent = isCollapsed ? '▸' : '▾';
-        toggleBtn.title = isCollapsed ? 'Expand children' : 'Collapse children';
+        toggleBtn.title = isCollapsed ? tHeading('toc.expandChildren') : tHeading('toc.collapseChildren');
         toggleBtn.addEventListener('click', (event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -939,7 +1087,7 @@ export class TableOfContents {
 
       const text = this.dom.document.createElement('span');
       text.className = 'toc-item-text';
-      text.textContent = heading.text || '(empty)';
+      text.textContent = heading.text || tHeading('toc.emptyHeading');
       text.title = heading.text;
 
       const levelTag = this.dom.document.createElement('span');
@@ -953,7 +1101,7 @@ export class TableOfContents {
       const dragBtn = this.dom.document.createElement('button');
       dragBtn.type = 'button';
       dragBtn.className = 'toc-item-action toc-item-drag-handle';
-      dragBtn.title = actionsDisabled ? 'Move is available in EasyView mode only' : 'Drag to move this heading section';
+      dragBtn.title = actionsDisabled ? tHeading('toc.moveUnavailable') : tHeading('toc.dragSection');
       dragBtn.draggable = !actionsDisabled;
       dragBtn.disabled = actionsDisabled;
       dragBtn.innerHTML = '<svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.25"/><circle cx="15" cy="6" r="1.25"/><circle cx="9" cy="12" r="1.25"/><circle cx="15" cy="12" r="1.25"/><circle cx="9" cy="18" r="1.25"/><circle cx="15" cy="18" r="1.25"/></svg>';
@@ -980,7 +1128,7 @@ export class TableOfContents {
       const deleteBtn = this.dom.document.createElement('button');
       deleteBtn.type = 'button';
       deleteBtn.className = 'toc-item-action toc-item-delete';
-      deleteBtn.title = actionsDisabled ? 'Delete is available in EasyView mode only' : 'Delete this heading and its content';
+      deleteBtn.title = actionsDisabled ? tHeading('toc.deleteUnavailable') : tHeading('toc.deleteSection');
       deleteBtn.disabled = actionsDisabled;
       deleteBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>';
       deleteBtn.addEventListener('click', (event) => {
@@ -1008,17 +1156,7 @@ export class TableOfContents {
         if (hasChildren) {
           this.toggleHeadingCollapse(heading.pos, hasChildrenBeyondMax);
         }
-        if (navigationHandler) {
-          // Lock active heading to clicked one (same as scrollToHeading does for WYSIWYG)
-          this.clickedPos = heading.pos;
-          this.programmaticScroll = true;
-          setTimeout(() => { this.programmaticScroll = false; }, 600);
-          this.activeIndex = heading.pos;
-          this.applyActiveClass(heading.pos);
-          navigationHandler({ level: heading.level, text: heading.text });
-        } else {
-          this.scrollToHeading(heading.pos);
-        }
+        this.navigateToHeading(heading);
       });
 
       if (!actionsDisabled) {
@@ -1068,14 +1206,14 @@ export class TableOfContents {
   private refreshTableModeControl(): void {
     if (!this.tableModeToggleBtn) return;
     this.saveTableMode();
-    this.tableModeToggleBtn.textContent = '表格目录';
+    this.tableModeToggleBtn.textContent = tHeading('toc.tableMode');
     this.tableModeToggleBtn.setAttribute('role', 'switch');
     this.tableModeToggleBtn.setAttribute('aria-checked', String(this.tableMode));
     this.tableModeToggleBtn.classList.toggle('active', this.tableMode);
     const detailModeBtn = this.tableModeToggleBtn.parentElement?.firstElementChild as HTMLButtonElement | null;
-    if (detailModeBtn) detailModeBtn.textContent = '全文目录';
+    if (detailModeBtn) detailModeBtn.textContent = tHeading('toc.headingsMode');
     detailModeBtn?.classList.toggle('active', !this.tableMode);
-    this.tableModeToggleBtn.title = this.tableMode ? '显示文档标题目录' : '显示文档第一个表格目录树';
+    this.tableModeToggleBtn.title = this.tableMode ? tHeading('toc.showHeadings') : tHeading('toc.showFirstTable');
   }
 
   private renderTableTree(): void {
@@ -1088,7 +1226,7 @@ export class TableOfContents {
     if (!tableElement) {
       const empty = this.dom.document.createElement('li');
       empty.className = 'toc-table-empty';
-      empty.textContent = '正在加载表格…';
+      empty.textContent = tHeading('toc.loadingTable');
       this.tocList.appendChild(empty);
       // NodeViews can mount after the editor transaction that opens the sidebar.
       // Retry once after layout without changing the existing document model.
@@ -1142,7 +1280,7 @@ export class TableOfContents {
       });
       node.childCount = childKeys.size;
     });
-    if (!tree.size) { const empty = this.dom.document.createElement('li'); empty.className = 'toc-table-empty'; empty.textContent = '表格暂无目录数据'; this.tocList.appendChild(empty); return; }
+    if (!tree.size) { const empty = this.dom.document.createElement('li'); empty.className = 'toc-table-empty'; empty.textContent = tHeading('toc.emptyTable'); this.tocList.appendChild(empty); return; }
     // Drop collapse/expand overrides for nodes that no longer exist after table edits.
     this.collapsedTablePathKeys.forEach((key) => {
       if (!tree.has(key)) this.collapsedTablePathKeys.delete(key);
@@ -1168,10 +1306,10 @@ export class TableOfContents {
         toggleBtn.classList.add('empty');
         toggleBtn.disabled = true;
         toggleBtn.textContent = '';
-        toggleBtn.title = 'No child nodes';
+        toggleBtn.title = tHeading('toc.noChildNodes');
       } else {
         toggleBtn.textContent = isCollapsed ? '▸' : '▾';
-        toggleBtn.title = isCollapsed ? 'Expand children' : 'Collapse children';
+        toggleBtn.title = isCollapsed ? tHeading('toc.expandChildren') : tHeading('toc.collapseChildren');
         toggleBtn.addEventListener('click', (event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -1386,16 +1524,20 @@ export class TableOfContents {
       return;
     }
 
-    // Source mode: use external provider for active heading
-    if (this.sourceGetActivePos) {
-      const activePos = this.findVisibleAncestorPos(this.sourceGetActivePos());
-      if (activePos === this.activeIndex) return;
-      this.activeIndex = activePos;
-      this.applyActiveClass(activePos);
-      return;
-    }
+    const resolvedPos = this.resolveActiveHeadingPos();
+    if (resolvedPos === null) return;
+    const activePos = this.findVisibleAncestorPos(resolvedPos);
+    if (activePos === this.activeIndex) return;
+    this.activeIndex = activePos;
+    this.applyActiveClass(activePos);
+  }
 
-    if (!this.scrollAreaEl) return;
+  /** Active heading pos from click lock, source-mode provider, or scroll position; null when unknown. */
+  private resolveActiveHeadingPos(): number | null {
+    if (this.headings.length === 0) return -1;
+    if (this.clickedPos !== null) return this.clickedPos;
+    if (this.sourceGetActivePos) return this.sourceGetActivePos();
+    if (!this.scrollAreaEl) return null;
 
     const scrollEl = this.scrollAreaEl!;
     const remainingScroll = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
@@ -1438,11 +1580,7 @@ export class TableOfContents {
     if (remainingScroll < scrollEl.clientHeight * 0.5 && lastVisiblePos !== -1) {
       activePos = lastVisiblePos;
     }
-
-    activePos = this.findVisibleAncestorPos(activePos);
-    if (activePos === this.activeIndex) return;
-    this.activeIndex = activePos;
-    this.applyActiveClass(activePos);
+    return activePos;
   }
 
   private findVisibleAncestorPos(pos: number): number {
@@ -1633,8 +1771,8 @@ export class TableOfContents {
       const isAll = this.maxVisibleLevel === null;
       this.levelToggleBtn.textContent = isAll ? '▾' : '▸';
       this.levelToggleBtn.title = isAll
-        ? 'Collapse to level 1'
-        : 'Expand all levels';
+        ? tHeading('toc.collapseToLevel1')
+        : tHeading('toc.expandAllLevels');
       this.levelToggleBtn.classList.toggle('active', isAll);
     }
     this.levelButtons.forEach((entry) => {
@@ -1676,6 +1814,21 @@ export class TableOfContents {
   }
 
   // ─── Scroll to Heading ───────────────────────────────────────────────
+
+  private navigateToHeading(heading: HeadingEntry): void {
+    const navigationHandler = this.sourceClickHandler ?? this.changeViewClickHandler;
+    if (!navigationHandler) {
+      this.scrollToHeading(heading.pos);
+      return;
+    }
+    // Lock active heading to clicked one (same as scrollToHeading does for WYSIWYG)
+    this.clickedPos = heading.pos;
+    this.programmaticScroll = true;
+    setTimeout(() => { this.programmaticScroll = false; }, 600);
+    this.activeIndex = heading.pos;
+    this.applyActiveClass(heading.pos);
+    navigationHandler({ level: heading.level, text: heading.text });
+  }
 
   private scrollToHeading(pos: number): void {
     this.view.focus();
@@ -1732,7 +1885,7 @@ export class TableOfContents {
     if (!this.scrollAreaEl) return;
 
     this.scrollHandler = () => {
-      if (!this.isVisible) return;
+      if (!this.isVisible && !this.miniMap) return;
 
       // Manual scroll detected — unlock click lock
       if (!this.programmaticScroll) {
@@ -1743,7 +1896,8 @@ export class TableOfContents {
       if (this.throttleTimer) return;
       this.throttleTimer = setTimeout(() => {
         this.throttleTimer = null;
-        if (this.tableMode) this.highlightActiveTableNode();
+        if (!this.isVisible) this.highlightMiniMap();
+        else if (this.tableMode) this.highlightActiveTableNode();
         else this.highlightActiveHeading();
       }, 100);
     };
@@ -1783,7 +1937,10 @@ export class TableOfContents {
   /** Called from dispatchTransaction on every state change */
   public update(view: EditorView, transaction?: { docChanged?: boolean; selectionSet?: boolean }): void {
     this.view = view;
-    if (!this.isVisible) return;
+    if (!this.isVisible) {
+      if (this.miniMap) this.updateMiniMap(transaction);
+      return;
+    }
 
     // Keep the heading cache current even while the table tree is showing.
     // Init uses view.updateState (no dispatch); table-mode used to skip that
@@ -1849,6 +2006,7 @@ export class TableOfContents {
     this.refreshTableModeControl();
     this.activeIndex = -1;
     this.renderList();
+    this.renderMiniMap();
     this.scheduleLayoutChangeNotifications();
   }
 
@@ -1860,6 +2018,10 @@ export class TableOfContents {
     this.sidebar?.classList.remove('resizing');
     this.sidebar?.classList.add('hidden');
     this.dom.themeRoot.classList.remove('toc-visible');
+    if (this.miniMap) {
+      this.headings = this.extractHeadings(this.view.state.doc);
+      this.renderMiniMap();
+    }
     this.scheduleLayoutChangeNotifications();
   }
 
@@ -1876,7 +2038,7 @@ export class TableOfContents {
     this.sourceScrollEl = scrollEl;
 
     this.sourceScrollHandler = () => {
-      if (!this.isVisible) return;
+      if (!this.isVisible && !this.miniMap) return;
 
       if (this.clickedPos !== null && !this.programmaticScroll) {
         this.clickedPos = null;
@@ -1885,13 +2047,15 @@ export class TableOfContents {
       if (this.throttleTimer) return;
       this.throttleTimer = setTimeout(() => {
         this.throttleTimer = null;
-        this.highlightActiveHeading();
+        if (this.isVisible) this.highlightActiveHeading();
+        else this.highlightMiniMap();
       }, 100);
     };
 
     scrollEl.addEventListener('scroll', this.sourceScrollHandler, { passive: true });
     if (this.isVisible) this.renderList();
     this.highlightActiveHeading();
+    this.highlightMiniMap();
   }
 
   public exitSourceMode(): void {
@@ -1902,6 +2066,7 @@ export class TableOfContents {
     this.sourceScrollHandler = null;
     this.sourceGetActivePos = null;
     if (this.isVisible) this.renderList();
+    this.highlightMiniMap();
   }
 
   public get visible(): boolean {
@@ -1918,9 +2083,9 @@ export class TableOfContents {
     const totalChars = Math.max(0, Number.isFinite(stats.totalChars) ? Math.floor(stats.totalChars) : 0);
     const line = Math.max(1, Number.isFinite(stats.line) ? Math.floor(stats.line) : 1);
     const selectedChars = Math.max(0, Number.isFinite(stats.selectedChars) ? Math.floor(stats.selectedChars) : 0);
-    this.statusTotalChars.textContent = `Chars ${totalChars}`;
-    this.statusLine.textContent = `Ln ${line}`;
-    this.statusSelectedChars.textContent = `Sel ${selectedChars}`;
+    this.statusTotalChars.textContent = tHeading('toc.status.chars', { count: totalChars });
+    this.statusLine.textContent = tHeading('toc.status.line', { line });
+    this.statusSelectedChars.textContent = tHeading('toc.status.selected', { count: selectedChars });
   }
 
   public destroy(): void {
@@ -1936,5 +2101,6 @@ export class TableOfContents {
       clearTimeout(this.throttleTimer);
     }
     this.sidebar?.remove();
+    this.miniMap?.remove();
   }
 }

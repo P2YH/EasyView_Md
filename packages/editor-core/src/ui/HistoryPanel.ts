@@ -13,6 +13,7 @@ import { undoDepth as cmUndoDepth, redoDepth as cmRedoDepth } from '@codemirror/
 import type { EditorView } from 'prosemirror-view';
 import type { DualModeHistory } from '../editor/DualModeHistory';
 import type { EditOperationLog } from '../editor/EditOperationLog';
+import { tHistoryPanel } from './historyPanel.i18n';
 
 export interface HistoryPanelDeps {
   getView: () => EditorView | null;
@@ -48,8 +49,8 @@ export class HistoryPanel {
     const header = document.createElement('div');
     header.className = 'history-panel-header';
     header.innerHTML = `
-      <span class="history-panel-title">最近</span>
-      <button class="history-panel-close" title="Close">&times;</button>
+      <span class="history-panel-title">${tHistoryPanel('title')}</span>
+      <button class="history-panel-close" title="${tHistoryPanel('close')}">&times;</button>
     `;
     this.closeButton = header.querySelector('.history-panel-close') as HTMLButtonElement;
     this.closeButton.addEventListener('click', this.handleCloseClick);
@@ -320,14 +321,14 @@ export class HistoryPanel {
 
     const statusEl = document.createElement('div');
     statusEl.className = 'history-panel-status';
-    const modeLabel = isSource ? 'Source' : 'WYSIWYG';
+    const modeLabel = isSource ? tHistoryPanel('mode.source') : tHistoryPanel('mode.wysiwyg');
     statusEl.innerHTML = `
       <div class="history-status-mode">
         <span class="history-dot ${isSource ? 'source' : 'wysiwyg'}"></span>
         ${modeLabel}
       </div>
       <div class="history-status-counts">
-        Undo: <strong>${undos}</strong> &nbsp; Redo: <strong>${redos}</strong>
+        ${tHistoryPanel('counts', { undos, redos })}
       </div>
     `;
     this.contentEl.appendChild(statusEl);
@@ -337,7 +338,7 @@ export class HistoryPanel {
 
     const undoBtn = document.createElement('button');
     undoBtn.className = 'history-action-btn';
-    undoBtn.textContent = 'Undo';
+    undoBtn.textContent = tHistoryPanel('undo');
     undoBtn.disabled = undos === 0;
     undoBtn.addEventListener('click', () => {
       this.undoSteps(1);
@@ -345,7 +346,7 @@ export class HistoryPanel {
 
     const redoBtn = document.createElement('button');
     redoBtn.className = 'history-action-btn';
-    redoBtn.textContent = 'Redo';
+    redoBtn.textContent = tHistoryPanel('redo');
     redoBtn.disabled = redos === 0;
     redoBtn.addEventListener('click', () => {
       this.redoSteps(1);
@@ -360,7 +361,7 @@ export class HistoryPanel {
 
     const sectionTitle = document.createElement('div');
     sectionTitle.className = 'history-section-title';
-    sectionTitle.textContent = '操作历史';
+    sectionTitle.textContent = tHistoryPanel('operations');
     listEl.appendChild(sectionTitle);
 
     const redoEntries = [...operationLog.getRedoEntries()].reverse();
@@ -370,7 +371,7 @@ export class HistoryPanel {
       listEl.appendChild(this.createOperationEntry({
         label: entry.label,
         mode: entry.mode,
-        meta: `Redo ${steps}`,
+        steps,
         future: true,
         onActivate: () => this.redoSteps(steps),
       }));
@@ -380,7 +381,7 @@ export class HistoryPanel {
     currentEl.className = 'history-operation-entry current';
     currentEl.innerHTML = `
       <span class="history-dot ${isSource ? 'source' : 'wysiwyg'}"></span>
-      <span class="history-operation-text"><em>当前位置</em></span>
+      <span class="history-operation-text"><em>${tHistoryPanel('current')}</em></span>
     `;
     listEl.appendChild(currentEl);
 
@@ -391,7 +392,7 @@ export class HistoryPanel {
       listEl.appendChild(this.createOperationEntry({
         label: entry.label,
         mode: entry.mode,
-        meta: `Undo ${steps}`,
+        steps,
         future: false,
         onActivate: () => this.undoSteps(steps),
       }));
@@ -401,7 +402,7 @@ export class HistoryPanel {
       const emptyEl = document.createElement('div');
       emptyEl.className = 'history-snapshot-entry';
       emptyEl.style.opacity = '0.65';
-      emptyEl.textContent = '暂无操作记录';
+      emptyEl.textContent = tHistoryPanel('empty');
       listEl.appendChild(emptyEl);
     }
 
@@ -415,7 +416,7 @@ export class HistoryPanel {
 
       const crossTitle = document.createElement('div');
       crossTitle.className = 'history-section-title';
-      crossTitle.textContent = 'Cross-mode snapshots';
+      crossTitle.textContent = tHistoryPanel('crossMode');
       sectionEl.appendChild(crossTitle);
 
       for (let index = redoStack.length - 1; index >= 0; index--) {
@@ -424,7 +425,7 @@ export class HistoryPanel {
 
       const nowEl = document.createElement('div');
       nowEl.className = 'history-snapshot-entry current';
-      nowEl.innerHTML = `<span class="history-dot ${isSource ? 'source' : 'wysiwyg'}"></span> <em>Current (${modeLabel})</em>`;
+      nowEl.innerHTML = `<span class="history-dot ${isSource ? 'source' : 'wysiwyg'}"></span> <em>${tHistoryPanel('currentMode', { mode: modeLabel })}</em>`;
       sectionEl.appendChild(nowEl);
 
       for (let index = undoStack.length - 1; index >= 0; index--) {
@@ -440,7 +441,7 @@ export class HistoryPanel {
   private createOperationEntry(options: {
     label: string;
     mode: 'wysiwyg' | 'source';
-    meta: string;
+    steps: number;
     future: boolean;
     onActivate: () => void;
   }): HTMLElement {
@@ -448,8 +449,8 @@ export class HistoryPanel {
     button.type = 'button';
     button.className = `history-operation-entry${options.future ? ' future' : ''}`;
     button.title = options.future
-      ? `重做 ${options.meta.replace('Redo ', '')} 步`
-      : `撤销 ${options.meta.replace('Undo ', '')} 步`;
+      ? tHistoryPanel('redoSteps', { steps: options.steps })
+      : tHistoryPanel('undoSteps', { steps: options.steps });
 
     const dot = document.createElement('span');
     dot.className = `history-dot ${options.mode}`;
@@ -462,7 +463,9 @@ export class HistoryPanel {
 
     const meta = document.createElement('span');
     meta.className = 'history-operation-meta';
-    meta.textContent = options.meta;
+    meta.textContent = options.future
+      ? tHistoryPanel('redoMeta', { steps: options.steps })
+      : tHistoryPanel('undoMeta', { steps: options.steps });
     button.appendChild(meta);
 
     button.addEventListener('click', (event) => {
@@ -483,9 +486,9 @@ export class HistoryPanel {
 
     const text = document.createElement('span');
     text.className = 'history-snapshot-text';
-    const modeStr = entry.mode === 'source' ? 'Source' : 'WYSIWYG';
+    const modeStr = entry.mode === 'source' ? tHistoryPanel('mode.source') : tHistoryPanel('mode.wysiwyg');
     text.textContent = modeStr;
-    text.title = `${modeStr} — ${entry.markdown.length} chars`;
+    text.title = tHistoryPanel('snapshotSize', { mode: modeStr, count: entry.markdown.length });
     el.appendChild(text);
 
     return el;

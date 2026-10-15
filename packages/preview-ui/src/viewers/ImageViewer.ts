@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { extension, h, UniversalFilePreview, loadingElement, ViewerError, usePreviewAppearance, type ViewerProps } from './shared';
 import { usePreviewAssets } from '../assets';
+import { tPreview } from '../preview.i18n';
 
 export function ImageViewer({ descriptor }: ViewerProps): React.ReactElement {
   const suffix = extension(descriptor.fileName);
@@ -8,11 +9,11 @@ export function ImageViewer({ descriptor }: ViewerProps): React.ReactElement {
   // HEIC needs an isolated decoder host (Desktop provides heicHostUrl in phase-2).
   if (['.heic', '.heif'].includes(suffix)) {
     if (!assets.heicHostUrl) {
-      return h('div', { className: 'preview-viewer-message' }, '当前宿主暂不支持 HEIC/HEIF 预览。');
+      return h('div', { className: 'preview-viewer-message' }, tPreview('image.heicUnsupported'));
     }
     return h(HeicImageViewer, { descriptor, heicHostUrl: assets.heicHostUrl });
   }
-  return h(UniversalFilePreview, { descriptor, loadingLabel: '正在加载图片预览器…' });
+  return h(UniversalFilePreview, { descriptor, loadingLabel: tPreview('image.loadingViewer') });
 }
 
 function HeicImageViewer({ descriptor, heicHostUrl }: ViewerProps & { heicHostUrl: string }): React.ReactElement {
@@ -26,13 +27,13 @@ function HeicImageViewer({ descriptor, heicHostUrl }: ViewerProps & { heicHostUr
     const receive = (event: MessageEvent<{ type?: string; token?: string; message?: string }>) => {
       if (event.source !== frame.current?.contentWindow || event.data?.token !== token) return;
       if (event.data.type === 'heic-ready') setReady(true);
-      if (event.data.type === 'heic-error') setError(new Error(event.data.message || 'HEIC 图片解码失败'));
+      if (event.data.type === 'heic-error') setError(new Error(event.data.message || tPreview('image.heicDecodeFailed')));
     };
     window.addEventListener('message', receive);
     const send = async () => {
       try {
         const response = await fetch(descriptor.contentUrl);
-        if (!response.ok) throw new Error(`无法读取 HEIC 文件（HTTP ${response.status}）`);
+        if (!response.ok) throw new Error(tPreview('image.heicReadFailed', { status: response.status }));
         const bytes = await response.arrayBuffer();
         if (!disposed) {
           frame.current?.contentWindow?.postMessage(
@@ -61,7 +62,7 @@ function HeicImageViewer({ descriptor, heicHostUrl }: ViewerProps & { heicHostUr
   }, [appearance.background, appearance.textColor, token]);
   if (error) return h(ViewerError, { error });
   return h('div', { className: 'preview-image-viewer preview-heic-viewer' },
-    !ready ? loadingElement('正在隔离解码 HEIC 图片…') : null,
+    !ready ? loadingElement(tPreview('image.heicDecoding')) : null,
     h('iframe', {
       ref: frame,
       className: 'preview-heic-frame',

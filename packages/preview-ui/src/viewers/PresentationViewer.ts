@@ -2,10 +2,11 @@ import * as React from 'react';
 import { h, Loading, ViewerError, extension, UniversalFilePreview, type ViewerProps } from './shared';
 import { usePreviewAssets } from '../assets';
 import { revokeSameOriginWorkerUrl, toSameOriginWorkerUrl } from '../workers/sameOriginWorker';
+import { tPreview } from '../preview.i18n';
 
 export function PresentationViewer({ descriptor }: ViewerProps): React.ReactElement {
   if (extension(descriptor.fileName) === '.ppt') return h(BinaryPptViewer, { descriptor });
-  return h(UniversalFilePreview, { descriptor, loadingLabel: '正在加载演示文稿预览器…' });
+  return h(UniversalFilePreview, { descriptor, loadingLabel: tPreview('presentation.loadingViewer') });
 }
 
 function BinaryPptViewer({ descriptor }: ViewerProps): React.ReactElement {
@@ -19,14 +20,14 @@ function BinaryPptViewer({ descriptor }: ViewerProps): React.ReactElement {
     let workerBlobUrl: string | null = null;
     void (async () => {
       const pptBase = assets.pptAssetBaseUrl;
-      if (!pptBase) throw new Error('当前宿主未提供 PPT 预览资源');
+      if (!pptBase) throw new Error(tPreview('presentation.assetsUnavailable'));
       const rawWorkerUrl = `${pptBase}worker.mjs`;
       workerBlobUrl = await toSameOriginWorkerUrl(rawWorkerUrl);
       const [{ createPptViewer }, response] = await Promise.all([
         import('@file-viewer/ppt'),
         fetch(descriptor.contentUrl),
       ]);
-      if (!response.ok) throw new Error(`无法读取 PPT（HTTP ${response.status}）`);
+      if (!response.ok) throw new Error(tPreview('presentation.readFailed', { status: response.status }));
       const viewer = await createPptViewer({
         worker: 'auto',
         workerUrl: workerBlobUrl,
@@ -57,7 +58,7 @@ function BinaryPptViewer({ descriptor }: ViewerProps): React.ReactElement {
   }, [descriptor.contentUrl, assets.pptAssetBaseUrl]);
   if (error) return h(ViewerError, { error });
   return h('section', { className: 'preview-ppt-viewer' },
-    h('p', { className: 'preview-notice' }, '旧版 PPT 预览包含 Flyfish Viewer 可见水印。'),
+    h('p', { className: 'preview-notice' }, tPreview('presentation.watermarkNotice')),
     h('div', { className: 'preview-ppt-canvas-root', ref: root }),
     !ready ? h(Loading, {}) : null,
   );

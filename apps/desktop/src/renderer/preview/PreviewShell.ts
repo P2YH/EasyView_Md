@@ -7,22 +7,35 @@ import {
   type PreviewExtraViewers,
   type PreviewHost,
 } from '@easyview/preview-ui';
+import { getLocale } from '@easyview/contracts/i18n';
 import type { PreviewController } from './PreviewController';
+import { tPreview } from './preview.i18n';
 
-const desktopAssets: PreviewAssetConfig = {
-  fileViewerAssetBaseUrl: new URL('./vendor/file-viewer/', window.location.href).toString(),
-  pptAssetBaseUrl: new URL('./vendor/file-viewer-ppt/', window.location.href).toString(),
-  docWorkerUrl: new URL('./workers/doc-worker.js', window.location.href).toString(),
-  heicHostUrl: new URL('./heic-host.html', window.location.href).toString(),
-  themeStorage: createLocalPreviewThemeStorage(window.localStorage),
-};
+let desktopAssets: PreviewAssetConfig | undefined;
+
+function getDesktopAssets(): PreviewAssetConfig {
+  desktopAssets ??= {
+    fileViewerAssetBaseUrl: new URL('./vendor/file-viewer/', window.location.href).toString(),
+    pptAssetBaseUrl: new URL('./vendor/file-viewer-ppt/', window.location.href).toString(),
+    docWorkerUrl: localizedAssetUrl('./workers/doc-worker.js'),
+    heicHostUrl: localizedAssetUrl('./heic-host.html'),
+    themeStorage: createLocalPreviewThemeStorage(window.localStorage),
+  };
+  return desktopAssets;
+}
+
+function localizedAssetUrl(relativeUrl: string): string {
+  const url = new URL(relativeUrl, window.location.href);
+  url.searchParams.set('locale', getLocale());
+  return url.toString();
+}
 
 const extraViewers: PreviewExtraViewers = {
   epub: () => import('./viewers/DesignViewer').then(({ DesignViewer }) => (descriptor) => h(DesignViewer, { descriptor })),
   design: () => import('./viewers/DesignViewer').then(({ DesignViewer }) => (descriptor) => h(DesignViewer, { descriptor })),
   font: () => import('./viewers/DesignViewer').then(({ DesignViewer }) => (descriptor) => h(DesignViewer, { descriptor })),
   http: () => import('./viewers/HttpViewer').then(({ HttpViewer }) => (descriptor, host) => {
-    if (!host.readText || !host.sendHttp) throw new Error('当前宿主未提供 HTTP 预览能力');
+    if (!host.readText || !host.sendHttp) throw new Error(tPreview('error.httpUnsupported'));
     return h(HttpViewer, {
       descriptor,
       readText: host.readText.bind(host),
@@ -30,7 +43,7 @@ const extraViewers: PreviewExtraViewers = {
     });
   }),
   'java-class': () => import('./viewers/JavaClassViewer').then(({ JavaClassViewer }) => (descriptor, host) => {
-    if (!host.decompileJava) throw new Error('当前宿主未提供 Java 反编译能力');
+    if (!host.decompileJava) throw new Error(tPreview('error.javaUnsupported'));
     return h(JavaClassViewer, { descriptor, decompile: host.decompileJava.bind(host) });
   }),
 };
@@ -42,7 +55,7 @@ export interface PreviewShellProps {
 export function PreviewShell({ controller }: PreviewShellProps): React.ReactElement {
   return React.createElement(SharedPreviewShell, {
     host: controller as PreviewHost,
-    assets: desktopAssets,
+    assets: getDesktopAssets(),
     extraViewers,
   });
 }

@@ -1,6 +1,7 @@
 import type { TimelineComparison, TimelineRequestMessage, TimelineResultMessage, LocalHistorySettings } from '@easyview/contracts';
 import type {
   EditorHostTransport,
+  Locale,
   OperationResult,
   PreviewWriteResult,
 } from '@easyview/contracts';
@@ -50,6 +51,10 @@ export interface EasyViewDesktopApi {
   app: {
     getTheme(): Promise<OperationResult<DesktopThemeMode>>;
     newWindow(): Promise<OperationResult<boolean>>;
+    /** Page zoom set by View › 放大/缩小 (1 = 100%). */
+    getZoomFactor(): number;
+    /** UI locale resolved by the main process at startup; changing it requires a restart. */
+    readonly locale: Locale;
     onThemeChanged(listener: (theme: DesktopThemeMode) => void): { unsubscribe(): void };
   };
   workspace: WorkspaceApi;

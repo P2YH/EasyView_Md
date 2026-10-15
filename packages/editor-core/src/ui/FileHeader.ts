@@ -8,6 +8,8 @@ import { applyEditorAppearance, EditorAppearanceStore, type EditorAppearanceStat
 export type { EasyViewAccentTheme } from './EditorAppearance';
 import type { EditorToHostMessage } from '@easyview/contracts/protocol';
 import { createEditorDomContext, type EditorDomContext } from '../runtime/editorDomContext';
+import { escapeHtml } from './escapeHtml';
+import { tFileHeader } from './fileHeader.i18n';
 
 export interface FileHeaderDeps {
   dom?: EditorDomContext;
@@ -63,25 +65,7 @@ const DEFAULT_SHORTCUTS: ToolbarShortcutConfig = {
   scrollBottom: 'Alt+ArrowDown',
 };
 
-const SHORTCUT_LABELS: Record<ToolbarShortcutAction, string> = {
-  openWithEasyView: 'Open with EasyView_Md',
-  toggleToc: 'Toggle TOC',
-  toggleFullWidth: 'Toggle full width',
-  toggleTableWrap: 'Toggle table wrap',
-  toggleExternalFollow: 'Toggle external follow scroll',
-  toggleTheme: 'Toggle light/dark theme',
-  toggleTerminal: 'Toggle embedded terminal',
-  toggleStickyNote: 'Toggle sticky note',
-  toggleAiChat: 'Toggle AI chat',
-  openSourceMode: 'Open source mode',
-  toggleViewChanges: 'Toggle change view',
-  copyOutlinePath: 'Copy outline path',
-  copyFullPath: 'Copy file and outline path',
-  stageFile: 'Stage current file',
-  commitFile: 'Commit current file',
-  scrollTop: 'Scroll to top',
-  scrollBottom: 'Scroll to bottom',
-};
+const shortcutActionLabel = (action: ToolbarShortcutAction): string => tFileHeader(`shortcut.${action}`);
 
 
 const IS_MAC = /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || '');
@@ -676,12 +660,12 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
   ensureCommitModalStyles();
   type ThemeMode = ThemeModeName;
   const accentThemes: Array<{ value: EasyViewAccentTheme; label: string }> = [
-    { value: 'default', label: 'Default text' },
-    { value: 'blue', label: 'Blue' },
-    { value: 'orangeRed', label: 'Orange red' },
-    { value: 'green', label: 'Green' },
-    { value: 'purple', label: 'Purple' },
-    { value: 'cherryRed', label: 'Cherry red' },
+    { value: 'default', label: tFileHeader('accent.default') },
+    { value: 'blue', label: tFileHeader('accent.blue') },
+    { value: 'orangeRed', label: tFileHeader('accent.orangeRed') },
+    { value: 'green', label: tFileHeader('accent.green') },
+    { value: 'purple', label: tFileHeader('accent.purple') },
+    { value: 'cherryRed', label: tFileHeader('accent.cherryRed') },
   ];
 
   const defaultMode = dom.themeRoot.classList.contains('vscode-dark')
@@ -709,7 +693,7 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
   nameEl.className = 'file-header-name';
   nameEl.contentEditable = 'true';
   nameEl.spellcheck = false;
-  nameEl.title = 'Click to rename';
+  nameEl.title = tFileHeader('rename');
 
   nameEl.addEventListener('keydown', (e) => {
     if (e.code === 'Enter' || e.code === 'Escape') {
@@ -727,7 +711,7 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
 
   const shortcutLabel = (action: ToolbarShortcutAction): string => {
     const value = shortcutConfig[action];
-    return value ? toDisplayShortcut(value) : 'Unassigned';
+    return value ? toDisplayShortcut(value) : tFileHeader('unassigned');
   };
 
   const setTitleWithShortcut = (element: HTMLElement, text: string, action?: ToolbarShortcutAction): void => {
@@ -736,7 +720,7 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
 
   const syncTocButton = (visible: boolean): void => {
     tocBtn.classList.toggle('active', visible);
-    setTitleWithShortcut(tocBtn, visible ? 'Hide Table of Contents' : 'Toggle Table of Contents', 'toggleToc');
+    setTitleWithShortcut(tocBtn, visible ? tFileHeader('toc.hide') : tFileHeader('toc.toggle'), 'toggleToc');
   };
 
   const syncWidthButton = (fullWidth: boolean): void => {
@@ -744,12 +728,12 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
     widthBtn.innerHTML = fullWidth
       ? '<svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M4 14h6v6\"/><path d=\"M20 10h-6V4\"/><path d=\"M14 10l7-7\"/><path d=\"M3 21l7-7\"/></svg>'
       : '<svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M15 3h6v6\"/><path d=\"M9 21H3v-6\"/><path d=\"M21 3l-7 7\"/><path d=\"M3 21l7-7\"/></svg>';
-    setTitleWithShortcut(widthBtn, fullWidth ? 'Exit full width' : 'Expand to full width', 'toggleFullWidth');
+    setTitleWithShortcut(widthBtn, fullWidth ? tFileHeader('width.exit') : tFileHeader('width.expand'), 'toggleFullWidth');
   };
 
   const syncTableWrapButton = (enabled: boolean): void => {
     tableWrapBtn.classList.toggle('active', enabled);
-    setTitleWithShortcut(tableWrapBtn, enabled ? 'Disable table word wrap' : 'Enable table word wrap', 'toggleTableWrap');
+    setTitleWithShortcut(tableWrapBtn, enabled ? tFileHeader('tableWrap.disable') : tFileHeader('tableWrap.enable'), 'toggleTableWrap');
   };
 
   const syncExternalFollowButton = (enabled: boolean): void => {
@@ -757,7 +741,7 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
     externalFollowBtn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
     setTitleWithShortcut(
       externalFollowBtn,
-      enabled ? 'Disable external-edit auto-follow scroll' : 'Enable external-edit auto-follow scroll',
+      enabled ? tFileHeader('externalFollow.disable') : tFileHeader('externalFollow.enable'),
       'toggleExternalFollow'
     );
   };
@@ -774,7 +758,7 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
   let allCollapsed = false;
   const collapseBtn = document.createElement('button');
   collapseBtn.className = 'file-header-btn';
-  collapseBtn.title = 'Collapse all headings';
+  collapseBtn.title = tFileHeader('headings.collapse');
   collapseBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>';
   leftGroup.appendChild(collapseBtn);
 
@@ -813,15 +797,15 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
   zoomGroup.className = 'file-header-zoom';
   const zoomOutBtn = document.createElement('button');
   zoomOutBtn.className = 'file-header-btn file-header-zoom-btn';
-  zoomOutBtn.title = 'Zoom out';
+  zoomOutBtn.title = tFileHeader('zoom.out');
   zoomOutBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>';
   const zoomLabel = document.createElement('span');
   zoomLabel.className = 'file-header-zoom-label';
   zoomLabel.textContent = '100%';
-  zoomLabel.title = 'Click to reset zoom';
+  zoomLabel.title = tFileHeader('zoom.reset');
   const zoomInBtn = document.createElement('button');
   zoomInBtn.className = 'file-header-btn file-header-zoom-btn';
-  zoomInBtn.title = 'Zoom in';
+  zoomInBtn.title = tFileHeader('zoom.in');
   zoomInBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
   function applyZoom(level: number) {
     zoomLevel = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, level));
@@ -876,25 +860,25 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
   const terminalBtn = document.createElement('button');
   terminalBtn.className = 'file-header-btn';
   terminalBtn.dataset.action = 'toggleTerminal';
-  terminalBtn.title = 'Open embedded terminal';
+  terminalBtn.title = tFileHeader('terminal.open');
   terminalBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/><path d="m7 9 3 3-3 3"/><path d="M12 15h5"/></svg>';
   if (capabilities.terminal) rightGroup.appendChild(terminalBtn);
 
   const historyBtn = document.createElement('button');
   historyBtn.className = 'file-header-btn';
-  historyBtn.title = 'Toggle history panel';
+  historyBtn.title = tFileHeader('history.toggle');
   historyBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
   rightGroup.appendChild(historyBtn);
 
   const aiChatBtn = document.createElement('button');
   aiChatBtn.className = 'file-header-btn';
-  aiChatBtn.title = 'Toggle AI chat';
+  aiChatBtn.title = tFileHeader('aiChat.toggle');
   aiChatBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
   if (capabilities.aiChat) rightGroup.appendChild(aiChatBtn);
 
   const stickyNoteBtn = document.createElement('button');
   stickyNoteBtn.className = 'file-header-btn';
-  stickyNoteBtn.title = 'Toggle sticky note editor';
+  stickyNoteBtn.title = tFileHeader('stickyNote.toggle');
   stickyNoteBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/><path d="M9 13h6"/><path d="M9 17h4"/></svg>';
   rightGroup.appendChild(stickyNoteBtn);
 
@@ -908,7 +892,7 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
   exportWrapper.className = 'file-header-export-wrapper';
   const exportBtn = document.createElement('button');
   exportBtn.className = 'file-header-btn';
-  exportBtn.title = 'Export';
+  exportBtn.title = tFileHeader('export');
   exportBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
   exportWrapper.appendChild(exportBtn);
 
@@ -917,24 +901,24 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
 
   const exportHtmlLightItem = document.createElement('button');
   exportHtmlLightItem.className = 'file-header-dropdown-item';
-  exportHtmlLightItem.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Export HTML (Light)';
+  exportHtmlLightItem.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> ' + escapeHtml(tFileHeader('export.htmlLight'));
 
   const exportHtmlDarkItem = document.createElement('button');
   exportHtmlDarkItem.className = 'file-header-dropdown-item';
-  exportHtmlDarkItem.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Export HTML (Dark)';
+  exportHtmlDarkItem.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> ' + escapeHtml(tFileHeader('export.htmlDark'));
 
   const exportPdfLightItem = document.createElement('button');
   exportPdfLightItem.className = 'file-header-dropdown-item';
-  exportPdfLightItem.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Export PDF (Light)';
+  exportPdfLightItem.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> ' + escapeHtml(tFileHeader('export.pdfLight'));
 
   const exportPdfDarkItem = document.createElement('button');
   exportPdfDarkItem.className = 'file-header-dropdown-item';
-  exportPdfDarkItem.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Export PDF (Dark)';
+  exportPdfDarkItem.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> ' + escapeHtml(tFileHeader('export.pdfDark'));
 
   const exportDocxItem = document.createElement('button');
   exportDocxItem.className = 'file-header-dropdown-item';
   exportDocxItem.dataset.action = 'exportDocx';
-  exportDocxItem.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Export DOCX';
+  exportDocxItem.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> ' + escapeHtml(tFileHeader('export.docx'));
 
   exportDropdown.appendChild(exportHtmlLightItem);
   exportDropdown.appendChild(exportHtmlDarkItem);
@@ -963,14 +947,14 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
     dark: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 7.5A9 9 0 1 1 12 3Z"/></svg>',
   };
   const THEME_TITLES: Record<ThemeMode, string> = {
-    light: 'Light mode (click to switch)',
-    gray: 'Gray mode (click to switch)',
-    dark: 'Dark mode (click to switch)',
+    light: tFileHeader('theme.light'),
+    gray: tFileHeader('theme.gray'),
+    dark: tFileHeader('theme.dark'),
   };
 
   const depthPanel = document.createElement('div');
   depthPanel.className = 'file-header-theme-depth';
-  depthPanel.title = 'Drag to adjust background depth';
+  depthPanel.title = tFileHeader('theme.depth');
   const depthTrack = document.createElement('div');
   depthTrack.className = 'file-header-theme-depth-track';
   const depthThumb = document.createElement('div');
@@ -1102,8 +1086,8 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
   viewChangesBtn.type = 'button';
   viewChangesBtn.className = 'file-header-btn';
   viewChangesBtn.dataset.action = 'toggleViewChanges';
-  viewChangesBtn.title = 'View Changes';
-  viewChangesBtn.setAttribute('aria-label', 'View Changes');
+  viewChangesBtn.title = tFileHeader('viewChanges');
+  viewChangesBtn.setAttribute('aria-label', tFileHeader('viewChanges'));
   viewChangesBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M4 12h10M4 19h16"/><path d="m17 9 3 3-3 3"/></svg>';
   viewChangesBtn.disabled = true;
   viewChangesBtn.setAttribute('aria-disabled', 'true');
@@ -1117,7 +1101,7 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
   externalFollowBtn.type = 'button';
   externalFollowBtn.className = 'file-header-btn';
   externalFollowBtn.dataset.action = 'toggleExternalFollow';
-  externalFollowBtn.setAttribute('aria-label', 'Toggle external-edit auto-follow scroll');
+  externalFollowBtn.setAttribute('aria-label', tFileHeader('externalFollow.toggle'));
   externalFollowBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 18 6-6-6-6"/><circle cx="6" cy="12" r="2"/></svg>';
   externalFollowBtn.addEventListener('click', (event) => {
     event.preventDefault();
@@ -1138,7 +1122,7 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
   const accentSelect = document.createElement('button');
   accentSelect.type = 'button';
   accentSelect.className = 'file-header-accent-select';
-  accentSelect.title = 'Choose editor text color theme';
+  accentSelect.title = tFileHeader('accent.choose');
   const accentLabel = document.createElement('span');
   accentSelect.appendChild(accentLabel);
   accentSelect.insertAdjacentHTML(
@@ -1197,19 +1181,19 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
 
   const settingsBtn = document.createElement('button');
   settingsBtn.className = 'file-header-btn';
-  settingsBtn.title = 'Configure toolbar shortcuts';
+  settingsBtn.title = tFileHeader('shortcuts.configure');
   settingsBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.2.5.2 1.06 0 1.56.5.2 1.06.2 1.56 0H21a2 2 0 1 1 0 4h-.09c-.45 0-.88.18-1.2.44z"/></svg>';
   rightGroup.appendChild(settingsBtn);
 
   const shortcutsBackdrop = document.createElement('div');
   shortcutsBackdrop.className = 'file-header-shortcuts-backdrop';
   shortcutsBackdrop.innerHTML = `
-    <div class="file-header-shortcuts-modal" role="dialog" aria-modal="true" aria-label="Toolbar shortcuts">
-      <div class="file-header-shortcuts-title">Toolbar Shortcut Settings</div>
+    <div class="file-header-shortcuts-modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(tFileHeader('shortcuts.dialog'))}">
+      <div class="file-header-shortcuts-title">${escapeHtml(tFileHeader('shortcuts.title'))}</div>
       <div class="file-header-shortcuts-list"></div>
       <div class="file-header-shortcuts-actions">
-        <button class="file-header-shortcuts-btn" data-action="reset">Restore Defaults</button>
-        <button class="file-header-shortcuts-btn primary" data-action="close">Done</button>
+        <button class="file-header-shortcuts-btn" data-action="reset">${escapeHtml(tFileHeader('shortcuts.reset'))}</button>
+        <button class="file-header-shortcuts-btn primary" data-action="close">${escapeHtml(tFileHeader('shortcuts.done'))}</button>
       </div>
     </div>
   `;
@@ -1224,14 +1208,14 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
 
     const label = document.createElement('label');
     label.className = 'file-header-shortcuts-label';
-    label.textContent = SHORTCUT_LABELS[action];
+    label.textContent = shortcutActionLabel(action);
 
     const input = document.createElement('input');
     input.className = 'file-header-shortcuts-input';
     input.type = 'text';
     input.readOnly = true;
     input.value = shortcutConfig[action] ? toDisplayShortcut(shortcutConfig[action]) : '';
-    input.placeholder = 'Press shortcut';
+    input.placeholder = tFileHeader('shortcuts.press');
     input.dataset.action = action;
 
     input.addEventListener('keydown', (event) => {
@@ -1261,7 +1245,7 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
     const clearBtn = document.createElement('button');
     clearBtn.className = 'file-header-shortcuts-clear';
     clearBtn.type = 'button';
-    clearBtn.textContent = 'Clear';
+    clearBtn.textContent = tFileHeader('shortcuts.clear');
     clearBtn.addEventListener('click', () => {
       shortcutConfig[action] = '';
       input.value = '';
@@ -1311,26 +1295,26 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
   const commitBackdrop = document.createElement('div');
   commitBackdrop.className = 'file-header-commit-backdrop';
   commitBackdrop.innerHTML = `
-    <div class="file-header-commit-modal" role="dialog" aria-modal="true" aria-label="Commit">
+    <div class="file-header-commit-modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(tFileHeader('commit.title'))}">
       <div class="file-header-commit-title">
-        <span>Commit</span>
-        <button class="file-header-commit-close" type="button" aria-label="Close">x</button>
+        <span>${escapeHtml(tFileHeader('commit.title'))}</span>
+        <button class="file-header-commit-close" type="button" aria-label="${escapeHtml(tFileHeader('commit.close'))}">x</button>
       </div>
       <div class="file-header-commit-body">
         <div class="file-header-commit-input-wrap">
           <span class="file-header-commit-source"></span>
-          <textarea class="file-header-commit-textarea" spellcheck="false" placeholder="Commit message"></textarea>
+          <textarea class="file-header-commit-textarea" spellcheck="false" placeholder="${escapeHtml(tFileHeader('commit.placeholder'))}"></textarea>
           <div class="file-header-commit-loading" aria-live="polite">
             <span class="file-header-commit-spinner"></span>
-            <span>Generating message<span class="file-header-commit-loading-dots"></span></span>
+            <span>${escapeHtml(tFileHeader('commit.generating'))}<span class="file-header-commit-loading-dots"></span></span>
           </div>
         </div>
         <div class="file-header-commit-status"></div>
       </div>
       <div class="file-header-commit-actions">
-        <button class="file-header-commit-btn" type="button" data-action="cancel">Cancel</button>
-        <button class="file-header-commit-btn primary" type="button" data-action="commit">Commit</button>
-        <button class="file-header-commit-btn sync" type="button" data-action="sync">Sync</button>
+        <button class="file-header-commit-btn" type="button" data-action="cancel">${escapeHtml(tFileHeader('commit.cancel'))}</button>
+        <button class="file-header-commit-btn primary" type="button" data-action="commit">${escapeHtml(tFileHeader('commit.commit'))}</button>
+        <button class="file-header-commit-btn sync" type="button" data-action="sync">${escapeHtml(tFileHeader('commit.sync'))}</button>
       </div>
     </div>
   `;
@@ -1364,7 +1348,7 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
       commitModalBusy = false;
       commitTextarea.disabled = false;
       commitTextarea.value = '';
-      commitTextarea.placeholder = 'Commit message';
+      commitTextarea.placeholder = tFileHeader('commit.placeholder');
       commitLoading.classList.remove('open');
       commitSource.textContent = '';
       commitSource.classList.remove('visible');
@@ -1457,23 +1441,23 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
     syncTocButton(state.isTocVisible);
     syncWidthButton(state.isFullWidth);
     syncTableWrapButton(state.isTableWrap);
-    setTitleWithShortcut(scrollTopBtn, 'Scroll to top', 'scrollTop');
-    setTitleWithShortcut(scrollBottomBtn, 'Scroll to bottom', 'scrollBottom');
-    setTitleWithShortcut(stageBtn, 'Stage current file', 'stageFile');
-    setTitleWithShortcut(commitBtn, 'Commit current file', 'commitFile');
-    setTitleWithShortcut(terminalBtn, 'Open embedded terminal', 'toggleTerminal');
-    setTitleWithShortcut(stickyNoteBtn, 'Toggle sticky note editor', 'toggleStickyNote');
-    setTitleWithShortcut(aiChatBtn, 'Toggle AI chat', 'toggleAiChat');
+    setTitleWithShortcut(scrollTopBtn, tFileHeader('shortcut.scrollTop'), 'scrollTop');
+    setTitleWithShortcut(scrollBottomBtn, tFileHeader('shortcut.scrollBottom'), 'scrollBottom');
+    setTitleWithShortcut(stageBtn, tFileHeader('shortcut.stageFile'), 'stageFile');
+    setTitleWithShortcut(commitBtn, tFileHeader('shortcut.commitFile'), 'commitFile');
+    setTitleWithShortcut(terminalBtn, tFileHeader('terminal.open'), 'toggleTerminal');
+    setTitleWithShortcut(stickyNoteBtn, tFileHeader('stickyNote.toggle'), 'toggleStickyNote');
+    setTitleWithShortcut(aiChatBtn, tFileHeader('aiChat.toggle'), 'toggleAiChat');
     setTitleWithShortcut(
       sourceBtn,
-      capabilities.sourceMode === 'native' ? 'Open native source mode' : 'Toggle source mode',
+      capabilities.sourceMode === 'native' ? tFileHeader('source.native') : tFileHeader('source.toggle'),
       'openSourceMode',
     );
     setTitleWithShortcut(
       viewChangesBtn,
       !viewChangesAvailable
-        ? 'View Changes (no uncommitted changes)'
-        : viewChangesEnabled ? 'Exit View Changes' : 'View Changes',
+        ? tFileHeader('viewChanges.unavailable')
+        : viewChangesEnabled ? tFileHeader('viewChanges.exit') : tFileHeader('viewChanges'),
       'toggleViewChanges',
     );
     syncExternalFollowButton(externalFollowEnabled);
@@ -1492,7 +1476,7 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
     setCollapseHandler(handler: () => void) {
       collapseBtn.addEventListener('click', () => {
         allCollapsed = !allCollapsed;
-        collapseBtn.title = allCollapsed ? 'Expand all headings' : 'Collapse all headings';
+        collapseBtn.title = allCollapsed ? tFileHeader('headings.expand') : tFileHeader('headings.collapse');
         collapseBtn.innerHTML = allCollapsed
           ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>'
           : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>';
@@ -1571,8 +1555,8 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
       setTitleWithShortcut(
         viewChangesBtn,
         !available
-          ? 'View Changes (no uncommitted changes)'
-          : viewChangesEnabled ? 'Exit View Changes' : 'View Changes',
+          ? tFileHeader('viewChanges.unavailable')
+          : viewChangesEnabled ? tFileHeader('viewChanges.exit') : tFileHeader('viewChanges'),
         'toggleViewChanges',
       );
     },
@@ -1649,12 +1633,12 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
       commitLoading.classList.toggle('open', loading);
       if (loading) {
         commitTextarea.value = '';
-        commitTextarea.placeholder = 'Generating commit message...';
+        commitTextarea.placeholder = tFileHeader('commit.generatingPlaceholder');
         commitSource.textContent = '';
         commitSource.classList.remove('visible');
         setCommitStatus('');
       } else {
-        commitTextarea.placeholder = 'Commit message';
+        commitTextarea.placeholder = tFileHeader('commit.placeholder');
         setCommitStatus('');
         updateCommitSubmitState();
       }
@@ -1663,7 +1647,7 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
       commitModalBusy = false;
       commitTextarea.disabled = false;
       commitTextarea.value = message;
-      commitTextarea.placeholder = 'Commit message';
+      commitTextarea.placeholder = tFileHeader('commit.placeholder');
       commitLoading.classList.remove('open');
       commitSource.textContent = status;
       commitSource.classList.toggle('visible', !!status);
@@ -1689,7 +1673,7 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
       commitCancelBtn.disabled = busy;
       commitCloseBtn.disabled = busy;
       commitLoading.classList.remove('open');
-      setCommitStatus(busy ? (mode === 'sync' ? 'Syncing current file...' : 'Committing current file...') : '');
+      setCommitStatus(busy ? (mode === 'sync' ? tFileHeader('commit.syncing') : tFileHeader('commit.committing')) : '');
     },
     syncTerminalState(open: boolean) {
       terminalBtn.classList.toggle('active', open);

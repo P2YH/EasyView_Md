@@ -1,4 +1,5 @@
 import { open } from 'node:fs/promises';
+import { tTimeline } from './timeline.i18n';
 export const MAX_HISTORY_READ_BYTES = 32 * 1024 * 1024;
 /** Bound allocation before reading, and always close the handle, including cancellation. */
 export async function readHistoryText(filePath: string, signal?: AbortSignal): Promise<string> {
@@ -6,7 +7,7 @@ export async function readHistoryText(filePath: string, signal?: AbortSignal): P
   const handle = await open(filePath, 'r');
   try {
     const before = await handle.stat();
-    if (!before.isFile() || before.size > MAX_HISTORY_READ_BYTES) throw new Error('版本正文超过 32 MiB 读取上限');
+    if (!before.isFile() || before.size > MAX_HISTORY_READ_BYTES) throw new Error(tTimeline('error.versionTooLarge'));
     const bytes = Buffer.alloc(before.size);
     let offset = 0;
     while (offset < bytes.length) {
@@ -17,7 +18,7 @@ export async function readHistoryText(filePath: string, signal?: AbortSignal): P
     }
     signal?.throwIfAborted();
     const after = await handle.stat();
-    if (after.size !== before.size || after.mtimeMs !== before.mtimeMs || offset !== before.size) throw new Error('版本在读取期间发生变化，请刷新后重试');
+    if (after.size !== before.size || after.mtimeMs !== before.mtimeMs || offset !== before.size) throw new Error(tTimeline('error.versionChanged'));
     return bytes.toString('utf8');
   } finally { await handle.close(); }
 }

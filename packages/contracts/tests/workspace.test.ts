@@ -10,7 +10,9 @@ import {
   resolveWorkspaceTreeDropMode,
   resolveWorkspaceTreeIcon,
   workspaceEntryNameSelectionRange,
-  WORKSPACE_TREE_SORT_MODE_LABELS,
+  workspaceTreeSortModeLabel,
+  setLocale,
+  resetLocale,
   WorkspaceOperationError,
 } from '../src';
 
@@ -74,11 +76,14 @@ describe('workspace contracts', () => {
   });
 
   it('shares sort-mode labels between Desktop and Extension tree menus', () => {
-    expect(WORKSPACE_TREE_SORT_MODE_LABELS).toEqual({
-      created: 'Sort by Created Time',
-      name: 'Sort by Name',
-      custom: 'Custom',
-    });
+    expect(['created', 'name', 'custom'].map((mode) => workspaceTreeSortModeLabel(mode as 'created' | 'name' | 'custom')))
+      .toEqual(['按创建时间排序', '按名称排序', '自定义']);
+    setLocale('en');
+    try {
+      expect(workspaceTreeSortModeLabel('created')).toBe('Sort by Created Time');
+    } finally {
+      resetLocale();
+    }
   });
 
   it('normalizes View-layer relative paths leniently (characterization of prior duplicated logic)', () => {

@@ -10,6 +10,7 @@ import {
   type InlineRange,
 } from '@easyview/markdown-core/git-diff';
 import { createSourceEditor } from '../editor/SourceEditor';
+import { tControllers } from './controllers.i18n';
 
 export interface ChangeViewVisibleAnchor {
   line: number;
@@ -100,16 +101,16 @@ function createHunkActions(hunk: GitDiffHunk): HTMLElement {
   revertBtn.type = 'button';
   revertBtn.className = 'easyview-change-hunk-action';
   revertBtn.dataset.hunkAction = 'revert';
-  revertBtn.title = 'Revert Block';
-  revertBtn.setAttribute('aria-label', 'Revert Block');
+  revertBtn.title = tControllers('change.revertBlock');
+  revertBtn.setAttribute('aria-label', tControllers('change.revertBlock'));
   revertBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>';
 
   const stageBtn = document.createElement('button');
   stageBtn.type = 'button';
   stageBtn.className = 'easyview-change-hunk-action';
   stageBtn.dataset.hunkAction = 'stage';
-  stageBtn.title = 'Stage Block';
-  stageBtn.setAttribute('aria-label', 'Stage Block');
+  stageBtn.title = tControllers('change.stageBlock');
+  stageBtn.setAttribute('aria-label', tControllers('change.stageBlock'));
   stageBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>';
 
   wrap.append(revertBtn, stageBtn);

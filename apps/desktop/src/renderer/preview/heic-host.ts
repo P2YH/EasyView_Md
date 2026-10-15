@@ -1,4 +1,12 @@
 import heic2any from 'heic2any';
+import { normalizeLocale, setLocale } from '@easyview/contracts/i18n';
+import { tPreview } from './preview.i18n';
+
+const locale = normalizeLocale(new URLSearchParams(window.location.search).get('locale'));
+if (locale) {
+  setLocale(locale);
+  document.documentElement.lang = locale;
+}
 
 interface DecodeMessage {
   type: 'decode-heic';
@@ -26,7 +34,7 @@ window.addEventListener('message', (event: MessageEvent<HostMessage>) => {
   if (message.type === 'set-theme') return;
   if (!(message.bytes instanceof ArrayBuffer)) return;
   void decode(message).catch((error) => {
-    document.body.textContent = error instanceof Error ? error.message : 'HEIC 图片解码失败';
+    document.body.textContent = error instanceof Error ? error.message : tPreview('heic.decodeFailed');
     event.source?.postMessage({ type: 'heic-error', token: message.token, message: document.body.textContent }, { targetOrigin: '*' });
   });
 });
@@ -48,11 +56,11 @@ async function decode(message: DecodeMessage): Promise<void> {
     toType: 'image/png',
   });
   const image = Array.isArray(result) ? result[0] : result;
-  if (!(image instanceof Blob)) throw new Error('HEIC 解码器未返回图片');
+  if (!(image instanceof Blob)) throw new Error(tPreview('heic.noImage'));
   if (currentUrl) URL.revokeObjectURL(currentUrl);
   currentUrl = URL.createObjectURL(image);
   const element = document.createElement('img');
-  element.alt = 'HEIC preview';
+  element.alt = tPreview('heic.alt');
   element.src = currentUrl;
   document.body.replaceChildren(element);
   await element.decode();

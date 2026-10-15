@@ -6,6 +6,7 @@
  */
 
 import { extractImageFilename, makeUniqueFilename } from './ExportTypes';
+import { tExport } from '../export.i18n';
 import type { ExportImage } from './ExportTypes';
 
 // Preserve the existing helper exports while keeping their implementation in
@@ -62,7 +63,7 @@ export function cleanupDom(container: HTMLElement): ExportImage[] {
     // Skip webview-internal URIs that have no originalSrc
     if (!isExternal && !originalSrc && (src.startsWith('vscode-webview://') || src.startsWith('https://file+'))) {
       img.style.display = 'none';
-      img.setAttribute('alt', img.getAttribute('alt') || '[Local image]');
+      img.setAttribute('alt', img.getAttribute('alt') || tExport('placeholder.localImage'));
       img.setAttribute('src', '');
       return;
     }
@@ -99,7 +100,7 @@ export function cleanupDom(container: HTMLElement): ExportImage[] {
   // Clean up drawio blocks — just remove them or show placeholder
   container.querySelectorAll('div[data-type="drawio"]').forEach((el) => {
     const placeholder = document.createElement('p');
-    placeholder.textContent = '[Draw.io diagram — not available in export]';
+    placeholder.textContent = tExport('placeholder.drawioHtml');
     placeholder.style.color = 'var(--text-tertiary)';
     placeholder.style.fontStyle = 'italic';
     el.replaceWith(placeholder);

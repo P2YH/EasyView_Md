@@ -7,6 +7,7 @@ import { TextSelection } from 'prosemirror-state';
 import { getMarkRange } from '../../../editor/lib/MarkRange';
 import { addLink, updateLink, removeLink } from './ToolbarLinkCommands';
 import { createEditorDomContext, type EditorDomContext } from '../../../runtime/editorDomContext';
+import { tToolbar } from './toolbar.i18n';
 
 export class LinkEditPopup {
   private el: HTMLDivElement;
@@ -28,7 +29,7 @@ export class LinkEditPopup {
     this.input.className = 'link-edit-input';
     this.input.type = 'text';
     this.input.inputMode = 'url';
-    this.input.placeholder = 'Enter URL...';
+    this.input.placeholder = tToolbar('link.placeholder');
     this.input.spellcheck = false;
     this.input.autocapitalize = 'off';
     this.input.autocomplete = 'off';
@@ -67,7 +68,7 @@ export class LinkEditPopup {
     // Apply button (checkmark)
     this.applyBtn = this.dom.document.createElement('button');
     this.applyBtn.className = 'link-edit-btn';
-    this.applyBtn.title = 'Apply';
+    this.applyBtn.title = tToolbar('link.apply');
     this.applyBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
     this.applyBtn.addEventListener('mousedown', (e) => {
       e.preventDefault();
@@ -77,7 +78,7 @@ export class LinkEditPopup {
     // Remove link button (unlink)
     this.removeBtn = this.dom.document.createElement('button');
     this.removeBtn.className = 'link-edit-btn';
-    this.removeBtn.title = 'Remove link';
+    this.removeBtn.title = tToolbar('link.remove');
     this.removeBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.84 12.25l1.72-1.71h-.02a5.004 5.004 0 0 0-.12-7.07 5.006 5.006 0 0 0-6.95 0l-1.72 1.71"/><path d="M5.17 11.75l-1.71 1.71a5.004 5.004 0 0 0 .12 7.07 5.006 5.006 0 0 0 6.95 0l1.71-1.71"/><line x1="8" y1="2" x2="8" y2="5"/><line x1="2" y1="8" x2="5" y2="8"/><line x1="16" y1="19" x2="16" y2="22"/><line x1="19" y1="16" x2="22" y2="16"/></svg>';
     this.removeBtn.addEventListener('mousedown', (e) => {
       e.preventDefault();
@@ -87,7 +88,7 @@ export class LinkEditPopup {
     // Open link button (external)
     this.openBtn = this.dom.document.createElement('button');
     this.openBtn.className = 'link-edit-btn';
-    this.openBtn.title = 'Open link';
+    this.openBtn.title = tToolbar('link.open');
     this.openBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
     this.openBtn.addEventListener('mousedown', (e) => {
       e.preventDefault();

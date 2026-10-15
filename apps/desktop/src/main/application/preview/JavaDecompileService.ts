@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { JavaDecompileResult } from '../../../contracts';
 import { PreviewSessionError, PreviewSessionStore } from './PreviewSession';
+import { tPreviewService } from './preview.i18n';
 
 const CONSOLE_DECOMPILER = 'org.jetbrains.java.decompiler.main.decompiler.ConsoleDecompiler';
 const MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
@@ -14,7 +15,7 @@ export class JavaDecompileService {
 
   async decompile(sessionId: string): Promise<JavaDecompileResult> {
     const descriptor = await this.sessions.descriptor(sessionId);
-    if (descriptor.route !== 'java-class') throw new PreviewSessionError('invalid', '当前文件不是 Java class 文件');
+    if (descriptor.route !== 'java-class') throw new PreviewSessionError('invalid', tPreviewService('java.notClassFile'));
     const jarPath = await resolveDecompilerJar();
     const output = await runConsoleDecompiler(jarPath, await this.sessions.filePath(sessionId));
     return { engine: 'fernflower', output: output.content, truncated: output.truncated };
@@ -31,7 +32,7 @@ async function resolveDecompilerJar(): Promise<string> {
       // Continue to the next verified runtime location.
     }
   }
-  throw new PreviewSessionError('unsupported', '未找到 Java Decompiler 运行时（java-decompiler.jar）');
+  throw new PreviewSessionError('unsupported', tPreviewService('java.decompilerMissing'));
 }
 
 function decompilerJarCandidates(): string[] {
@@ -57,7 +58,7 @@ async function runConsoleDecompiler(jarPath: string, filePath: string): Promise<
     const processOutput = await runJava(jarPath, filePath, outputDirectory);
     const sourcePath = await findDecompiledSource(outputDirectory);
     if (!sourcePath) {
-      throw new PreviewSessionError('unsupported', processOutput.trim() || 'Java Decompiler 没有生成源码');
+      throw new PreviewSessionError('unsupported', processOutput.trim() || tPreviewService('java.noSource'));
     }
     const source = await readBoundedText(sourcePath);
     return source;
@@ -92,7 +93,7 @@ function runJava(jarPath: string, filePath: string, outputDirectory: string): Pr
       clearTimeout(timer);
       if (settled) return;
       settled = true;
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') reject(new PreviewSessionError('unsupported', '未找到 Java 运行时；请安装 JRE 8 或更高版本后重试'));
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') reject(new PreviewSessionError('unsupported', tPreviewService('java.runtimeMissing')));
       else reject(error);
     });
     child.once('close', (code) => {
@@ -100,9 +101,9 @@ function runJava(jarPath: string, filePath: string, outputDirectory: string): Pr
       if (settled) return;
       settled = true;
       const message = Buffer.concat(output, outputSize).toString('utf8').trim();
-      if (timedOut) return reject(new PreviewSessionError('invalid', 'Java 反编译超时'));
+      if (timedOut) return reject(new PreviewSessionError('invalid', tPreviewService('java.timeout')));
       if (code === 0) return resolve(message);
-      reject(new PreviewSessionError('unsupported', message || 'Java Decompiler 无法解析此 class 文件'));
+      reject(new PreviewSessionError('unsupported', message || tPreviewService('java.parseFailed')));
     });
   });
 }

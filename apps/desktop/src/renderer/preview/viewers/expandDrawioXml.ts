@@ -1,4 +1,5 @@
 import { inflate, inflateRaw } from 'pako';
+import { tPreview } from '../preview.i18n';
 
 /**
  * diagrams.net stores many `.drawio` pages as base64(raw-deflate(encodeURIComponent(xml))).
@@ -29,7 +30,7 @@ function decompressDrawioPayload(encoded: string): string {
       lastError = error;
     }
   }
-  throw lastError instanceof Error ? lastError : new Error('无法解压 Draw.io 图元数据');
+  throw lastError instanceof Error ? lastError : new Error(tPreview('drawio.decompressFailed'));
 }
 
 function looksLikeXml(value: string): boolean {

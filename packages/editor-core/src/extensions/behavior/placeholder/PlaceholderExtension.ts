@@ -13,6 +13,7 @@ import {
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import type { Schema } from 'prosemirror-model';
 import { Extension } from '../../../editor/EditorExtension';
+import { tPlaceholder } from './placeholder.i18n';
 
 export class PlaceholderExtension extends Extension {
   get name() {
@@ -49,8 +50,8 @@ export class PlaceholderExtension extends Extension {
 
             const isFirstAndOnly = doc.childCount === 1;
             const text = isFirstAndOnly
-              ? "Start writing, or type '/' for commands..."
-              : "Type '/' for commands...";
+              ? tPlaceholder('emptyDocument')
+              : tPlaceholder('emptyParagraph');
 
             const hostDecoration = Decoration.node($from.before(), $from.after(), {
               class: 'easyview-placeholder-host',
@@ -88,7 +89,7 @@ export class PlaceholderExtension extends Extension {
                   btn.contentEditable = 'false';
                   btn.innerHTML =
                     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
-                  btn.title = 'Insert block';
+                  btn.title = tPlaceholder('insertBlock');
                   btn.addEventListener('mousedown', (e) => {
                     e.preventDefault();
                     e.stopPropagation();

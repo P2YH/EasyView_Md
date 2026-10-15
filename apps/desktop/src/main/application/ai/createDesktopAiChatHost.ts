@@ -9,6 +9,7 @@ import {
   setAiChatHost,
   workspaceCore,
 } from '../host/desktopRuntime';
+import { tAiHost } from './createDesktopAiChatHost.i18n';
 
 export function createDesktopAiChatHost(): AiChatHost {
   const userDataPath = app.getPath('userData');
@@ -29,7 +30,7 @@ export function createDesktopAiChatHost(): AiChatHost {
       },
       async setApiKey(apiKey) {
         if (!safeStorage.isEncryptionAvailable()) {
-          throw new Error('当前系统不支持安全存储 API Key');
+          throw new Error(tAiHost('secret.apiKeyUnsupported'));
         }
         const encrypted = safeStorage.encryptString(apiKey);
         await fs.writeFile(apiKeyPath, encrypted);
@@ -44,7 +45,7 @@ export function createDesktopAiChatHost(): AiChatHost {
       },
       async setWebSearchApiKey(apiKey) {
         if (!safeStorage.isEncryptionAvailable()) {
-          throw new Error('当前系统不支持安全存储 Web Search API Key');
+          throw new Error(tAiHost('secret.webSearchApiKeyUnsupported'));
         }
         await fs.writeFile(webSearchApiKeyPath, safeStorage.encryptString(apiKey));
       },
@@ -57,7 +58,7 @@ export function createDesktopAiChatHost(): AiChatHost {
           properties: ['openFile', 'multiSelections'],
           filters: [
             {
-              name: 'Images',
+              name: tAiHost('dialog.images'),
               extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg'],
             },
           ],

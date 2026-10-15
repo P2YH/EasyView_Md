@@ -10,6 +10,7 @@ import type { Node } from 'prosemirror-model';
 import type { EditorView, NodeView } from 'prosemirror-view';
 import { TextSelection } from 'prosemirror-state';
 import yaml from 'js-yaml';
+import { tBlocks } from '../blocks.i18n';
 
 export class FrontmatterView implements NodeView {
   dom: HTMLElement;
@@ -185,12 +186,12 @@ export class FrontmatterView implements NodeView {
 
     const hint = document.createElement('span');
     hint.className = 'frontmatter-hint';
-    hint.textContent = 'Double-click to edit · Esc to close';
+    hint.textContent = tBlocks('frontmatter.hint');
 
     // Delete button
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'frontmatter-delete-btn';
-    deleteBtn.setAttribute('aria-label', 'Delete block');
+    deleteBtn.setAttribute('aria-label', tBlocks('action.deleteBlock'));
     deleteBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
     deleteBtn.addEventListener('mousedown', (e) => {
       e.preventDefault();

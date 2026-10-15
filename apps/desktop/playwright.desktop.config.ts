@@ -1,5 +1,8 @@
 import { defineConfig } from '@playwright/test';
 
+// Specs assert Chinese UI text; pin the language so results don't depend on the machine's locale.
+process.env.EASYVIEW_DESKTOP_LANGUAGE ??= 'zh-CN';
+
 export default defineConfig({
   testDir: './e2e',
   timeout: 90_000,

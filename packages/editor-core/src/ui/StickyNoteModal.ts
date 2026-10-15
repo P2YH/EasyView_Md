@@ -1,4 +1,5 @@
 import { createSourceEditor } from '../editor/SourceEditor';
+import { tStickyNote } from './stickyNote.i18n';
 
 interface TabCompletionRequest {
   line: number;
@@ -65,7 +66,7 @@ export function createStickyNoteModal(options: StickyNoteModalOptions): StickyNo
 
   const title = document.createElement('div');
   title.className = 'easyview-sticky-note__title';
-  title.textContent = '小签';
+  title.textContent = tStickyNote('title');
 
   const headerCenter = document.createElement('div');
   headerCenter.className = 'easyview-sticky-note__center';
@@ -81,30 +82,30 @@ export function createStickyNoteModal(options: StickyNoteModalOptions): StickyNo
 
   const nativeModeLabel = document.createElement('span');
   nativeModeLabel.className = 'easyview-sticky-note__display-label';
-  nativeModeLabel.textContent = '原生';
+  nativeModeLabel.textContent = tStickyNote('display.native');
 
   const displayToggleBtn = document.createElement('button');
   displayToggleBtn.type = 'button';
   displayToggleBtn.className = 'easyview-sticky-note__display-toggle';
-  displayToggleBtn.setAttribute('aria-label', '切换小签显示模式');
-  displayToggleBtn.title = '左侧为原生 VS Code 编辑器模式，右侧为渲染显示模式';
+  displayToggleBtn.setAttribute('aria-label', tStickyNote('display.toggle'));
+  displayToggleBtn.title = tStickyNote('display.toggleTitle');
   displayToggleBtn.innerHTML = '<span class="easyview-sticky-note__display-thumb"></span>';
 
   const renderModeLabel = document.createElement('span');
   renderModeLabel.className = 'easyview-sticky-note__display-label';
-  renderModeLabel.textContent = '渲染';
+  renderModeLabel.textContent = tStickyNote('display.render');
 
   const localModeBtn = document.createElement('button');
   localModeBtn.type = 'button';
   localModeBtn.className = 'easyview-sticky-note__mode-btn';
-  localModeBtn.textContent = '本地文件';
-  localModeBtn.title = '读取当前文件内容，关闭后自动保存回当前文件';
+  localModeBtn.textContent = tStickyNote('mode.local');
+  localModeBtn.title = tStickyNote('mode.localTitle');
 
   const tempModeBtn = document.createElement('button');
   tempModeBtn.type = 'button';
   tempModeBtn.className = 'easyview-sticky-note__mode-btn';
-  tempModeBtn.textContent = '临时文件';
-  tempModeBtn.title = '独立临时内容，仅保存在本地存储';
+  tempModeBtn.textContent = tStickyNote('mode.temp');
+  tempModeBtn.title = tStickyNote('mode.tempTitle');
 
   modeGroup.appendChild(tempModeBtn);
   modeGroup.appendChild(localModeBtn);
@@ -112,21 +113,21 @@ export function createStickyNoteModal(options: StickyNoteModalOptions): StickyNo
   const closeBtn = document.createElement('button');
   closeBtn.type = 'button';
   closeBtn.className = 'easyview-sticky-note__close';
-  closeBtn.setAttribute('aria-label', 'Close sticky note');
+  closeBtn.setAttribute('aria-label', tStickyNote('close'));
   closeBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
 
   const decreaseFontBtn = document.createElement('button');
   decreaseFontBtn.type = 'button';
   decreaseFontBtn.className = 'easyview-sticky-note__action-btn';
-  decreaseFontBtn.setAttribute('aria-label', 'Decrease sticky note font size');
-  decreaseFontBtn.title = '缩小字号';
+  decreaseFontBtn.setAttribute('aria-label', tStickyNote('font.decrease'));
+  decreaseFontBtn.title = tStickyNote('font.decrease');
   decreaseFontBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14"/></svg>';
 
   const increaseFontBtn = document.createElement('button');
   increaseFontBtn.type = 'button';
   increaseFontBtn.className = 'easyview-sticky-note__action-btn';
-  increaseFontBtn.setAttribute('aria-label', 'Increase sticky note font size');
-  increaseFontBtn.title = '放大字号';
+  increaseFontBtn.setAttribute('aria-label', tStickyNote('font.increase'));
+  increaseFontBtn.title = tStickyNote('font.increase');
   increaseFontBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>';
 
   const body = document.createElement('div');

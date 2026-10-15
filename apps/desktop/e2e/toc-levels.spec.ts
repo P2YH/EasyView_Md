@@ -2,7 +2,7 @@ import { _electron as electron, expect, test } from '@playwright/test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { terminateElectron } from './support/electronApp';
+import { resumeRestoredSession, terminateElectron } from './support/electronApp';
 
 test('H1-H5 reset the outline to the selected level, including repeated clicks after manual expansion', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'easyview-toc-levels-'));
@@ -25,6 +25,7 @@ test('H1-H5 reset the outline to the selected level, including repeated clicks a
   });
   try {
     const page = await app.firstWindow();
+    await resumeRestoredSession(page);
     await expect(page.locator('.toc-sidebar')).toBeVisible();
     const labels = page.locator('.toc-item-text');
     const level = (value: number) => page.locator('.toc-level-btn').filter({ hasText: new RegExp(`^H${value}$`) });

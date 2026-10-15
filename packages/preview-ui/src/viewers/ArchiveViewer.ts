@@ -17,6 +17,7 @@ import {
   ViewerError,
   type ViewerProps,
 } from './shared';
+import { tPreview } from '../preview.i18n';
 
 export interface ArchiveViewerProps extends ViewerProps {
   host: PreviewHost;
@@ -56,7 +57,7 @@ export function ArchiveViewer({ descriptor, host }: ArchiveViewerProps): React.R
   if (LIBARCHIVE_ONLY.has(suffix)) {
     return h(UniversalFilePreview, {
       descriptor,
-      loadingLabel: '正在加载压缩包预览器…',
+      loadingLabel: tPreview('archive.loadingViewer'),
     });
   }
 
@@ -82,7 +83,7 @@ export function ArchiveViewer({ descriptor, host }: ArchiveViewerProps): React.R
 
   return h(UniversalFilePreview, {
     descriptor,
-    loadingLabel: '正在加载压缩包预览器…',
+    loadingLabel: tPreview('archive.loadingViewer'),
   });
 }
 
@@ -140,7 +141,7 @@ function FolderArchiveViewer(props: {
   }, [descriptor.sessionId, list]);
 
   if (error) return h(ViewerError, { error });
-  if (!entries) return loadingElement('正在读取压缩包目录…');
+  if (!entries) return loadingElement(tPreview('archive.readingEntries'));
 
   return h(ArchiveSplitLayout, {
     archiveName: descriptor.fileName,
@@ -179,7 +180,7 @@ function ClientZipArchiveViewer({ descriptor }: ViewerProps): React.ReactElement
     void (async () => {
       try {
         const response = await fetch(descriptor.contentUrl);
-        if (!response.ok) throw new Error(`无法读取压缩包（HTTP ${response.status}）`);
+        if (!response.ok) throw new Error(tPreview('archive.readFailed', { status: response.status }));
         const loaded = await JSZip.loadAsync(await response.arrayBuffer());
         if (disposed) return;
         setZip(loaded);
@@ -196,12 +197,12 @@ function ClientZipArchiveViewer({ descriptor }: ViewerProps): React.ReactElement
   }, [descriptor.contentUrl]);
 
   const openEntry = React.useCallback(async (path: string) => {
-    if (!zip) throw new Error('压缩包尚未就绪');
+    if (!zip) throw new Error(tPreview('archive.notReady'));
     const file = zip.file(path);
-    if (!file || file.dir) throw new Error('压缩包条目不存在');
+    if (!file || file.dir) throw new Error(tPreview('archive.entryMissing'));
     const bytes = await file.async('uint8array');
     if (bytes.byteLength > MAX_CLIENT_ENTRY_BYTES) {
-      throw new Error('压缩包条目超过 4 MiB 安全预览上限');
+      throw new Error(tPreview('archive.entryTooLarge'));
     }
     const mimeType = mimeTypeForEntry(path);
     const blob = new Blob([Uint8Array.from(bytes)], { type: mimeType });
@@ -220,9 +221,9 @@ function ClientZipArchiveViewer({ descriptor }: ViewerProps): React.ReactElement
   }, [entries, zip]);
 
   const exportEntry = React.useCallback(async (path: string) => {
-    if (!zip) throw new Error('压缩包尚未就绪');
+    if (!zip) throw new Error(tPreview('archive.notReady'));
     const file = zip.file(path);
-    if (!file || file.dir) throw new Error('压缩包条目不存在');
+    if (!file || file.dir) throw new Error(tPreview('archive.entryMissing'));
     const bytes = await file.async('uint8array');
     const blob = new Blob([Uint8Array.from(bytes)], { type: mimeTypeForEntry(path) });
     const url = URL.createObjectURL(blob);
@@ -234,7 +235,7 @@ function ClientZipArchiveViewer({ descriptor }: ViewerProps): React.ReactElement
   }, [zip]);
 
   if (error) return h(ViewerError, { error });
-  if (!entries) return loadingElement('正在读取压缩包目录…');
+  if (!entries) return loadingElement(tPreview('archive.readingEntries'));
 
   return h(ArchiveSplitLayout, {
     archiveName: descriptor.fileName,
@@ -307,7 +308,7 @@ function ArchiveSplitLayout(props: {
   );
 
   return h('section', { className: `preview-archive-viewer${props.selected ? ' has-preview' : ''}` },
-    h('aside', { className: 'preview-archive-tree', 'aria-label': '压缩包目录树' },
+    h('aside', { className: 'preview-archive-tree', 'aria-label': tPreview('archive.tree') },
       h('div', {
         className: `preview-archive-tree-row is-root${props.currentDir === '' ? ' is-active' : ''}`,
         role: 'treeitem',
@@ -317,7 +318,7 @@ function ArchiveSplitLayout(props: {
         h('button', {
           type: 'button',
           className: 'preview-archive-tree-twistie',
-          'aria-label': expanded.has('') ? '折叠' : '展开',
+          'aria-label': expanded.has('') ? tPreview('archive.collapse') : tPreview('archive.expand'),
           onClick: (event: React.MouseEvent) => toggleExpand('', event),
         }, h(ArchiveChevronIcon, { expanded: expanded.has('') })),
         h(ArchiveZipIcon),
@@ -332,16 +333,16 @@ function ArchiveSplitLayout(props: {
         h('table', { className: 'preview-archive-table' },
           h('thead', null,
             h('tr', null,
-              sortHeader('名称', 'name', sortKey, sortDir, toggleSort),
-              sortHeader('修改时间', 'modified', sortKey, sortDir, toggleSort),
-              sortHeader('大小', 'size', sortKey, sortDir, toggleSort),
-              sortHeader('原始大小', 'origin', sortKey, sortDir, toggleSort),
+              sortHeader(tPreview('archive.columnName'), 'name', sortKey, sortDir, toggleSort),
+              sortHeader(tPreview('archive.columnModified'), 'modified', sortKey, sortDir, toggleSort),
+              sortHeader(tPreview('archive.columnSize'), 'size', sortKey, sortDir, toggleSort),
+              sortHeader(tPreview('archive.columnOriginalSize'), 'origin', sortKey, sortDir, toggleSort),
             ),
           ),
           h('tbody', null,
             tableRows.length === 0
               ? h('tr', null,
-                  h('td', { className: 'preview-archive-empty', colSpan: 4 }, '当前目录为空'),
+                  h('td', { className: 'preview-archive-empty', colSpan: 4 }, tPreview('archive.emptyFolder')),
                 )
               : tableRows.map((row) => {
                   if (row.kind === 'directory') {
@@ -376,12 +377,12 @@ function ArchiveSplitLayout(props: {
                         h('button', {
                           type: 'button',
                           className: 'preview-archive-export',
-                          title: '导出条目',
+                          title: tPreview('archive.exportEntry'),
                           onClick: (event: React.MouseEvent) => {
                             event.stopPropagation();
                             props.onExportFile(row.entry.path);
                           },
-                        }, '导出'),
+                        }, tPreview('archive.export')),
                       ),
                     ),
                     h('td', { className: 'preview-archive-col-modified' }, formatModified(row.entry.lastModified)),
@@ -400,12 +401,12 @@ function ArchiveSplitLayout(props: {
                 type: 'button',
                 className: 'preview-archive-preview-action',
                 onClick: () => props.onExportFile(props.selected!.path),
-              }, '导出'),
+              }, tPreview('archive.export')),
               h('button', {
                 type: 'button',
                 className: 'preview-archive-preview-action',
                 onClick: props.onClearPreview,
-              }, '关闭'),
+              }, tPreview('archive.close')),
             ),
             h('iframe', {
               className: 'preview-archive-content',

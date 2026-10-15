@@ -7,6 +7,7 @@ import { PNG } from "pngjs";
 import { writeFileAtomically } from '../filesystem/file-write';
 import { documentAssetsDirectoryName } from '../image/image-security';
 import { stripPandocHighlightMarkup } from "@easyview/markdown-core/pandoc-highlight-markup";
+import { tConversion } from "./conversion.i18n";
 
 type CommandError = Error & { code?: string | number; stderr?: string };
 const execFileAsync = promisify(execFile);
@@ -69,17 +70,17 @@ async function ensureSourceFile(sourcePath: string, extensions: string[]): Promi
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === "ENOENT") {
-      throw new DocumentConversionError("INVALID_ARGUMENT", `Source file was not found: ${sourcePath}`);
+      throw new DocumentConversionError("INVALID_ARGUMENT", tConversion("sourceNotFound", { path: sourcePath }));
     }
     throw error;
   }
   if (!info.isFile()) {
-    throw new DocumentConversionError("INVALID_ARGUMENT", `Source path is not a file: ${sourcePath}`);
+    throw new DocumentConversionError("INVALID_ARGUMENT", tConversion("sourceNotFile", { path: sourcePath }));
   }
   if (!extensions.includes(path.extname(sourcePath).toLowerCase())) {
     throw new DocumentConversionError(
       "INVALID_ARGUMENT",
-      `Unsupported source format. Expected ${extensions.join(" or ")}.`,
+      tConversion("unsupportedSourceFormat", { extensions: extensions.join(tConversion("or")) }),
     );
   }
 }
@@ -94,7 +95,7 @@ async function ensureOutputAvailable(outputPath: string, overwrite: boolean): Pr
   if (!overwrite) {
     throw new DocumentConversionError(
       "OUTPUT_EXISTS",
-      `Output file already exists: ${outputPath}. Set overwrite=true to replace it.`,
+      tConversion("outputExists", { path: outputPath }),
     );
   }
 }
@@ -107,14 +108,14 @@ async function runCommand(command: string, args: string[]): Promise<void> {
     if (commandError.code === "ENOENT") {
       throw new DocumentConversionError(
         "DEPENDENCY_MISSING",
-        `${command} is required for document conversion but was not found.`,
+        tConversion("dependencyMissing", { command }),
         command,
       );
     }
     const detail = commandError.stderr?.trim();
     throw new DocumentConversionError(
       "CONVERSION_FAILED",
-      detail ? `${command} failed: ${detail}` : `${command} failed.`,
+      detail ? tConversion("commandFailedWithDetail", { command, detail }) : tConversion("commandFailed", { command }),
       command,
     );
   }
@@ -233,7 +234,10 @@ async function copyExtractedMedia(sourceDirectory: string, targetDirectory: stri
  * styled with the editor's highlight + text color marks.
  * Word writes local wall-clock time with a `Z` suffix, so the date is shown as-is.
  */
-const WORD_TRACK_CHANGES_LUA_FILTER = String.raw`
+function wordTrackChangesLuaFilter(): string {
+  const label = tConversion("comment.label");
+  const separator = tConversion("comment.separator");
+  return String.raw`
 local comments = {}
 local has_end = {}
 
@@ -253,7 +257,7 @@ local function collect(doc)
         if author ~= '' then table.insert(meta, author) end
         local y, mo, d, h, mi = (span.attributes['date'] or ''):match('^(%d+)-(%d+)-(%d+)T(%d+):(%d+)')
         if y then table.insert(meta, y .. '-' .. mo .. '-' .. d .. ' ' .. h .. ':' .. mi) end
-        local label = #meta > 0 and ('批注 ' .. table.concat(meta, ' ') .. '：') or '批注：'
+        local label = #meta > 0 and ('${label} ' .. table.concat(meta, ' ') .. '${separator}') or '${label}${separator}'
         comments[id] = '【' .. label .. text .. '】'
       elseif span.classes:includes('comment-end') then
         has_end[id] = true
@@ -298,6 +302,7 @@ function Pandoc(doc)
   return doc:walk({ Span = rewrite })
 end
 `;
+}
 
 /** Pandoc inserts empty HTML comments to keep adjacent lists apart; they render as empty comment blocks. */
 export function removePandocListSeparators(markdown: string): string {
@@ -309,7 +314,7 @@ async function findConvertedDocx(directory: string, stem: string): Promise<strin
   const expected = `${stem}.docx`.toLowerCase();
   const output = entries.find((entry) => entry.isFile() && entry.name.toLowerCase() === expected)
     ?? entries.find((entry) => entry.isFile() && path.extname(entry.name).toLowerCase() === ".docx");
-  if (!output) throw new DocumentConversionError("CONVERSION_FAILED", "LibreOffice did not produce a DOCX file.");
+  if (!output) throw new DocumentConversionError("CONVERSION_FAILED", tConversion("noDocxProduced"));
   return path.join(directory, output.name);
 }
 
@@ -339,7 +344,7 @@ export async function convertWordToMarkdown(request: DocumentConversionRequest):
     const temporaryExtractDirectory = path.join(temporaryDirectory, "media");
     const temporaryMediaDirectory = path.join(temporaryExtractDirectory, "media");
     const luaFilterPath = path.join(temporaryDirectory, "track-changes.lua");
-    await writeFile(luaFilterPath, WORD_TRACK_CHANGES_LUA_FILTER, "utf8");
+    await writeFile(luaFilterPath, wordTrackChangesLuaFilter(), "utf8");
     await runCommand("pandoc", [
       inputForPandoc,
       "--from=docx",
@@ -416,7 +421,7 @@ export async function convertPdfToMarkdown(request: DocumentConversionRequest): 
       markdown = `${markdown}\n\n${markdownImageReferences(assetDirectoryName, assetPaths)}`;
     }
     if (!markdown) {
-      throw new DocumentConversionError("CONVERSION_FAILED", "No extractable text or page images were found in this PDF.");
+      throw new DocumentConversionError("CONVERSION_FAILED", tConversion("pdfEmpty"));
     }
     const outputMarkdown = `${markdown}\n`;
     await writeFileAtomically(outputPath, outputMarkdown);
@@ -433,5 +438,5 @@ export async function convertDocumentToMarkdown(
   const extension = path.extname(sourcePath).toLowerCase();
   if (extension === ".doc" || extension === ".docx") return convertWordToMarkdown(request);
   if (extension === ".pdf") return convertPdfToMarkdown(request);
-  throw new DocumentConversionError("INVALID_ARGUMENT", "Only DOC, DOCX, and PDF files can be converted.");
+  throw new DocumentConversionError("INVALID_ARGUMENT", tConversion("unsupportedDocument"));
 }

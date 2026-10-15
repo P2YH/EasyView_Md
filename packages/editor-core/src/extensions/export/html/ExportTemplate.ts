@@ -4,6 +4,7 @@
  */
 
 import { EXPORT_CSS } from './ExportStyles';
+import { tExport } from '../export.i18n';
 
 /**
  * Embedded JavaScript for the standalone HTML page.
@@ -36,7 +37,7 @@ const EXPORT_JS = /* js */ `
     themeBtn.innerHTML = isDark
       ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>'
       : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
-    themeBtn.title = isDark ? 'Switch to light theme' : 'Switch to dark theme';
+    themeBtn.title = isDark ? EXPORT_LABELS.switchToLight : EXPORT_LABELS.switchToDark;
   }
 
   // Apply stored or initial theme
@@ -174,7 +175,7 @@ const EXPORT_JS = /* js */ `
     widthBtn.addEventListener('click', function() {
       content.classList.toggle('full-width');
       var isWide = content.classList.contains('full-width');
-      widthBtn.title = isWide ? 'Exit full width' : 'Expand to full width';
+      widthBtn.title = isWide ? EXPORT_LABELS.exitFullWidth : EXPORT_LABELS.expandWidth;
       widthBtn.innerHTML = isWide
         ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 14h6v6"/><path d="M20 10h-6V4"/><path d="M14 10l7-7"/><path d="M3 21l7-7"/></svg>'
         : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>';
@@ -246,7 +247,7 @@ const EXPORT_JS = /* js */ `
           if (result.bindFunctions) result.bindFunctions(el);
         } catch(err) {
           if (generation !== mermaidGeneration) return;
-          el.textContent = 'Mermaid error: ' + err;
+          el.textContent = EXPORT_LABELS.mermaidError + err;
         }
       }
     }).catch(function(err) {
@@ -287,6 +288,13 @@ export function buildTemplate(
 ): string {
   const theme = options.isDark ? 'dark' : 'light';
   const escapedTitle = escapeHtml(options.title);
+  const exportLabels = JSON.stringify({
+    switchToLight: tExport('template.switchToLight'),
+    switchToDark: tExport('template.switchToDark'),
+    exitFullWidth: tExport('template.exitFullWidth'),
+    expandWidth: tExport('template.expandWidth'),
+    mermaidError: tExport('template.mermaidError'),
+  }).replace(/</g, '\\u003c');
 
   const mermaidScript = options.hasMermaid
     ? '<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>'
@@ -308,24 +316,24 @@ export function buildTemplate(
 <body>
   <header class="export-header">
     <div class="header-left">
-      <button id="toc-toggle" class="active" title="Toggle Table of Contents">
+      <button id="toc-toggle" class="active" title="${escapeHtml(tExport('template.toggleToc'))}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="15" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="17" y2="18"/></svg>
       </button>
     </div>
     <span class="header-title">${escapedTitle}</span>
     <div class="header-right">
-      <button id="width-toggle" title="Expand to full width">
+      <button id="width-toggle" title="${escapeHtml(tExport('template.expandWidth'))}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
       </button>
-      <button id="theme-toggle" title="Switch theme">
+      <button id="theme-toggle" title="${escapeHtml(tExport('template.switchTheme'))}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
     </div>
   </header>
   <div class="main-layout">
     <nav class="toc-sidebar" id="toc-sidebar">
-      <div class="toc-header">Contents</div>
-      <input class="toc-filter" placeholder="Filter..." id="toc-filter">
+      <div class="toc-header">${escapeHtml(tExport('template.contents'))}</div>
+      <input class="toc-filter" placeholder="${escapeHtml(tExport('template.filterPlaceholder'))}" id="toc-filter">
       <ul class="toc-list" id="toc-list">${tocHtml}</ul>
     </nav>
     <main class="content-area">
@@ -335,7 +343,7 @@ ${contentHtml}
     </main>
   </div>
   ${mermaidScript}
-  <script>${EXPORT_JS}</script>
+  <script>var EXPORT_LABELS = ${exportLabels};${EXPORT_JS}</script>
 </body>
 </html>`;
 }

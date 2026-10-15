@@ -17,6 +17,7 @@ import {
   validateWorkspaceEntryName,
 } from './workspace-path';
 import type { WorkspaceTreeOrderState } from './workspace-tree-order-state';
+import { tWorkspaceError } from './workspace.i18n';
 
 /** Shared mutation facade that keeps host adapters aligned on validation and cache invalidation. */
 export class WorkspaceFileOperationService {
@@ -41,7 +42,7 @@ export class WorkspaceFileOperationService {
 
   async rename(rootId: string, request: WorkspaceRenameRequest): Promise<WorkspaceEntry> {
     const relativePath = normalizeWorkspaceRelativePath(request.relativePath);
-    if (!relativePath) throw new WorkspaceOperationError('INVALID_PATH', 'Workspace root cannot be renamed');
+    if (!relativePath) throw new WorkspaceOperationError('INVALID_PATH', tWorkspaceError('rootCannotRename'));
     validateWorkspaceEntryName(request.newName);
     const renamed = await this.gateway.rename(rootId, { relativePath, newName: request.newName });
     this.orderState?.noteRenamed(relativePath, renamed.relativePath);
@@ -52,7 +53,7 @@ export class WorkspaceFileOperationService {
 
   async move(rootId: string, request: WorkspaceMoveRequest): Promise<WorkspaceEntry> {
     const relativePath = normalizeWorkspaceRelativePath(request.relativePath);
-    if (!relativePath) throw new WorkspaceOperationError('INVALID_PATH', 'Workspace root cannot be moved');
+    if (!relativePath) throw new WorkspaceOperationError('INVALID_PATH', tWorkspaceError('rootCannotMove'));
     const targetParentRelativePath = normalizeWorkspaceRelativePath(request.targetParentRelativePath);
     if (request.newName !== undefined) validateWorkspaceEntryName(request.newName);
 
@@ -71,11 +72,11 @@ export class WorkspaceFileOperationService {
       targetParentRelativePath === relativePath
       || targetParentRelativePath.startsWith(`${relativePath}/`)
     ) {
-      throw new WorkspaceOperationError('INVALID_PATH', 'Cannot move a folder into itself or its descendants');
+      throw new WorkspaceOperationError('INVALID_PATH', tWorkspaceError('moveIntoSelf'));
     }
 
     if (sourceParent === targetParentRelativePath && nextName === sourceName) {
-      throw new WorkspaceOperationError('INVALID_PATH', 'Move target is identical to the source');
+      throw new WorkspaceOperationError('INVALID_PATH', tWorkspaceError('moveSameTarget'));
     }
 
     const moved = await this.gateway.move(rootId, {
@@ -91,7 +92,7 @@ export class WorkspaceFileOperationService {
 
   async delete(rootId: string, request: WorkspaceDeleteRequest): Promise<void> {
     const relativePath = normalizeWorkspaceRelativePath(request.relativePath);
-    if (!relativePath) throw new WorkspaceOperationError('INVALID_PATH', 'Workspace root cannot be deleted');
+    if (!relativePath) throw new WorkspaceOperationError('INVALID_PATH', tWorkspaceError('rootCannotDelete'));
     await this.gateway.delete(rootId, { ...request, relativePath });
     this.orderState?.noteDeleted(relativePath);
     this.treeModel.invalidatePath(rootId, relativePath);

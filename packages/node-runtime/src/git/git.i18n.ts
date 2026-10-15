@@ -1,0 +1,38 @@
+import { defineMessages } from '@easyview/contracts/i18n';
+
+export const tGit = defineMessages({
+  'zh-CN': {
+    'commandFailed': 'Git 命令执行失败（git {args}）：{detail}',
+    'pathEmpty': '路径不能为空。',
+    'pathNotFound': '路径不存在或无法访问：{path}',
+    'gitNotFound': '未找到 git 可执行文件。',
+    'notRepository': '路径不属于 Git 仓库：{path}',
+    'fileInaccessible': '文件无法访问：{path}',
+    'fileNotFound': '文件不存在：{path}',
+    'outsideRepository': '文件必须位于仓库内：{path}',
+    'invalidIndexEntry': '无法解析 Git index 条目：{path}',
+    'writeObjectFailed': '无法写入 Git 对象：{objectId}',
+    'commitMessageEmpty': '提交信息不能为空。',
+    'committed': '已提交文件 {path}。',
+    'detachedHead': '当前处于 detached HEAD，无法查询上游分支。',
+    'invalidSyncStatus': '无法解析分支同步状态：{counts}',
+    'noUpstream': '当前分支 {branch} 未配置上游分支，无法推送。',
+  },
+  en: {
+    'commandFailed': 'Git command failed (git {args}): {detail}',
+    'pathEmpty': 'Path must not be empty.',
+    'pathNotFound': 'Path does not exist or is not accessible: {path}',
+    'gitNotFound': 'git executable not found.',
+    'notRepository': 'Path is not inside a Git repository: {path}',
+    'fileInaccessible': 'File is not accessible: {path}',
+    'fileNotFound': 'File does not exist: {path}',
+    'outsideRepository': 'File must be inside the repository: {path}',
+    'invalidIndexEntry': 'Unable to parse Git index entry: {path}',
+    'writeObjectFailed': 'Unable to write Git object: {objectId}',
+    'commitMessageEmpty': 'Commit message must not be empty.',
+    'committed': 'Committed file {path}.',
+    'detachedHead': 'HEAD is detached; cannot query the upstream branch.',
+    'invalidSyncStatus': 'Unable to parse branch sync status: {counts}',
+    'noUpstream': 'Branch {branch} has no upstream branch configured; cannot push.',
+  },
+});

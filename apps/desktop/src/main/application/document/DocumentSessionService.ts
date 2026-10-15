@@ -14,6 +14,7 @@ import {
   filePathKey,
   type DocumentSession,
 } from './documentSession';
+import { tDocument } from './document.i18n';
 
 export type { DocumentGitContext, DocumentGitPort } from './documentGit';
 
@@ -73,9 +74,9 @@ export class DocumentSessionService {
   }
 
   require(sessionId: string | null | undefined): OperationResult<DocumentSession> {
-    if (!sessionId) return operationFailure('NOT_FOUND', '文档会话不存在');
+    if (!sessionId) return operationFailure('NOT_FOUND', tDocument('session.notFound'));
     const session = this.get(sessionId);
-    if (!session) return operationFailure('NOT_FOUND', '文档会话不存在');
+    if (!session) return operationFailure('NOT_FOUND', tDocument('session.notFound'));
     return operationSuccess(session);
   }
 
@@ -131,32 +132,32 @@ export class DocumentSessionService {
   async getChangeSnapshot(sessionId: string): Promise<OperationResult<Awaited<ReturnType<NonNullable<DocumentGitPort['getChangeSnapshot']>>>>> {
     const context = await this.resolveGitContext(sessionId);
     if (!context.ok) return context;
-    if (!this.git?.getChangeSnapshot) return operationFailure('DEPENDENCY_MISSING', '当前环境未接入 Git 变更计算');
+    if (!this.git?.getChangeSnapshot) return operationFailure('DEPENDENCY_MISSING', tDocument('git.changesUnavailable'));
     try {
       const session = this.get(sessionId);
-      if (!session) return operationFailure('NOT_FOUND', '文档会话不存在');
+      if (!session) return operationFailure('NOT_FOUND', tDocument('session.notFound'));
       return operationSuccess(await this.git.getChangeSnapshot(context.value.rootPath, context.value.filePath, session.content));
     } catch (error) {
-      return operationFailure('UNKNOWN', error instanceof Error ? error.message : 'Git 变更计算失败');
+      return operationFailure('UNKNOWN', error instanceof Error ? error.message : tDocument('git.changesFailed'));
     }
   }
 
   async resolveGitContext(sessionId: string): Promise<OperationResult<DocumentGitContext>> {
     const required = this.require(sessionId);
     if (!required.ok) return required;
-    if (!this.git) return operationFailure('DEPENDENCY_MISSING', '当前环境未接入 Git');
+    if (!this.git) return operationFailure('DEPENDENCY_MISSING', tDocument('git.unavailable'));
     const session = required.value;
-    if (!session.filePath) return operationFailure('INVALID_ARGUMENT', '请先保存 Markdown 文档。');
+    if (!session.filePath) return operationFailure('INVALID_ARGUMENT', tDocument('git.saveDocumentFirst'));
     try {
       const repository = await this.git.findRepository(session.filePath);
-      if (!repository) return operationFailure('NOT_FOUND', '当前文档不属于 Git 仓库。');
+      if (!repository) return operationFailure('NOT_FOUND', tDocument('git.notRepository'));
       return operationSuccess({
         rootPath: repository.rootPath,
         filePath: session.filePath,
         fileName: session.fileName,
       });
     } catch (error) {
-      return operationFailure('UNKNOWN', error instanceof Error ? error.message : '无法解析 Git 仓库');
+      return operationFailure('UNKNOWN', error instanceof Error ? error.message : tDocument('git.repositoryFailed'));
     }
   }
 
@@ -167,7 +168,7 @@ export class DocumentSessionService {
       await this.git!.stageFile(context.value.rootPath, context.value.filePath);
       return operationSuccess({ fileName: context.value.fileName });
     } catch (error) {
-      return operationFailure('UNKNOWN', error instanceof Error ? error.message : 'Git 暂存失败');
+      return operationFailure('UNKNOWN', error instanceof Error ? error.message : tDocument('git.stageFailed'));
     }
   }
 
@@ -179,26 +180,26 @@ export class DocumentSessionService {
       else await this.git!.stageFile(context.value.rootPath, context.value.filePath);
       return operationSuccess({ fileName: context.value.fileName });
     } catch (error) {
-      return operationFailure('UNKNOWN', error instanceof Error ? error.message : 'Git 暂存失败');
+      return operationFailure('UNKNOWN', error instanceof Error ? error.message : tDocument('git.stageFailed'));
     }
   }
 
   async commit(sessionId: string, message: string): Promise<OperationResult<{ fileName: string }>> {
-    if (!message.trim()) return operationFailure('INVALID_ARGUMENT', '提交信息不能为空。');
+    if (!message.trim()) return operationFailure('INVALID_ARGUMENT', tDocument('git.emptyCommitMessage'));
     const context = await this.resolveGitContext(sessionId);
     if (!context.ok) return context;
     try {
       const status = await this.git!.getFileStatus(context.value.rootPath, context.value.filePath);
-      if (!status.isModified) return operationFailure('INVALID_ARGUMENT', '当前文件没有可提交的 Git 变更。');
+      if (!status.isModified) return operationFailure('INVALID_ARGUMENT', tDocument('git.nothingToCommit'));
       await this.git!.commitFile(context.value.rootPath, context.value.filePath, message.trim());
       return operationSuccess({ fileName: context.value.fileName });
     } catch (error) {
-      return operationFailure('UNKNOWN', error instanceof Error ? error.message : 'Git 提交失败');
+      return operationFailure('UNKNOWN', error instanceof Error ? error.message : tDocument('git.commitFailed'));
     }
   }
 
   async sync(sessionId: string, message: string): Promise<OperationResult<{ fileName: string }>> {
-    if (!message.trim()) return operationFailure('INVALID_ARGUMENT', '提交信息不能为空。');
+    if (!message.trim()) return operationFailure('INVALID_ARGUMENT', tDocument('git.emptyCommitMessage'));
     const context = await this.resolveGitContext(sessionId);
     if (!context.ok) return context;
     try {
@@ -207,12 +208,12 @@ export class DocumentSessionService {
         await this.git!.commitFile(context.value.rootPath, context.value.filePath, message.trim());
       }
       const upstream = await this.git!.getUpstreamStatus(context.value.rootPath);
-      if (!upstream.upstream) return operationFailure('INVALID_ARGUMENT', '当前分支未配置上游远端。');
-      if (upstream.ahead <= 0) return operationFailure('INVALID_ARGUMENT', '当前分支没有待推送提交。');
+      if (!upstream.upstream) return operationFailure('INVALID_ARGUMENT', tDocument('git.noUpstream'));
+      if (upstream.ahead <= 0) return operationFailure('INVALID_ARGUMENT', tDocument('git.nothingToPush'));
       await this.git!.push(context.value.rootPath);
       return operationSuccess({ fileName: context.value.fileName });
     } catch (error) {
-      return operationFailure('UNKNOWN', error instanceof Error ? error.message : 'Git 同步失败');
+      return operationFailure('UNKNOWN', error instanceof Error ? error.message : tDocument('git.syncFailed'));
     }
   }
 
@@ -313,7 +314,7 @@ export class DocumentSessionService {
     session.sync.applySnapshot(session.content, session.sync.snapshot.revision + 1);
     session.externalConflict = null;
     session.dirty = false;
-    void this.historyRecorder?.(session.filePath!, raw, '外部文件变化').catch((error) => console.warn('[Timeline]', error));
+    void this.historyRecorder?.(session.filePath!, raw, tDocument('history.externalChange')).catch((error) => console.warn('[Timeline]', error));
   }
 
   save(sessionId: string, content: string, options: { overwrite?: boolean } = {}): Promise<DocumentSaveOutcome> {
@@ -323,7 +324,7 @@ export class DocumentSessionService {
       if (!required.ok) return { kind: 'error', error: required };
       const session = required.value;
       if (!session.filePath) return { kind: 'needs-save-as', session };
-      if ((session.restoreGeneration ?? 0) !== restoreGeneration) return { kind: 'error', error: operationFailure('CONFLICT', '文件已恢复，旧保存请求已取消') };
+      if ((session.restoreGeneration ?? 0) !== restoreGeneration) return { kind: 'error', error: operationFailure('CONFLICT', tDocument('save.staleAfterRestore')) };
       if (options.overwrite) session.externalConflict = null;
       return this.writeBoundPath(session, session.filePath, content, options.overwrite === true);
     });
@@ -334,12 +335,12 @@ export class DocumentSessionService {
       const required = this.require(sessionId);
       if (!required.ok) return { kind: 'error', error: required };
       const session = required.value;
-      if (!session.filePath) return { kind: 'error', error: operationFailure('NOT_FOUND', '请先保存文件') };
+      if (!session.filePath) return { kind: 'error', error: operationFailure('NOT_FOUND', tDocument('restore.saveFirst')) };
       return this.enqueueFile(session.filePath, async () => {
-        const conflict = () => ({ kind: 'error' as const, error: operationFailure('CONFLICT', '文件在确认期间发生变化，恢复已停止') });
+        const conflict = () => ({ kind: 'error' as const, error: operationFailure('CONFLICT', tDocument('restore.changedDuringConfirm')) });
         if (session.content !== expectedContent || await this.fileSystem.readFile(session.filePath!) !== expectedDisk) return conflict();
-        await store.preserve(session.filePath!, expectedDisk, '恢复前磁盘内容');
-        if (session.rawContent !== expectedDisk) await store.preserve(session.filePath!, session.rawContent, '恢复前未保存内容');
+        await store.preserve(session.filePath!, expectedDisk, tDocument('history.beforeRestoreDisk'));
+        if (session.rawContent !== expectedDisk) await store.preserve(session.filePath!, session.rawContent, tDocument('history.beforeRestoreUnsaved'));
         if (session.content !== expectedContent) return conflict();
         const result = await this.fileSystem.compareAndWrite(session.filePath!, hashContent(expectedDisk), content);
         if (result === 'conflict') return conflict();
@@ -360,7 +361,7 @@ export class DocumentSessionService {
           session.dirty = session.content !== session.diskContent;
         }
         let historyWarning: string | undefined;
-        try { await store.preserve(session.filePath!, content, '文件已恢复'); } catch (error) { historyWarning = `文件已恢复，但无法记录恢复后的历史：${error instanceof Error ? error.message : String(error)}`; }
+        try { await store.preserve(session.filePath!, content, tDocument('history.restored')); } catch (error) { historyWarning = tDocument('history.restoredWithoutHistory', { error: error instanceof Error ? error.message : String(error) }); }
         return { kind: 'saved', historyWarning, value: { filePath: session.filePath!, fileName: session.fileName, mtimeMs: session.diskMtimeMs! } };
       });
     });
@@ -374,7 +375,7 @@ export class DocumentSessionService {
       const resolved = path.resolve(filePath);
       const duplicate = this.findByFilePath(resolved).find((candidate) => candidate.tabId !== session.tabId);
       if (duplicate) {
-        return { kind: 'error', error: operationFailure('CONFLICT', '该 Markdown 文件已在另一个标签中打开') };
+        return { kind: 'error', error: operationFailure('CONFLICT', tDocument('save.alreadyOpenInOtherTab')) };
       }
       session.lineEnding = lineEnding;
       return this.enqueueFile(resolved, () => this.performWrite(session, resolved, content, { skipConflictCheck: true }));
@@ -387,7 +388,7 @@ export class DocumentSessionService {
       if (!required.ok) return { kind: 'error', error: required };
       const session = required.value;
       if (!session.filePath) {
-        return { kind: 'error', error: operationFailure('NOT_FOUND', '当前没有已打开的文件') };
+        return { kind: 'error', error: operationFailure('NOT_FOUND', tDocument('rename.noOpenFile')) };
       }
       const targetPath = path.join(path.dirname(session.filePath), fileName);
       if (targetPath === session.filePath) {
@@ -421,11 +422,11 @@ export class DocumentSessionService {
         } catch (error) {
           const code = (error as NodeJS.ErrnoException).code;
           if (code === 'EEXIST') {
-            return { kind: 'error' as const, error: operationFailure('CONFLICT', '目标文件已存在') };
+            return { kind: 'error' as const, error: operationFailure('CONFLICT', tDocument('rename.targetExists')) };
           }
           return {
             kind: 'error' as const,
-            error: operationFailure('UNKNOWN', error instanceof Error ? error.message : '无法重命名文件'),
+            error: operationFailure('UNKNOWN', error instanceof Error ? error.message : tDocument('rename.failed')),
           };
         }
       }));
@@ -469,7 +470,7 @@ export class DocumentSessionService {
     options: { skipConflictCheck: boolean },
   ): Promise<DocumentSaveOutcome> {
     if (session.externalConflict && !options.skipConflictCheck) {
-      return { kind: 'error', error: operationFailure('CONFLICT', '文件已在外部修改，请重新加载文件后再保存') };
+      return { kind: 'error', error: operationFailure('CONFLICT', tDocument('save.externallyModified')) };
     }
     const raw = session.documentAdapter.rawContentFor(content);
     try {
@@ -477,7 +478,7 @@ export class DocumentSessionService {
         const written = await this.fileSystem.compareAndWrite(filePath, session.diskContentHash, raw);
         if (written === 'conflict') {
           session.externalConflict = { contentHash: null, content: '' };
-          return { kind: 'error', error: operationFailure('CONFLICT', '文件已被其他程序修改，请先处理磁盘版本') };
+          return { kind: 'error', error: operationFailure('CONFLICT', tDocument('save.modifiedByOtherProgram')) };
         }
       } else {
         await this.fileSystem.writeFileAtomically(filePath, raw);
@@ -492,7 +493,7 @@ export class DocumentSessionService {
       session.diskMtimeMs = stats.mtimeMs;
       session.externalConflict = null;
       session.dirty = session.content !== session.diskContent;
-      await this.historyRecorder?.(filePath, raw, '文件已保存').catch((error) => console.warn('[Timeline]', error));
+      await this.historyRecorder?.(filePath, raw, tDocument('history.saved')).catch((error) => console.warn('[Timeline]', error));
       return {
         kind: 'saved',
         value: { filePath, fileName: session.fileName, mtimeMs: stats.mtimeMs },
@@ -500,7 +501,7 @@ export class DocumentSessionService {
     } catch (error) {
       return {
         kind: 'error',
-        error: operationFailure('UNKNOWN', error instanceof Error ? error.message : '无法保存文件'),
+        error: operationFailure('UNKNOWN', error instanceof Error ? error.message : tDocument('save.failed')),
       };
     }
   }

@@ -31,6 +31,7 @@ import {
   workbookBytesToXsSheets,
   xsSheetsToWorkbookBytes,
 } from '../spreadsheet/xSpreadsheetBridge';
+import { tPreview } from '../preview.i18n';
 
 /** x-data-spreadsheet hardcodes these when computing sheet viewHeight (data_proxy). */
 const XS_LIBRARY_TOOLBAR_HEIGHT_PX = 41;
@@ -65,7 +66,7 @@ function spreadsheetViewHeight(mount: HTMLElement | null | undefined): number {
  */
 export function SpreadsheetViewer({ descriptor, host }: SpreadsheetViewerProps): React.ReactElement {
   if (!isEditableSpreadsheetFile(descriptor.fileName) || !host?.writeBytes) {
-    return h(UniversalFilePreview, { descriptor, loadingLabel: '正在加载表格预览器…' });
+    return h(UniversalFilePreview, { descriptor, loadingLabel: tPreview('spreadsheet.loadingViewer') });
   }
   return h(SpreadsheetEditor, { descriptor, host });
 }
@@ -97,7 +98,7 @@ function SpreadsheetEditor({ descriptor, host }: { descriptor: ViewerProps['desc
       setChromeSlot(null);
       try {
         const response = await fetch(descriptor.contentUrl);
-        if (!response.ok) throw new Error(`无法读取表格文件（HTTP ${response.status}）`);
+        if (!response.ok) throw new Error(tPreview('spreadsheet.readFailed', { status: response.status }));
         const bytes = await response.arrayBuffer();
         const sheets = await workbookBytesToXsSheets(bytes);
         if (disposed || !mountRef.current) return;
@@ -221,9 +222,9 @@ html, body, .preview-root, .preview-shell, .preview-content {
       const bytes = await xsSheetsToWorkbookBytes(sheetRef.current.getData());
       const result: PreviewWriteResult = await host.writeBytes(descriptor.sessionId, bytes);
       setDirty(false);
-      setSaveMessage(`已保存 · ${(result.size / 1024).toFixed(result.size >= 10240 ? 0 : 1)} KB`);
+      setSaveMessage(tPreview('common.savedSize', { size: (result.size / 1024).toFixed(result.size >= 10240 ? 0 : 1) }));
     } catch (reason) {
-      setSaveMessage(reason instanceof Error ? reason.message : '保存失败');
+      setSaveMessage(reason instanceof Error ? reason.message : tPreview('common.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -263,7 +264,7 @@ html, body, .preview-root, .preview-shell, .preview-content {
       'aria-busy': loading || undefined,
     }),
     toolbarChrome,
-    loading ? h('div', { className: 'preview-spreadsheet-loading' }, loadingElement('正在加载表格编辑器…')) : null,
+    loading ? h('div', { className: 'preview-spreadsheet-loading' }, loadingElement(tPreview('spreadsheet.loadingEditor'))) : null,
   );
 }
 
@@ -281,5 +282,5 @@ function resolveXSpreadsheetFactory(moduleValue: unknown): XsSpreadsheetFactory 
     }
     return fn;
   }
-  throw new Error('x-spreadsheet 未能正确加载（缺少构造函数）');
+  throw new Error(tPreview('spreadsheet.libraryLoadFailed'));
 }

@@ -166,7 +166,7 @@ class SlashMenuView {
 
 export const slashMenuKey = new PluginKey('slashMenu');
 
-export function slashMenuPlugin(items: SlashMenuItem[] = defaultSlashItems): Plugin {
+export function slashMenuPlugin(items: SlashMenuItem[] = defaultSlashItems()): Plugin {
   let menuView: SlashMenuView | null = null;
   let shouldOpenMenu = false;
 

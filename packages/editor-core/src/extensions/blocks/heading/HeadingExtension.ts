@@ -20,7 +20,7 @@ import type { Command } from 'prosemirror-state';
 import { setBlockType } from 'prosemirror-commands';
 import { findCollapsedNodes } from './FindCollapsedNodes';
 import { getHeadingAnchors, anchorPlugin } from './AnchorPlugin';
-import { headingPathActionLabels } from './HeadingPathActionLabels';
+import { tHeading } from './heading.i18n';
 import {
   Extension,
   type SerializerNodeHandler,
@@ -293,7 +293,7 @@ function createHeadingWidgets(doc: ProsemirrorNode, options: HeadingExtensionOpt
               if (found) {
                 const md = `[${node.textContent}](#${found.id})`;
                 ownerDocument.defaultView?.navigator.clipboard.writeText(md).then(
-                  () => options.onToast?.('Link copied'),
+                  () => options.onToast?.(tHeading('anchor.linkCopied')),
                   () => {}
                 );
               }
@@ -338,7 +338,7 @@ function createHeadingWidgets(doc: ProsemirrorNode, options: HeadingExtensionOpt
             const copyBtn = ownerDocument.createElement('button');
             copyBtn.type = 'button';
             copyBtn.className = 'heading-copy-outline';
-            copyBtn.dataset.tooltip = headingPathActionLabels.clipboard;
+            copyBtn.dataset.tooltip = tHeading('pathAction.clipboard');
             copyBtn.setAttribute('aria-label', copyBtn.dataset.tooltip);
             copyBtn.tabIndex = -1;
             copyBtn.innerHTML = OUTLINE_PATH_COPY_ICON;
@@ -354,7 +354,7 @@ function createHeadingWidgets(doc: ProsemirrorNode, options: HeadingExtensionOpt
               const chatBtn = ownerDocument.createElement('button');
               chatBtn.type = 'button';
               chatBtn.className = 'heading-send-to-chat';
-              chatBtn.dataset.tooltip = headingPathActionLabels.cursorChat;
+              chatBtn.dataset.tooltip = tHeading('pathAction.cursorChat');
               chatBtn.setAttribute('aria-label', chatBtn.dataset.tooltip);
               chatBtn.tabIndex = -1;
               chatBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/><path d="M8 10h8M8 14h5"/></svg>';
@@ -371,7 +371,7 @@ function createHeadingWidgets(doc: ProsemirrorNode, options: HeadingExtensionOpt
               const terminalBtn = ownerDocument.createElement('button');
               terminalBtn.type = 'button';
               terminalBtn.className = 'heading-copy-outline heading-insert-iterm';
-              terminalBtn.dataset.tooltip = headingPathActionLabels.iTerm2;
+              terminalBtn.dataset.tooltip = tHeading('pathAction.iTerm2');
               terminalBtn.setAttribute('aria-label', terminalBtn.dataset.tooltip);
               terminalBtn.tabIndex = -1;
               terminalBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m6 8 4 4-4 4m7 0h5"/></svg>';

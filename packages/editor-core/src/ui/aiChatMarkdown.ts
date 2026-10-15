@@ -4,6 +4,7 @@
  */
 
 import MarkdownIt from 'markdown-it';
+import { tAiChat } from './aiChat.i18n';
 
 const markdown = new MarkdownIt({
   html: false,
@@ -31,12 +32,12 @@ export function decorateRenderedMarkdown(container: HTMLElement, onCopyCode: (co
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'ai-chat-code-copy';
-    button.textContent = '复制';
+    button.textContent = tAiChat('code.copy');
     button.addEventListener('click', () => {
       onCopyCode(block.textContent ?? '');
-      button.textContent = '已复制';
+      button.textContent = tAiChat('code.copied');
       window.setTimeout(() => {
-        button.textContent = '复制';
+        button.textContent = tAiChat('code.copy');
       }, 1500);
     });
     pre.appendChild(button);

@@ -35,7 +35,7 @@ it('uses the right-clicked heading for all three existing path actions', () => {
       expect(target.dispatchEvent(event)).toBe(false);
       const buttons = [...document.querySelectorAll<HTMLElement>('.toc-context-menu .context-menu-item')];
       expect(buttons.map((button) => button.textContent)).toEqual([
-        'Copy outline path to clipboard', 'Copy outline path to Cursor chat', 'Copy outline path to iTerm2',
+        '复制大纲路径到剪贴板', '复制大纲路径到 Cursor 对话', '复制大纲路径到 iTerm2',
       ]);
       expect(buttons.map((button) => button.querySelector('svg')?.getAttribute('viewBox'))).toEqual([
         '0 0 24 24', '600 300 400 400', '0 0 24 24',
@@ -46,9 +46,9 @@ it('uses the right-clicked heading for all three existing path actions', () => {
         .dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
       expect(document.querySelector('.toc-context-menu')).toBeNull();
     };
-    selectMenuAction('Copy outline path to clipboard');
-    selectMenuAction('Copy outline path to Cursor chat');
-    selectMenuAction('Copy outline path to iTerm2');
+    selectMenuAction('复制大纲路径到剪贴板');
+    selectMenuAction('复制大纲路径到 Cursor 对话');
+    selectMenuAction('复制大纲路径到 iTerm2');
     expect(onCopyOutlinePath).toHaveBeenCalledExactlyOnceWith(targetPos);
     expect(onSendHeadingToChat).toHaveBeenCalledExactlyOnceWith(targetPos);
     expect(onInsertIntoITerm).toHaveBeenCalledExactlyOnceWith(targetPos);

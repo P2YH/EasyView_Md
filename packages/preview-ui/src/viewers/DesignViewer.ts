@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { extension, h, UniversalFilePreview, type ViewerProps } from './shared';
+import { tPreview } from '../preview.i18n';
 
 /**
  * Design-route previews that share UniversalFilePreview / @file-viewer
@@ -9,7 +10,7 @@ import { extension, h, UniversalFilePreview, type ViewerProps } from './shared';
 export function DesignViewer({ descriptor }: ViewerProps): React.ReactElement {
   const suffix = extension(descriptor.fileName);
   const label = suffix === '.xmind'
-    ? '正在加载 XMind 脑图预览器…'
-    : `正在加载 ${suffix.slice(1).toUpperCase() || '设计文件'} 预览器…`;
+    ? tPreview('design.loadingXmind')
+    : tPreview('design.loadingFormat', { format: suffix.slice(1).toUpperCase() || tPreview('design.genericFormat') });
   return h(UniversalFilePreview, { descriptor, loadingLabel: label });
 }

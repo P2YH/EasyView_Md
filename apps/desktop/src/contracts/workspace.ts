@@ -118,6 +118,15 @@ export interface DesktopWorkspaceState {
   outlineWidth: number;
 }
 
+export interface RecentFolder {
+  path: string;
+  name: string;
+  /** Parent directory with the home prefix shortened to `~`. */
+  displayPath: string;
+  /** False when the folder was moved or deleted since it was last opened. */
+  exists: boolean;
+}
+
 export interface WorkspaceCopyRequest {
   sourceRelativePath: string;
   targetParentRelativePath: string;

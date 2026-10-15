@@ -1,5 +1,6 @@
 import { TimelinePanel } from '@easyview/editor-core/timeline';
-import type { TimelineClient } from '@easyview/contracts';
+import { WorkspaceSearchPanel } from '@easyview/editor-core/workspace';
+import type { TimelineClient, WorkspaceSearchResult } from '@easyview/contracts';
 import {
   describeWorkspaceEntryTimestamps,
   filterWorkspaceEntriesByDotVisibility,
@@ -8,13 +9,17 @@ import {
   collectVisibleWorkspaceTreeRelativePaths,
   computeNextWorkspaceTreeSelection,
   resolveWorkspaceTreeKeyAction,
-  resolveWorkspaceTreeDropMode,
+  resolveWorkspaceTreeDropTarget,
+  resolveWorkspaceTreeRowDropZone,
+  workspaceTreeDepthFromPointer,
+  workspaceTreeDropLineOffset,
+  workspaceTreeGapBeforeName,
   isExternalWorkspaceFileDrag,
   collectWorkspaceExternalDropSources,
-  workspaceTreeDropParentRelativePath,
   resolveWorkspaceTreeIcon,
+  type WorkspaceTreeDropTarget,
   workspaceEntryNameSelectionRange,
-  WORKSPACE_TREE_SORT_MODE_LABELS as SORT_MODE_LABELS,
+  workspaceTreeSortModeLabel,
   WORKSPACE_TREE_SORT_MODE_ICONS as SORT_MODE_ICONS,
   workspaceTreeMenuIconSvg,
   type WorkspaceTreeMenuIconId,
@@ -26,6 +31,7 @@ import type {
   WorkspaceExplorerRequest,
   WorkspaceExplorerSortConfig,
 } from './workspace-explorer-messages';
+import { tExplorer } from './workspaceExplorer.i18n';
 
 export interface WorkspaceExplorerVsCodeApi {
   postMessage(msg: unknown): void;
@@ -36,7 +42,6 @@ export interface WorkspaceExplorerVsCodeApi {
 type PendingOpResolve = (result: Extract<WorkspaceExplorerEvent, { type: 'opResult' }>) => void;
 type PendingListResolve = (result: Extract<WorkspaceExplorerEvent, { type: 'listChildrenResult' }>) => void;
 const DIRECTORY_LOAD_TIMEOUT_MS = 8_000;
-const DIRECTORY_LOAD_TIMEOUT_MESSAGE = 'Directory loading timed out.';
 
 interface ContextMenuItem {
   label: string;
@@ -82,8 +87,11 @@ export class WorkspaceExplorerView {
   private pendingCreate: { parentRelativePath: string; kind: 'file' | 'directory' } | null = null;
   private renamePath: string | null = null;
   private sortMenuOpen = false;
+  private searchOpen = false;
+  private searchPanel: WorkspaceSearchPanel | null = null;
+  private readonly pendingSearches = new Map<string, (result: WorkspaceSearchResult | null) => void>();
   private dragRelativePath: string | null = null;
-  private dropIntent: { mode: 'before' | 'into'; targetRelativePath: string } | null = null;
+  private dropIntent: { targetRelativePath: string; target: WorkspaceTreeDropTarget } | null = null;
   private dropIndicator: HTMLElement | null = null;
   private contextMenuEl: HTMLElement | null = null;
   private sortMenuEl: HTMLElement | null = null;
@@ -151,6 +159,8 @@ export class WorkspaceExplorerView {
     this.timestampTooltipEl?.remove();
     this.timestampTooltipEl = null;
     this.clearDropVisuals();
+    this.searchPanel?.dispose();
+    this.searchPanel = null;
   }
 
   /** Handle a host → webview event (call from `window` message listener). */
@@ -189,6 +199,14 @@ export class WorkspaceExplorerView {
         if (pending) {
           this.pendingLists.delete(event.requestId);
           pending(event);
+        }
+        break;
+      }
+      case 'searchResult': {
+        const pending = this.pendingSearches.get(event.requestId);
+        if (pending) {
+          this.pendingSearches.delete(event.requestId);
+          pending(event.ok ? { entries: event.entries, truncated: event.truncated } : null);
         }
         break;
       }
@@ -266,6 +284,7 @@ export class WorkspaceExplorerView {
     this.renamePath = null;
     this.setEditing(false);
     this.sortMenuOpen = false;
+    this.resetSearch();
     this.render();
     if (this.rootUri !== null || this.rootName !== null) {
       void this.loadDirectory('').then(async () => {
@@ -291,6 +310,7 @@ export class WorkspaceExplorerView {
     this.renamePath = null;
     this.setEditing(false);
     this.sortMenuOpen = false;
+    this.resetSearch();
     this.clearDropVisuals();
     this.closeContextMenu();
     this.render();
@@ -298,6 +318,7 @@ export class WorkspaceExplorerView {
 
   private async onFsChanged(relativePaths: string[]): Promise<void> {
     if (!this.hasRoot()) return;
+    if (this.searchOpen) this.searchPanel?.refresh();
     if (this.editing || this.pendingCreate || this.renamePath) return;
     const targets = [...new Set(relativePaths.map(normalizeRelativePath))].filter(
       (value) => value === '' || this.expanded.has(value) || (this.displayMode === 'icons' && value === this.iconDirectory),
@@ -361,6 +382,10 @@ export class WorkspaceExplorerView {
         if (this.sortMenuOpen) this.openSortMenu();
         else this.closeSortMenu();
         break;
+      case 'toggleSearch':
+        if (this.searchOpen) this.closeSearch();
+        else this.openSearch();
+        break;
       case 'refresh':
         this.entriesByDirectory.clear();
         await this.refreshExpanded();
@@ -398,7 +423,7 @@ export class WorkspaceExplorerView {
     const result = await new Promise<Extract<WorkspaceExplorerEvent, { type: 'listChildrenResult' }>>((resolve) => {
       const timer = setTimeout(() => {
         this.pendingLists.delete(requestId);
-        resolve({ type: 'listChildrenResult', requestId, ok: false, relativePath, message: DIRECTORY_LOAD_TIMEOUT_MESSAGE });
+        resolve({ type: 'listChildrenResult', requestId, ok: false, relativePath, message: tExplorer('directoryLoadTimeout') });
       }, DIRECTORY_LOAD_TIMEOUT_MS);
       this.pendingLists.set(requestId, (event) => {
         clearTimeout(timer);
@@ -408,7 +433,7 @@ export class WorkspaceExplorerView {
     });
     if (revision !== this.rootRevision) return;
     if (!result.ok) {
-      if (relativePath === '' && attempt === 0 && result.message === DIRECTORY_LOAD_TIMEOUT_MESSAGE) {
+      if (relativePath === '' && attempt === 0 && result.message === tExplorer('directoryLoadTimeout')) {
         await this.loadDirectory(relativePath, 1);
         return;
       }
@@ -550,6 +575,7 @@ export class WorkspaceExplorerView {
     // Window activation refreshes the tree asynchronously. Keep its floating
     // menu interactive while those directory responses rerender the rows.
     // Keep floating sort menu on body (outside overflow:hidden tree) while open.
+    const searchFocused = this.searchPanel?.hasFocus() ?? false;
     this.container.replaceChildren();
 
     if (!this.hasRoot()) {
@@ -557,7 +583,7 @@ export class WorkspaceExplorerView {
       this.sortMenuOpen = false;
       const empty = document.createElement('div');
       empty.className = 'workspace-empty';
-      empty.textContent = 'Open a folder or workspace';
+      empty.textContent = tExplorer('noRoot');
       this.container.appendChild(empty);
       return;
     }
@@ -565,11 +591,11 @@ export class WorkspaceExplorerView {
     if (!this.entriesByDirectory.has('')) {
       const status = document.createElement('div');
       status.className = 'workspace-empty';
-      status.textContent = this.rootLoadError ?? 'Loading files...';
+      status.textContent = this.rootLoadError ?? tExplorer('loading');
       if (this.rootLoadError) {
         const retry = document.createElement('button');
         retry.type = 'button';
-        retry.textContent = 'Retry';
+        retry.textContent = tExplorer('retry');
         retry.addEventListener('click', () => {
           this.rootLoadError = null;
           this.render();
@@ -579,6 +605,16 @@ export class WorkspaceExplorerView {
       }
       this.container.appendChild(status);
       return;
+    }
+
+    if (this.searchOpen && this.searchPanel) {
+      this.container.appendChild(this.searchPanel.element);
+      if (searchFocused) this.searchPanel.focus();
+      if (this.searchPanel.hasQuery) {
+        if (this.sortMenuOpen) this.openSortMenu();
+        else this.closeSortMenu();
+        return;
+      }
     }
 
     const tree = document.createElement('div');
@@ -591,7 +627,7 @@ export class WorkspaceExplorerView {
     }
     const dropHint = document.createElement('div');
     dropHint.className = 'workspace-drop-hint';
-    dropHint.textContent = `Hold Shift to drop files from ${IS_MAC ? 'Finder' : 'File Explorer'}`;
+    dropHint.textContent = tExplorer(IS_MAC ? 'dropHint.finder' : 'dropHint.fileExplorer');
     tree.appendChild(dropHint);
     tree.addEventListener('click', (event) => {
       if (event.target instanceof Element
@@ -609,6 +645,65 @@ export class WorkspaceExplorerView {
   private closeSortMenu(): void {
     this.sortMenuEl?.remove();
     this.sortMenuEl = null;
+  }
+
+  private openSearch(): void {
+    if (!this.hasRoot()) return;
+    if (!this.searchPanel) {
+      const panel = new WorkspaceSearchPanel({
+        search: (query) => this.requestSearch(query),
+        onOpen: (entry) => { void this.openSearchResult(entry as WorkspaceExplorerEntry); },
+        onClose: () => this.closeSearch(),
+        onQueryActiveChange: () => this.render(),
+      });
+      // VS Code keybindings (Enter → rename, Backspace → delete) must not fire while typing a query.
+      panel.element.addEventListener('focusin', () => this.post({ type: 'setInputFocus', focused: true }));
+      panel.element.addEventListener('focusout', () => this.post({ type: 'setInputFocus', focused: this.editing }));
+      this.searchPanel = panel;
+    }
+    this.sortMenuOpen = false;
+    this.searchOpen = true;
+    this.render();
+    this.searchPanel.focus(true);
+  }
+
+  private closeSearch(): void {
+    if (!this.searchOpen) return;
+    this.resetSearch();
+    this.render();
+    this.container.focus({ preventScroll: true });
+    this.container.querySelector('.workspace-entry.selected')?.scrollIntoView({ block: 'nearest' });
+  }
+
+  private resetSearch(): void {
+    const hadFocus = this.searchPanel?.hasFocus() ?? false;
+    this.searchOpen = false;
+    this.searchPanel?.reset();
+    for (const resolve of this.pendingSearches.values()) resolve(null);
+    this.pendingSearches.clear();
+    if (hadFocus) this.post({ type: 'setInputFocus', focused: this.editing });
+  }
+
+  private requestSearch(query: string): Promise<WorkspaceSearchResult | null> {
+    const requestId = this.nextRequestId();
+    return new Promise((resolve) => {
+      this.pendingSearches.set(requestId, resolve);
+      this.post({ type: 'search', requestId, query });
+    });
+  }
+
+  private async openSearchResult(entry: WorkspaceExplorerEntry): Promise<void> {
+    if (entry.kind !== 'directory') {
+      this.post({ type: 'open', relativePath: entry.relativePath });
+      return;
+    }
+    this.closeSearch();
+    if (this.displayMode === 'icons') {
+      await this.navigateIconDirectory(entry.relativePath);
+      return;
+    }
+    await this.onReveal(entry.relativePath, true);
+    if (!this.expanded.has(entry.relativePath)) this.toggleDirectory(entry.relativePath);
   }
 
   private openSortMenu(): void {
@@ -638,13 +733,13 @@ export class WorkspaceExplorerView {
 
     this.appendSortMenuItem(menu, {
       icon: 'viewList',
-      label: 'View as List',
+      label: tExplorer('menu.viewAsList'),
       checked: this.displayMode === 'list',
       onClick: () => { void this.changeDisplayMode('list'); },
     });
     this.appendSortMenuItem(menu, {
       icon: 'viewIcons',
-      label: 'View as Icons',
+      label: tExplorer('menu.viewAsIcons'),
       checked: this.displayMode === 'icons',
       onClick: () => { void this.changeDisplayMode('icons'); },
     });
@@ -655,7 +750,7 @@ export class WorkspaceExplorerView {
     for (const mode of ['created', 'name', 'custom'] as const) {
       this.appendSortMenuItem(menu, {
         icon: SORT_MODE_ICONS[mode],
-        label: SORT_MODE_LABELS[mode],
+        label: workspaceTreeSortModeLabel(mode),
         checked: this.sortMode === mode,
         onClick: () => { void this.changeSortMode(mode); },
       });
@@ -665,19 +760,19 @@ export class WorkspaceExplorerView {
     menu.appendChild(separator);
     this.appendSortMenuItem(menu, {
       icon: 'showCreated',
-      label: 'Show Created Time',
+      label: tExplorer('menu.showCreatedTime'),
       checked: this.showCreatedAt,
       onClick: () => { void this.changeShowCreatedAt(!this.showCreatedAt); },
     });
     this.appendSortMenuItem(menu, {
       icon: 'showUpdated',
-      label: 'Show Updated Time',
+      label: tExplorer('menu.showUpdatedTime'),
       checked: this.showUpdatedAt,
       onClick: () => { void this.changeShowUpdatedAt(!this.showUpdatedAt); },
     });
     this.appendSortMenuItem(menu, {
       icon: 'showTimeOnHover',
-      label: 'Show Time on Hover',
+      label: tExplorer('menu.showTimeOnHover'),
       checked: this.showTimestampHover,
       onClick: () => { void this.changeShowTimestampHover(!this.showTimestampHover); },
     });
@@ -686,7 +781,7 @@ export class WorkspaceExplorerView {
     menu.appendChild(dotSeparator);
     this.appendSortMenuItem(menu, {
       icon: 'showDotEntries',
-      label: 'Show Dotfiles and Folders',
+      label: tExplorer('menu.showDotEntries'),
       checked: this.showDotEntries,
       onClick: () => { void this.changeShowDotEntries(!this.showDotEntries); },
     });
@@ -714,28 +809,28 @@ export class WorkspaceExplorerView {
     back.type = 'button';
     back.className = 'workspace-icon-back';
     back.textContent = '‹';
-    back.title = 'Back to parent folder';
+    back.title = tExplorer('icons.back');
     back.setAttribute('aria-label', back.title);
     back.disabled = this.iconDirectory === '';
     back.addEventListener('click', () => { void this.navigateIconDirectory(parentRelativePath(this.iconDirectory)); });
     const pathLabel = document.createElement('span');
     pathLabel.className = 'workspace-icon-path';
-    pathLabel.textContent = this.iconDirectory.split('/').at(-1) || this.rootName || 'Files';
-    pathLabel.title = this.iconDirectory || this.rootName || 'Files';
+    pathLabel.textContent = this.iconDirectory.split('/').at(-1) || this.rootName || tExplorer('icons.rootFallback');
+    pathLabel.title = this.iconDirectory || this.rootName || tExplorer('icons.rootFallback');
     navigation.append(back, pathLabel);
     content.appendChild(navigation);
 
     const grid = document.createElement('div');
     grid.className = 'workspace-icon-grid';
     grid.setAttribute('role', 'grid');
-    grid.setAttribute('aria-label', `Files in ${pathLabel.textContent}`);
+    grid.setAttribute('aria-label', tExplorer('icons.gridLabel', { name: pathLabel.textContent }));
     const entries = filterWorkspaceEntriesByDotVisibility(
       this.entriesByDirectory.get(this.iconDirectory) ?? [], this.showDotEntries,
     );
     if (entries.length === 0 && !this.pendingCreate) {
       const empty = document.createElement('p');
       empty.className = 'workspace-icon-empty';
-      empty.textContent = 'Folder is empty';
+      empty.textContent = tExplorer('icons.emptyFolder');
       grid.appendChild(empty);
     }
     for (const entry of entries) {
@@ -900,6 +995,7 @@ export class WorkspaceExplorerView {
       const row = document.createElement('div');
       row.className = `workspace-entry workspace-entry-${entry.kind}`;
       row.dataset.relativePath = entry.relativePath;
+      row.dataset.kind = entry.kind;
       row.style.paddingInlineStart = `${8 + depth * 16}px`;
       row.classList.toggle('selected', this.selected.has(entry.relativePath));
       row.setAttribute('role', 'treeitem');
@@ -966,7 +1062,7 @@ export class WorkspaceExplorerView {
         create.type = 'button';
         create.className = 'workspace-entry-create';
         create.textContent = '＋';
-        create.title = 'New File';
+        create.title = tExplorer('entry.newFile');
         create.disabled = !entry.writable;
         create.addEventListener('click', (event) => {
           event.stopPropagation();
@@ -1152,43 +1248,43 @@ export class WorkspaceExplorerView {
 
     if (isFile) {
       items.push(
-        { label: 'Open Preview', action: () => this.post({ type: 'open', relativePath: entry.relativePath }) },
-        { label: 'Open with Default Application', action: () => this.post({ type: 'openExternal', relativePath: entry.relativePath }) },
+        { label: tExplorer('context.openPreview'), action: () => this.post({ type: 'open', relativePath: entry.relativePath }) },
+        { label: tExplorer('context.openWithDefaultApp'), action: () => this.post({ type: 'openExternal', relativePath: entry.relativePath }) },
       );
       if (/\.(pdf|docx|doc)$/i.test(entry.name)) {
-        items.push({ label: 'Export to Markdown (.md)', action: () => this.post({ type: 'convertToMarkdown', relativePath: entry.relativePath }) });
+        items.push({ label: tExplorer('context.exportToMarkdown'), action: () => this.post({ type: 'convertToMarkdown', relativePath: entry.relativePath }) });
       }
     } else if (writable) {
       items.push(
-        { label: 'New File', action: () => this.beginCreate(entry.relativePath, 'file') },
-        { label: 'New Folder', action: () => this.beginCreate(entry.relativePath, 'directory') },
+        { label: tExplorer('context.newFile'), action: () => this.beginCreate(entry.relativePath, 'file') },
+        { label: tExplorer('context.newFolder'), action: () => this.beginCreate(entry.relativePath, 'directory') },
       );
     }
 
     items.push({
       label: /mac|iphone|ipad/i.test(navigator.platform) || (navigator as { userAgentData?: { platform?: string } }).userAgentData?.platform === 'macOS'
-        ? 'Reveal in Finder'
-        : 'Reveal in File Explorer',
+        ? tExplorer('context.revealInFinder')
+        : tExplorer('context.revealInFileExplorer'),
       action: () => this.post({ type: 'revealInOS', relativePath: entry.relativePath }),
     });
     items.push({ label: '---', action: () => undefined });
 
     if (writable) {
       items.push({
-        label: 'Copy',
+        label: tExplorer('context.copy'),
         shortcut: `${modKey()}C`,
         action: () => { void this.copyEntries([...this.selected].length ? [...this.selected] : [entry.relativePath]); },
       });
     }
     items.push({
-      label: 'Paste',
+      label: tExplorer('context.paste'),
       shortcut: `${modKey()}V`,
       disabled: !this.hasClipboard || !writable,
       action: () => { void this.pasteAt(entry.relativePath); },
     });
     items.push(
       {
-        label: 'Copy Path',
+        label: tExplorer('context.copyPath'),
         shortcut: IS_MAC ? '⌥⌘C' : 'Shift+Alt+C',
         action: () => this.post({
           type: 'copyPath',
@@ -1196,7 +1292,7 @@ export class WorkspaceExplorerView {
         }),
       },
       {
-        label: 'Copy Relative Path',
+        label: tExplorer('context.copyRelativePath'),
         shortcut: IS_MAC ? '⇧⌥⌘C' : 'Ctrl+K Ctrl+Shift+C',
         action: () => this.post({
           type: 'copyRelativePath',
@@ -1208,12 +1304,12 @@ export class WorkspaceExplorerView {
     if (writable) {
       items.push(
         {
-          label: 'Rename...',
+          label: tExplorer('context.rename'),
           shortcut: 'Enter',
           action: () => this.beginRename(entry.relativePath),
         },
         {
-          label: 'Delete',
+          label: tExplorer('context.delete'),
           shortcut: IS_MAC ? '⌘⌫' : 'Delete',
           action: () => {
             void this.deleteEntries(
@@ -1588,20 +1684,16 @@ export class WorkspaceExplorerView {
     row.addEventListener('dragover', (event) => {
       const external = isExternalWorkspaceFileDrag(event.dataTransfer, this.dragRelativePath !== null);
       if (!external && (!this.dragRelativePath || this.dragRelativePath === entry.relativePath)) return;
-      if (
-        !external
-        && entry.kind === 'directory'
-        && (
-          this.dragRelativePath === entry.relativePath
-          || entry.relativePath.startsWith(`${this.dragRelativePath}/`)
-        )
-      ) {
+      const target = this.resolveDropTarget(row, event, external);
+      if (!target) {
+        this.clearDropVisuals();
         return;
       }
       event.preventDefault();
       event.stopPropagation();
       if (event.dataTransfer) event.dataTransfer.dropEffect = external ? 'copy' : 'move';
-      this.updateDropIntent(row, entry, event.clientY);
+      this.dropIntent = { targetRelativePath: entry.relativePath, target };
+      this.renderDropVisuals(target);
     });
     row.addEventListener('dragleave', (event) => {
       const related = event.relatedTarget;
@@ -1615,36 +1707,45 @@ export class WorkspaceExplorerView {
       event.stopPropagation();
       const external = isExternalWorkspaceFileDrag(event.dataTransfer, this.dragRelativePath !== null);
       const intent = this.dropIntent;
-      const mode = intent?.targetRelativePath === entry.relativePath
-        ? intent.mode
-        : this.resolveDropMode(entry, event.clientY, row);
+      const target = intent?.targetRelativePath === entry.relativePath
+        ? intent.target
+        : this.resolveDropTarget(row, event, external);
       this.clearDropVisuals();
+      if (!target) return;
       if (external && event.dataTransfer) {
-        void this.importExternalDrop(event.dataTransfer, workspaceTreeDropParentRelativePath(entry, mode));
+        void this.importExternalDrop(
+          event.dataTransfer,
+          target.kind === 'into' ? target.relativePath : target.placement.parentRelativePath,
+        );
         return;
       }
       const source = this.dragRelativePath ?? event.dataTransfer?.getData('text/plain');
-      if (!source || source === entry.relativePath) return;
-      void this.handleDrop(source, entry, mode);
+      if (!source) return;
+      void this.handleDrop(source, target);
     });
   }
 
-  private resolveDropMode(
-    entry: WorkspaceExplorerEntry,
-    clientY: number,
-    row: HTMLElement,
-  ): 'before' | 'into' {
+  private treeRows(): HTMLElement[] {
+    return [...this.container.querySelectorAll<HTMLElement>('.workspace-tree .workspace-entry')];
+  }
+
+  private resolveDropTarget(row: HTMLElement, event: DragEvent, external: boolean): WorkspaceTreeDropTarget | null {
+    const rows = this.treeRows();
     const rect = row.getBoundingClientRect();
-    return resolveWorkspaceTreeDropMode(entry.kind, clientY, rect.top, rect.height);
+    const kind = (row.dataset.kind ?? 'file') as WorkspaceExplorerEntry['kind'];
+    return resolveWorkspaceTreeDropTarget({
+      rows: rows.map((element) => ({
+        relativePath: element.dataset.relativePath ?? '',
+        kind: (element.dataset.kind ?? 'file') as WorkspaceExplorerEntry['kind'],
+      })),
+      index: rows.indexOf(row),
+      zone: resolveWorkspaceTreeRowDropZone(kind, event.clientY, rect.top, rect.height),
+      pointerDepth: workspaceTreeDepthFromPointer(event.clientX - rect.left),
+      draggedRelativePath: external ? null : this.dragRelativePath,
+    });
   }
 
-  private updateDropIntent(row: HTMLElement, entry: WorkspaceExplorerEntry, clientY: number): void {
-    const mode = this.resolveDropMode(entry, clientY, row);
-    this.dropIntent = { mode, targetRelativePath: entry.relativePath };
-    this.renderDropVisuals(row, mode);
-  }
-
-  private renderDropVisuals(row: HTMLElement, mode: 'before' | 'into'): void {
+  private renderDropVisuals(target: WorkspaceTreeDropTarget): void {
     this.setRootDropHighlight(false);
     this.container.querySelectorAll('.workspace-entry.is-drop-into').forEach((node) => {
       node.classList.remove('is-drop-into');
@@ -1654,23 +1755,27 @@ export class WorkspaceExplorerView {
       this.dropIndicator.className = 'workspace-drop-indicator';
       this.container.appendChild(this.dropIndicator);
     }
+    const rows = this.treeRows();
 
-    if (mode === 'into') {
+    if (target.kind === 'into') {
       this.dropIndicator.classList.remove('is-visible');
-      row.classList.add('is-drop-into');
+      rows.find((element) => element.dataset.relativePath === target.relativePath)?.classList.add('is-drop-into');
       return;
     }
 
-    row.classList.remove('is-drop-into');
+    const lineRow = rows[target.lineRowIndex];
     const tree = this.container.querySelector('.workspace-tree');
+    if (!lineRow || !tree) return;
     const containerRect = this.container.getBoundingClientRect();
-    const rowRect = row.getBoundingClientRect();
-    const left = (tree?.getBoundingClientRect().left ?? rowRect.left) - containerRect.left;
-    const width = tree?.clientWidth ?? rowRect.width;
-    const top = rowRect.top - containerRect.top - 1;
-    this.dropIndicator.style.left = `${Math.max(0, left + 8)}px`;
-    this.dropIndicator.style.width = `${Math.max(40, width - 16)}px`;
-    this.dropIndicator.style.top = `${top}px`;
+    const rowRect = lineRow.getBoundingClientRect();
+    const treeRect = tree.getBoundingClientRect();
+    // The line starts at the target level's indent so the user can see which folder receives the drop.
+    const left = rowRect.left - containerRect.left + workspaceTreeDropLineOffset(target.placement.depth);
+    const right = treeRect.left - containerRect.left + tree.clientWidth - 8;
+    const edge = target.lineEdge === 'top' ? rowRect.top : rowRect.bottom;
+    this.dropIndicator.style.left = `${Math.max(0, left)}px`;
+    this.dropIndicator.style.width = `${Math.max(24, right - left)}px`;
+    this.dropIndicator.style.top = `${edge - containerRect.top - 1}px`;
     this.dropIndicator.classList.add('is-visible');
   }
 
@@ -1767,19 +1872,18 @@ export class WorkspaceExplorerView {
 
   private async handleDrop(
     sourceRelativePath: string,
-    target: WorkspaceExplorerEntry,
-    mode: 'before' | 'into',
+    dropTarget: WorkspaceTreeDropTarget,
   ): Promise<void> {
     const sourceParent = parentRelativePath(sourceRelativePath);
     const sourceName = sourceRelativePath.split('/').at(-1)!;
-    const targetParent = parentRelativePath(target.relativePath);
 
-    if (mode === 'into' && target.kind === 'directory') {
+    if (dropTarget.kind === 'into') {
+      const target = { relativePath: dropTarget.relativePath };
       if (
         sourceRelativePath === target.relativePath
         || target.relativePath.startsWith(`${sourceRelativePath}/`)
       ) {
-        this.showError('Cannot move a folder into itself or its descendants.');
+        this.showError(tExplorer('move.intoSelf'));
         return;
       }
       if (sourceParent === target.relativePath) return;
@@ -1819,8 +1923,12 @@ export class WorkspaceExplorerView {
       return;
     }
 
+    const { placement } = dropTarget;
+    const targetParent = placement.parentRelativePath;
+    const siblingNames = (this.entriesByDirectory.get(targetParent) ?? []).map((entry) => entry.name);
+    const beforeName = workspaceTreeGapBeforeName(placement, siblingNames);
     if (sourceParent === targetParent) {
-      await this.reorderBefore(sourceParent, sourceName, target.name);
+      await this.reorderBefore(sourceParent, sourceName, beforeName);
       return;
     }
 
@@ -1836,7 +1944,7 @@ export class WorkspaceExplorerView {
     }
     if (!(await this.ensureCustomSort())) return;
     const movedName = moveResult.entry?.name ?? sourceName;
-    const siblings = (this.entriesByDirectory.get(targetParent) ?? []).map((entry) => entry.name);
+    const siblings = [...siblingNames];
     if (!siblings.includes(movedName)) siblings.push(movedName);
     const reorderResult = await this.requestOp((requestId) => ({
       type: 'reorder',
@@ -1844,11 +1952,15 @@ export class WorkspaceExplorerView {
       parentRelativePath: targetParent,
       movedName,
       siblingNames: siblings,
-      beforeName: target.name,
+      beforeName,
     }));
     if (!reorderResult.ok) {
       this.showError(reorderResult.message);
       return;
+    }
+    if (targetParent && !this.expanded.has(targetParent)) {
+      this.expanded.add(targetParent);
+      this.post({ type: 'setExpanded', relativePath: targetParent, expanded: true });
     }
     await Promise.all([
       this.loadDirectory(sourceParent),
@@ -1859,11 +1971,15 @@ export class WorkspaceExplorerView {
   private async reorderBefore(
     parentRelativePathValue: string,
     movedName: string,
-    beforeName: string,
+    /** Undefined appends to the end of the folder. */
+    beforeName: string | undefined,
   ): Promise<void> {
-    if (!(await this.ensureCustomSort())) return;
     if (movedName === beforeName) return;
     const siblings = (this.entriesByDirectory.get(parentRelativePathValue) ?? []).map((entry) => entry.name);
+    // Dropping right after itself (or at the end while already last) keeps the current order.
+    const index = siblings.indexOf(movedName);
+    if (index >= 0 && siblings[index + 1] === beforeName) return;
+    if (!(await this.ensureCustomSort())) return;
     const result = await this.requestOp((requestId) => ({
       type: 'reorder',
       requestId,

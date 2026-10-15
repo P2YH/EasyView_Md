@@ -9,6 +9,7 @@ import {
   type WorkspaceEntry,
   type WorkspaceMoveRequest,
   type WorkspaceRenameRequest,
+  type WorkspaceSearchResult,
   type WorkspaceTreeSortMode,
   WorkspaceOperationError,
 } from '@easyview/contracts';
@@ -16,15 +17,26 @@ import {
   LocalWorkspaceGateway,
   normalizeWorkspaceRelativePath,
   parentWorkspaceRelativePath,
+  searchWorkspaceTree,
   WORKSPACE_TREE_ORDER_RELATIVE_PATH,
   WorkspaceFileOperationService,
   WorkspaceTreeModel,
   WorkspaceTreeOrderState,
 } from '@easyview/node-runtime';
 import type { WorkspaceCopyRequest, WorkspaceResourcePaths } from '../../../contracts/workspace';
+import { tWorkspace } from './workspace.i18n';
 
 /** Stable single-root id for the Desktop host (one folder window). */
 export const DESKTOP_WORKSPACE_ROOT_ID = 'desktop';
+
+/** Errors whose message is already user-facing and is shown as-is. */
+const hostMessageErrors = new WeakSet<WorkspaceOperationError>();
+
+function hostMessageError(code: WorkspaceOperationError['code'], message: string): WorkspaceOperationError {
+  const error = new WorkspaceOperationError(code, message);
+  hostMessageErrors.add(error);
+  return error;
+}
 
 /**
  * Desktop adapter over the shared workspace core.
@@ -65,7 +77,7 @@ export class DesktopWorkspaceCore {
   async bindRoot(selectedPath: string): Promise<string> {
     const stat = await fs.stat(selectedPath);
     if (!stat.isDirectory()) {
-      throw new WorkspaceOperationError('NOT_DIRECTORY', '所选路径不是文件夹');
+      throw hostMessageError('NOT_DIRECTORY', tWorkspace('open.notDirectory'));
     }
     const rootPath = await fs.realpath(selectedPath);
     this.model.clear();
@@ -98,6 +110,14 @@ export class DesktopWorkspaceCore {
     this.requireRoot();
     const entries = await this.model.listChildren(DESKTOP_WORKSPACE_ROOT_ID, relativePath);
     return entries.map((entry) => ({ ...entry }));
+  }
+
+  async search(query: string): Promise<WorkspaceSearchResult> {
+    this.requireRoot();
+    const result = await searchWorkspaceTree(this.model, DESKTOP_WORKSPACE_ROOT_ID, query, {
+      showDotEntries: this.getShowDotEntries(),
+    });
+    return { entries: result.entries.map((entry) => ({ ...entry })), truncated: result.truncated };
   }
 
   async setSortMode(sortMode: WorkspaceTreeSortMode): Promise<WorkspaceTreeSortMode> {
@@ -207,19 +227,19 @@ export class DesktopWorkspaceCore {
     const sourceRelativePath = normalizeWorkspaceRelativePath(request.sourceRelativePath);
     const targetParentRelativePath = normalizeWorkspaceRelativePath(request.targetParentRelativePath);
     if (!sourceRelativePath) {
-      throw new WorkspaceOperationError('INVALID_PATH', '不能复制工作区根目录');
+      throw new WorkspaceOperationError('INVALID_PATH', tWorkspace('core.cannotCopyRoot'));
     }
 
     const sourcePath = this.resolveAbsolutePath(sourceRelativePath);
     const parentPath = this.resolveAbsolutePath(targetParentRelativePath);
     const sourceStat = await fs.lstat(sourcePath);
     if (sourceStat.isSymbolicLink()) {
-      throw new WorkspaceOperationError('SYMLINK_NOT_TRAVERSABLE', '暂不支持复制符号链接');
+      throw hostMessageError('SYMLINK_NOT_TRAVERSABLE', tWorkspace('core.copySymlinkUnsupported'));
     }
 
     const parentStat = await fs.lstat(parentPath);
     if (!parentStat.isDirectory() || parentStat.isSymbolicLink()) {
-      throw new WorkspaceOperationError('NOT_DIRECTORY', '目标目录不可用');
+      throw new WorkspaceOperationError('NOT_DIRECTORY', tWorkspace('core.targetUnavailable'));
     }
     const realParent = await fs.realpath(parentPath);
     this.ensureWithinRoot(root, realParent);
@@ -227,7 +247,7 @@ export class DesktopWorkspaceCore {
     if (sourceStat.isDirectory()) {
       const realSource = await fs.realpath(sourcePath);
       if (realParent === realSource || realParent.startsWith(`${realSource}${path.sep}`)) {
-        throw new WorkspaceOperationError('INVALID_PATH', '不能粘贴到自身或其子目录中');
+        throw hostMessageError('INVALID_PATH', tWorkspace('core.pasteIntoSelf'));
       }
     }
 
@@ -255,12 +275,12 @@ export class DesktopWorkspaceCore {
     const parentPath = this.resolveAbsolutePath(targetParent);
     const sourceStat = await fs.lstat(sourcePath);
     if (sourceStat.isSymbolicLink()) {
-      throw new WorkspaceOperationError('SYMLINK_NOT_TRAVERSABLE', '暂不支持导入符号链接');
+      throw hostMessageError('SYMLINK_NOT_TRAVERSABLE', tWorkspace('core.importSymlinkUnsupported'));
     }
 
     const parentStat = await fs.lstat(parentPath);
     if (!parentStat.isDirectory() || parentStat.isSymbolicLink()) {
-      throw new WorkspaceOperationError('NOT_DIRECTORY', '目标目录不可用');
+      throw new WorkspaceOperationError('NOT_DIRECTORY', tWorkspace('core.targetUnavailable'));
     }
     const realParent = await fs.realpath(parentPath);
     this.ensureWithinRoot(root, realParent);
@@ -268,10 +288,10 @@ export class DesktopWorkspaceCore {
     const realSource = sourceStat.isDirectory() ? await fs.realpath(sourcePath) : path.resolve(sourcePath);
     const realRoot = await fs.realpath(root);
     if (realSource === realRoot) {
-      throw new WorkspaceOperationError('INVALID_PATH', '不能将工作区根目录导入自身');
+      throw hostMessageError('INVALID_PATH', tWorkspace('core.importRootIntoSelf'));
     }
     if (sourceStat.isDirectory() && (realParent === realSource || realParent.startsWith(`${realSource}${path.sep}`))) {
-      throw new WorkspaceOperationError('INVALID_PATH', '不能导入到自身或其子目录中');
+      throw hostMessageError('INVALID_PATH', tWorkspace('core.importIntoSelf'));
     }
 
     const targetPath = await uniqueCopyTargetPath(realParent, path.basename(sourcePath), sourceStat.isDirectory());
@@ -300,7 +320,7 @@ export class DesktopWorkspaceCore {
     const parentPath = this.resolveAbsolutePath(targetParent);
     const parentStat = await fs.lstat(parentPath);
     if (!parentStat.isDirectory() || parentStat.isSymbolicLink()) {
-      throw new WorkspaceOperationError('NOT_DIRECTORY', '目标目录不可用');
+      throw new WorkspaceOperationError('NOT_DIRECTORY', tWorkspace('core.targetUnavailable'));
     }
     const realParent = await fs.realpath(parentPath);
     this.ensureWithinRoot(root, realParent);
@@ -431,7 +451,7 @@ export class DesktopWorkspaceCore {
 
   private requireRoot(): string {
     if (!this.boundRootPath) {
-      throw new WorkspaceOperationError('ROOT_NOT_FOUND', '尚未打开工作区');
+      throw new WorkspaceOperationError('ROOT_NOT_FOUND', tWorkspace('notOpen'));
     }
     return this.boundRootPath;
   }
@@ -440,7 +460,7 @@ export class DesktopWorkspaceCore {
     const root = path.resolve(rootPath);
     const candidate = path.resolve(candidatePath);
     if (candidate !== root && !candidate.startsWith(`${root}${path.sep}`)) {
-      throw new WorkspaceOperationError('ROOT_ESCAPE', '路径不能超出工作区根目录');
+      throw new WorkspaceOperationError('ROOT_ESCAPE', tWorkspace('core.outsideRoot'));
     }
   }
 }
@@ -449,24 +469,23 @@ export function desktopWorkspaceErrorMessage(error: unknown): string {
   if (isWorkspaceOperationError(error)) {
     switch (error.code) {
       case 'ALREADY_EXISTS':
-        return '同名文件或文件夹已存在';
+        return tWorkspace('error.alreadyExists');
       case 'ROOT_ESCAPE':
-        return '路径不能超出工作区根目录';
+        return tWorkspace('core.outsideRoot');
       case 'INVALID_NAME':
-        return '名称不能为空且不能包含路径分隔符';
+        return tWorkspace('error.invalidName');
       case 'INVALID_PATH':
-        return error.message.includes('自身') ? error.message : '工作区路径无效';
+        return hostMessageErrors.has(error) ? error.message : tWorkspace('error.invalidPath');
       case 'NOT_DIRECTORY':
-        return error.message.includes('所选') ? error.message : '目录节点不可读取';
       case 'SYMLINK_NOT_TRAVERSABLE':
-        return error.message.includes('复制') ? error.message : '目录节点不可读取';
+        return hostMessageErrors.has(error) ? error.message : tWorkspace('error.unreadable');
       case 'ROOT_NOT_FOUND':
-        return '尚未打开工作区';
+        return tWorkspace('notOpen');
       default:
         return error.message;
     }
   }
-  return error instanceof Error ? error.message : '工作区操作失败';
+  return error instanceof Error ? error.message : tWorkspace('error.failed');
 }
 
 function applyTopLevelRename(relativePath: string, rename: ReadonlyMap<string, string>): string {

@@ -41,8 +41,10 @@ import {
   runInWindowContext,
 } from '../host/desktopRuntime';
 import { DesktopDocumentAdapter } from './desktopDocumentAdapter';
+import { recentFolderStore } from '../workspace/recentFolders';
 import type { DocumentSession } from './DocumentSessionService';
 import { toOperationResult } from './DocumentSessionService';
+import { tDocument } from './document.i18n';
 
 export async function stopWatcher(session: DocumentSession): Promise<void> {
   session.watcher?.close();
@@ -57,14 +59,14 @@ export async function watchDocumentSession(session: DocumentSession): Promise<bo
     session.watcher = watch(session.filePath, { persistent: false }, () => {
       runInWindowContext(context, () => {
         void reloadIfChanged(session).catch((error) => {
-          console.warn('[EasyView_Md] 文件变化检查失败:', error);
+          console.warn('[EasyView_Md] File change check failed:', error);
         });
       });
     });
     return true;
   } catch (error) {
     session.watcher = undefined;
-    console.warn('[EasyView_Md] 文件监听不可用:', error);
+    console.warn('[EasyView_Md] File watcher unavailable:', error);
     return false;
   }
 }
@@ -81,7 +83,7 @@ export async function reloadIfChanged(session: DocumentSession): Promise<void> {
       const stats = await fs.stat(session.filePath);
       const raw = await fs.readFile(session.filePath, 'utf8');
       const rawHash = hashContent(raw);
-      if (rawHash !== session.diskContentHash) void captureDesktopHistory(session.filePath, raw, '外部文件变化').catch((error) => console.warn('[Timeline]', error));
+      if (rawHash !== session.diskContentHash) void captureDesktopHistory(session.filePath, raw, tDocument('history.externalChange')).catch((error) => console.warn('[Timeline]', error));
       // mtime is only a cheap watcher hint. Content hash is the source of
       // truth because sync folders and coarse filesystems can preserve mtime.
       if (rawHash === session.diskContentHash) {
@@ -144,11 +146,11 @@ export async function resolveExternalConflict(
   if (!session.externalConflict || !sessionIsActive(session)) return;
   const decision = await dialog.showMessageBox(getMainWindow()!, {
     type: 'warning',
-    buttons: ['取消', '重新加载磁盘版本', '使用当前内容覆盖'],
+    buttons: [tDocument('conflict.cancel'), tDocument('conflict.reload'), tDocument('conflict.overwrite')],
     defaultId: 0,
     cancelId: 0,
-    message: `${session.fileName} 已在外部修改`,
-    detail: '请选择保留当前编辑内容、重新加载磁盘版本，或明确覆盖磁盘文件。',
+    message: tDocument('conflict.message', { fileName: session.fileName }),
+    detail: tDocument('conflict.detail'),
   });
   if (decision.response === 1) {
     documentSessions.applyDiskReload(session, diskContent, diskMtimeMs);
@@ -172,12 +174,12 @@ export async function loadEditorTab(
   notify = true,
   groupId?: string,
 ): Promise<OperationResult<DocumentOpenResult>> {
-  if (!isMarkdownPath(filePath)) return failure('INVALID_ARGUMENT', '仅支持 Markdown 文件');
+  if (!isMarkdownPath(filePath)) return failure('INVALID_ARGUMENT', tDocument('open.markdownOnly'));
   let resolvedPath: string;
   try {
     resolvedPath = await fs.realpath(filePath);
   } catch (error) {
-    return failure('UNKNOWN', error instanceof Error ? error.message : '无法读取文件');
+    return failure('UNKNOWN', error instanceof Error ? error.message : tDocument('open.readFailed'));
   }
   const targetGroupId = groupId ?? tabSnapshot().activeGroupId;
   const targetGroup = tabSnapshot().groups.find((group) => group.id === targetGroupId);
@@ -192,7 +194,7 @@ export async function loadEditorTab(
       notifyActiveDocument('initial');
     }
     const existingSession = documentSessions.get(existingInGroup.id);
-    if (!existingSession) return failure('NOT_FOUND', 'Markdown 会话不存在');
+    if (!existingSession) return failure('NOT_FOUND', tDocument('session.markdownNotFound'));
     return success(documentResult(existingSession));
   }
   const shared = documentSessions.findByFilePath(resolvedPath)[0];
@@ -207,7 +209,7 @@ export async function loadEditorTab(
   }
   try {
     const [raw, stats] = await Promise.all([fs.readFile(resolvedPath, 'utf8'), fs.stat(resolvedPath)]);
-    if (!stats.isFile()) return failure('INVALID_ARGUMENT', '只能打开普通 Markdown 文件');
+    if (!stats.isFile()) return failure('INVALID_ARGUMENT', tDocument('open.regularMarkdownOnly'));
     const tab = tabRegistry.openEditor(resolvedPath, path.basename(resolvedPath), requestedId, targetGroupId);
     const session = documentSessions.open({
       tabId: tab.id,
@@ -225,21 +227,21 @@ export async function loadEditorTab(
     }
     return success(documentResult(session));
   } catch (error) {
-    return failure('UNKNOWN', error instanceof Error ? error.message : '无法读取文件');
+    return failure('UNKNOWN', error instanceof Error ? error.message : tDocument('open.readFailed'));
   }
 }
 
 export async function resolveWorkspaceFilePath(relativePath: string): Promise<string> {
   const rootPath = workspaceRoot();
-  if (!rootPath) throw new PreviewSessionError('invalid', '请先打开工作区');
+  if (!rootPath) throw new PreviewSessionError('invalid', tDocument('workspace.openFirst'));
   const root = await fs.realpath(rootPath);
   const targetPath = workspaceCore.resolveAbsolutePath(relativePath);
   const entry = await fs.lstat(targetPath);
-  if (!entry.isFile() || entry.isSymbolicLink()) throw new PreviewSessionError('permission', '只能访问工作区内的普通文件');
+  if (!entry.isFile() || entry.isSymbolicLink()) throw new PreviewSessionError('permission', tDocument('workspace.regularFilesOnly'));
   const realPath = await fs.realpath(targetPath);
   const relative = path.relative(root, realPath);
   if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
-    throw new PreviewSessionError('permission', '路径不能超出工作区根目录');
+    throw new PreviewSessionError('permission', tDocument('workspace.outsideRoot'));
   }
   return realPath;
 }
@@ -251,7 +253,7 @@ export async function registerPreviewTab(
   groupId?: string,
 ): Promise<DesktopTabSnapshot> {
   const rootPath = workspaceRoot();
-  if (!rootPath) throw new PreviewSessionError('invalid', '请先打开工作区');
+  if (!rootPath) throw new PreviewSessionError('invalid', tDocument('workspace.openFirst'));
   const descriptor = await previewSessions.open(rootPath, relativePath);
   previewSessions.close(descriptor.sessionId);
   tabRegistry.openPreview(relativePath, descriptor.fileName, descriptor.route, requestedId, groupId);
@@ -260,7 +262,7 @@ export async function registerPreviewTab(
 
 export async function openWorkspaceEntryTab(relativePath: string): Promise<OperationResult<DesktopTabSnapshot>> {
   const rootPath = workspaceRoot();
-  if (!rootPath) return failure('INVALID_ARGUMENT', '请先打开工作区');
+  if (!rootPath) return failure('INVALID_ARGUMENT', tDocument('workspace.openFirst'));
   try {
     const targetPath = await resolveWorkspaceFilePath(relativePath);
     if (isMarkdownPath(targetPath)) {
@@ -275,10 +277,10 @@ export async function openWorkspaceEntryTab(relativePath: string): Promise<Opera
 
 export async function activateTab(tabId: string): Promise<OperationResult<DesktopTabSnapshot>> {
   const tab = tabRegistry.activate(tabId);
-  if (!tab) return failure('NOT_FOUND', '标签页不存在');
+  if (!tab) return failure('NOT_FOUND', tDocument('tabs.notFound'));
   if (tab.kind === 'editor') {
     const session = activateEditorSession(tab.id);
-    if (!session) return failure('NOT_FOUND', 'Markdown 会话不存在');
+    if (!session) return failure('NOT_FOUND', tDocument('session.markdownNotFound'));
   }
   syncTabState();
   if (tab.kind === 'editor') {
@@ -333,13 +335,13 @@ export async function saveAsSession(
   });
   if (chosen.canceled || !chosen.filePath) return success(null);
   if (!isMarkdownPath(chosen.filePath)) {
-    return failure('INVALID_ARGUMENT', '保存目标必须是 Markdown 文件');
+    return failure('INVALID_ARGUMENT', tDocument('save.targetMustBeMarkdown'));
   }
   let targetPath: string;
   try {
     targetPath = path.join(await fs.realpath(path.dirname(chosen.filePath)), path.basename(chosen.filePath));
   } catch (error) {
-    return failure('UNKNOWN', error instanceof Error ? error.message : '无法访问保存目录');
+    return failure('UNKNOWN', error instanceof Error ? error.message : tDocument('save.directoryUnavailable'));
   }
   await stopWatcher(session);
   const outcome = await documentSessions.writeToPath(sessionId, targetPath, content, lineEnding);
@@ -369,14 +371,14 @@ export async function renameSession(sessionId: string, value: unknown): Promise<
   if (!required.ok) return required;
   const session = required.value;
   const fileName = markdownFileName(value, session);
-  if (!fileName) return failure('INVALID_ARGUMENT', '文件名必须是合法的 Markdown 文件名');
+  if (!fileName) return failure('INVALID_ARGUMENT', tDocument('rename.invalidFileName'));
   await stopWatcher(session);
   const oldPath = documentSessions.get(sessionId)?.filePath;
   const outcome = await documentSessions.rename(sessionId, fileName);
   if (outcome.kind !== 'saved') await watchDocumentSession(session);
   const published = await publishSaveOutcome(sessionId, outcome);
   if (!published.ok) return published;
-  if (!published.value) return failure('NOT_FOUND', '当前没有已打开的文件');
+  if (!published.value) return failure('NOT_FOUND', tDocument('rename.noOpenFile'));
   if (oldPath && oldPath !== published.value.filePath) await (await desktopHistory()).local.migrate(oldPath, published.value.filePath);
   return success(published.value);
 }
@@ -391,11 +393,11 @@ export async function confirmCloseSession(session: DocumentSession): Promise<boo
   if (!session.dirty) return true;
   const response = await dialog.showMessageBox(getMainWindow()!, {
     type: 'warning',
-    buttons: ['保存', '不保存', '取消'],
+    buttons: [tDocument('close.save'), tDocument('close.dontSave'), tDocument('close.cancel')],
     defaultId: 0,
     cancelId: 2,
-    message: `${session.fileName} 尚未保存`,
-    detail: '关闭标签前是否保存当前修改？',
+    message: tDocument('close.unsavedMessage', { fileName: session.fileName }),
+    detail: tDocument('close.unsavedDetail'),
   });
   if (response.response === 2) return false;
   if (response.response === 1) {
@@ -418,11 +420,11 @@ export async function confirmCloseAll(): Promise<boolean> {
   if (dirtySessions.length === 0) return true;
   const response = await dialog.showMessageBox(getMainWindow()!, {
     type: 'warning',
-    buttons: ['全部保存', '全部不保存', '取消'],
+    buttons: [tDocument('closeAll.saveAll'), tDocument('closeAll.discardAll'), tDocument('close.cancel')],
     defaultId: 0,
     cancelId: 2,
-    message: `有 ${dirtySessions.length} 个文档尚未保存`,
-    detail: '关闭前是否保存全部修改？',
+    message: tDocument('closeAll.message', { count: dirtySessions.length }),
+    detail: tDocument('closeAll.detail'),
   });
   if (response.response === 2) return false;
   if (response.response === 1) {
@@ -439,7 +441,7 @@ export async function confirmCloseAll(): Promise<boolean> {
     if (!result.ok || !result.value) {
       syncTabState();
       notifyActiveDocument('visible');
-      await showOperationError(result.ok ? failure('CANCELLED', '保存已取消') : result);
+      await showOperationError(result.ok ? failure('CANCELLED', tDocument('save.cancelled')) : result);
       return false;
     }
   }
@@ -478,7 +480,7 @@ export async function releaseEditorTabs(tabIds: readonly string[]): Promise<bool
 
 export async function closeTab(tabId: string): Promise<OperationResult<DesktopTabSnapshot | null>> {
   const tab = tabRegistry.get(tabId);
-  if (!tab) return failure('NOT_FOUND', '标签页不存在');
+  if (!tab) return failure('NOT_FOUND', tDocument('tabs.notFound'));
   if (!(await releaseEditorTabs([tabId]))) return success(null);
   releaseHistoryComparison(tabId);
   tabRegistry.close(tabId);
@@ -499,8 +501,8 @@ export async function closeTabIds(tabIds: string[]): Promise<boolean> {
 
 export async function closeOtherTabs(tabId: string): Promise<OperationResult<DesktopTabSnapshot>> {
   const group = tabRegistry.groupForTab(tabId);
-  if (!group) return failure('NOT_FOUND', '标签页不存在');
-  if (!(await closeTabIds(group.tabs.filter((tab) => tab.id !== tabId).map((tab) => tab.id)))) return failure('CANCELLED', '已取消关闭其他标签');
+  if (!group) return failure('NOT_FOUND', tDocument('tabs.notFound'));
+  if (!(await closeTabIds(group.tabs.filter((tab) => tab.id !== tabId).map((tab) => tab.id)))) return failure('CANCELLED', tDocument('tabs.closeOthersCancelled'));
   tabRegistry.activate(tabId);
   syncTabState();
   const active = tabRegistry.active();
@@ -510,8 +512,8 @@ export async function closeOtherTabs(tabId: string): Promise<OperationResult<Des
 
 export async function closeGroupTabs(tabId: string): Promise<OperationResult<DesktopTabSnapshot>> {
   const group = tabRegistry.groupForTab(tabId);
-  if (!group) return failure('NOT_FOUND', '标签页不存在');
-  if (!(await closeTabIds(group.tabs.map((tab) => tab.id)))) return failure('CANCELLED', '已取消关闭全部标签');
+  if (!group) return failure('NOT_FOUND', tDocument('tabs.notFound'));
+  if (!(await closeTabIds(group.tabs.map((tab) => tab.id)))) return failure('CANCELLED', tDocument('tabs.closeAllCancelled'));
   return success(tabSnapshot());
 }
 
@@ -531,6 +533,7 @@ export async function restoreWorkspace(): Promise<void> {
       rootPath = await workspaceCore.bindRoot(current.rootPath);
       const { startWorkspaceWatcher } = await import('../workspace/workspaceWorkflow');
       startWorkspaceWatcher(rootPath);
+      if (!(await recentFolderStore().paths()).includes(rootPath)) await recentFolderStore().remember(rootPath);
     } catch {
       workspaceCore.clear();
       rootPath = null;
@@ -604,9 +607,9 @@ export async function chooseExportPath(extension: string, label: string): Promis
 export async function showExportCompleted(filePath: string): Promise<void> {
   const result = await dialog.showMessageBox(getMainWindow()!, {
     type: 'info',
-    buttons: ['确定', '在文件夹中显示'],
+    buttons: [tDocument('export.ok'), tDocument('export.showInFolder')],
     defaultId: 0,
-    message: `已导出 ${path.basename(filePath)}`,
+    message: tDocument('export.completed', { fileName: path.basename(filePath) }),
   });
   if (result.response === 1) shell.showItemInFolder(filePath);
 }
@@ -615,7 +618,7 @@ export function requireDocumentPath(): string | null {
   if (activeSession()?.filePath) return activeSession()!.filePath;
   void dialog.showMessageBox(getMainWindow()!, {
     type: 'info',
-    message: '请先保存 Markdown 文档，再添加本地图片。',
+    message: tDocument('image.saveDocumentFirst'),
   });
   return null;
 }
@@ -669,17 +672,17 @@ export async function importDocument(extensions: string[], title: string): Promi
     if (!(error instanceof DocumentConversionError) || error.code !== 'OUTPUT_EXISTS') {
       await dialog.showMessageBox(getMainWindow()!, {
         type: 'error',
-        message: error instanceof Error ? error.message : '文档转换失败',
+        message: error instanceof Error ? error.message : tDocument('import.conversionFailed'),
       });
       return;
     }
     const confirmation = await dialog.showMessageBox(getMainWindow()!, {
       type: 'warning',
-      buttons: ['替换', '取消'],
+      buttons: [tDocument('import.replace'), tDocument('import.cancel')],
       defaultId: 0,
       cancelId: 1,
-      message: '目标 Markdown 已存在',
-      detail: '是否替换现有 Markdown 和对应资源？',
+      message: tDocument('import.targetExists'),
+      detail: tDocument('import.replaceDetail'),
     });
     if (confirmation.response !== 0) return;
     try {
@@ -687,7 +690,7 @@ export async function importDocument(extensions: string[], title: string): Promi
     } catch (retryError) {
       await dialog.showMessageBox(getMainWindow()!, {
         type: 'error',
-        message: retryError instanceof Error ? retryError.message : '文档转换失败',
+        message: retryError instanceof Error ? retryError.message : tDocument('import.conversionFailed'),
       });
       return;
     }

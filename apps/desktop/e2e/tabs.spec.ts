@@ -2,13 +2,15 @@ import { _electron as electron, expect, test, type ElectronApplication, type Pag
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { terminateElectron } from './support/electronApp';
+import { resumeRestoredSession, terminateElectron } from './support/electronApp';
 
 const appDir = process.cwd();
 
 async function launch(userDataDir: string): Promise<{ application: ElectronApplication; page: Page }> {
   const application = await electron.launch({ args: [appDir, `--user-data-dir=${userDataDir}`] });
-  return { application, page: await application.firstWindow() };
+  const page = await application.firstWindow();
+  await resumeRestoredSession(page);
+  return { application, page };
 }
 
 test('keeps Markdown dirty content while preview tabs occupy the central surface and restore after restart', async () => {
@@ -103,8 +105,15 @@ test('keeps Markdown dirty content while preview tabs occupy the central surface
     expect(Math.abs(previewLayout.tabBarTop - previewLayout.aiTop)).toBeLessThanOrEqual(1);
     expect(Math.abs(previewLayout.viewportHeight - previewLayout.aiBottom)).toBeLessThanOrEqual(1);
 
-    await page.locator('#accent-toggle').click();
-    await page.locator('#desktop-accent-panel [data-accent="green"]').click();
+    const clickMenuItem = (id: string) => launched.application.evaluate(({ Menu }, menuId) => {
+      Menu.getApplicationMenu()?.getMenuItemById(menuId)?.click();
+    }, id);
+    const menuItemChecked = (id: string) => launched.application.evaluate(({ Menu }, menuId) =>
+      Menu.getApplicationMenu()?.getMenuItemById(menuId)?.checked ?? false, id);
+    await expect(page.locator('#theme-toggle, #accent-toggle')).toHaveCount(0);
+    const initialMode = await page.evaluate(() => document.documentElement.dataset.easyviewTheme ?? '');
+    await expect.poll(() => menuItemChecked(`appearance-mode-${initialMode}`)).toBe(true);
+    await clickMenuItem('appearance-accent-green');
     await expect.poll(() => page.evaluate(() => document.body.dataset.mdpreAccent)).toBe('green');
     const accentColors = await page.evaluate(() => {
       const probe = document.createElement('span');
@@ -120,7 +129,8 @@ test('keeps Markdown dirty content while preview tabs occupy the central surface
     expect(accentColors.previewColor).toBe(accentColors.accentColor);
 
     const backgroundBefore = await page.locator('#file-preview-root').evaluate((element) => getComputedStyle(element).backgroundColor);
-    await page.locator('#theme-toggle').click();
+    const currentMode = await page.evaluate(() => document.documentElement.dataset.easyviewTheme ?? '');
+    await clickMenuItem(currentMode === 'dark' ? 'appearance-mode-light' : 'appearance-mode-dark');
     await expect.poll(() => page.locator('#file-preview-root').evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe(backgroundBefore);
     const themedColors = await page.evaluate(() => {
       const probe = document.createElement('span');

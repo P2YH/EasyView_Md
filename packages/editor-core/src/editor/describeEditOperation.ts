@@ -1,5 +1,6 @@
 import type { Transaction } from 'prosemirror-state';
 import { ReplaceStep } from 'prosemirror-transform';
+import { tEditOperation } from './editOperation.i18n';
 
 function summarizeText(text: string, max = 36): string {
   const normalized = text.replace(/\s+/g, ' ').trim();
@@ -9,7 +10,7 @@ function summarizeText(text: string, max = 36): string {
 }
 
 export function describeProseMirrorTransaction(tr: Transaction): string {
-  if (!tr.docChanged) return '调整选区';
+  if (!tr.docChanged) return tEditOperation('selection');
 
   if (tr.getMeta('addToHistory') === false) return '';
 
@@ -31,11 +32,11 @@ export function describeProseMirrorTransaction(tr: Transaction): string {
   }
 
   const snippet = summarizeText(inserted);
-  if (snippet && deletedChars > 0) return `替换为「${snippet}」`;
-  if (snippet) return `输入「${snippet}」`;
-  if (deletedChars > 0) return '删除内容';
-  if (structural) return '调整结构';
-  return '编辑文档';
+  if (snippet && deletedChars > 0) return tEditOperation('replace', { text: snippet });
+  if (snippet) return tEditOperation('insert', { text: snippet });
+  if (deletedChars > 0) return tEditOperation('deleteContent');
+  if (structural) return tEditOperation('structure');
+  return tEditOperation('editDocument');
 }
 
 export function describeSourceDocChange(before: string, after: string): string {
@@ -48,11 +49,11 @@ export function describeSourceDocChange(before: string, after: string): string {
   const removedSnippet = summarizeText(removed.replace(/\n/g, ' ↵ '));
 
   if (addedSnippet && removedSnippet) {
-    return `替换为「${addedSnippet}」`;
+    return tEditOperation('replace', { text: addedSnippet });
   }
-  if (addedSnippet) return `输入「${addedSnippet}」`;
-  if (removedSnippet) return `删除「${removedSnippet}」`;
-  return '编辑源码';
+  if (addedSnippet) return tEditOperation('insert', { text: addedSnippet });
+  if (removedSnippet) return tEditOperation('delete', { text: removedSnippet });
+  return tEditOperation('editSource');
 }
 
 function sharedPrefixLength(a: string, b: string): number {

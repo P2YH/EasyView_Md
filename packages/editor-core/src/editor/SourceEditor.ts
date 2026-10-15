@@ -11,6 +11,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { syntaxHighlighting, HighlightStyle, bracketMatching } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
 import { closeBrackets } from '@codemirror/autocomplete';
+import { findHorizontalRuleLines } from '@easyview/markdown-core/horizontal-rule';
 
 const vscodeTheme = EditorView.theme({
   '&': {
@@ -220,6 +221,19 @@ const deco = {
   htmlBracket: Decoration.mark({ attributes: { style: 'color: #abb2bf;' } }),        // < > / — grey
 };
 
+const HORIZONTAL_RULE_COLOR = 'var(--vscode-textSeparator-foreground, rgba(128, 128, 128, 0.45))';
+
+/** `---` lines render as a full-width rule; the active line keeps its markers visible for editing. */
+const horizontalRuleTheme = EditorView.theme({
+  '.cm-line.cm-hr-line': {
+    backgroundImage: `linear-gradient(to bottom, transparent calc(50% - 1px), ${HORIZONTAL_RULE_COLOR} calc(50% - 1px), ${HORIZONTAL_RULE_COLOR} calc(50% + 1px), transparent calc(50% + 1px))`,
+    backgroundRepeat: 'no-repeat',
+  },
+  '.cm-line.cm-hr-line:not(.cm-activeLine), .cm-line.cm-hr-line:not(.cm-activeLine) *': {
+    color: 'transparent !important',
+  },
+});
+
 function buildMarkdownDecorations(view: EditorView, visualMode: SourceEditorOptions['visualMode'] = 'default'): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>();
   const doc = view.state.doc;
@@ -244,9 +258,15 @@ function buildMarkdownDecorations(view: EditorView, visualMode: SourceEditorOpti
   let activeCalloutColor: string | null = null;
   let calloutEnd = 0;
 
+  const horizontalRuleLines = new Set(findHorizontalRuleLines(doc.toString().split('\n')).map((index) => index + 1));
+
   for (let i = 1; i <= doc.lines; i++) {
     const line = doc.line(i);
     const text = line.text;
+
+    if (horizontalRuleLines.has(i)) {
+      builder.add(line.from, line.from, Decoration.line({ class: 'cm-hr-line' }));
+    }
 
     // Collect all mark decorations for this line, sort before adding to builder
     const marks: Array<{from: number; to: number; deco: Decoration}> = [];
@@ -872,6 +892,7 @@ export function createSourceEditor(options: SourceEditorOptions) {
           },
         }),
         visualTheme,
+        horizontalRuleTheme,
         markdownDecoPlugin,
         ghostSuggestionField,
         sourceSearchField,

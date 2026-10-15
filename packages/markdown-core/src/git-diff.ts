@@ -13,6 +13,9 @@ export interface GitDiffRange {
   kind: 'added' | 'modified';
 }
 
+/** Stable message of the budget-exceeded error, so UI callers can show their own localized text. */
+export const GIT_DIFF_TOO_COMPLEX_MESSAGE = 'Version diff is too complex; computation stopped to keep the app responsive';
+
 function lines(value: string): string[] {
   if (!value) return [];
   const parts = value.split('\n');
@@ -34,7 +37,7 @@ function joinContent(rows: string[], endsWithNewline: boolean): string {
 export function computeGitDiff(baseContent: string, currentContent: string, budget?: { timeout: number; maxEditLength: number }): { hunks: GitDiffHunk[]; lineRanges: GitDiffRange[] } {
   const hunks: GitDiffHunk[] = [];
   const parts = diffLines(baseContent.replace(/\r\n/g, '\n'), currentContent.replace(/\r\n/g, '\n'), budget);
-  if (!parts) throw new Error('版本差异过于复杂，已停止计算以保护应用响应');
+  if (!parts) throw new Error(GIT_DIFF_TOO_COMPLEX_MESSAGE);
   let oldLine = 1;
   let newLine = 1;
   for (let i = 0; i < parts.length;) {

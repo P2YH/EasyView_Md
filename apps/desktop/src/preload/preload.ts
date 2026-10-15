@@ -1,9 +1,10 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webFrame } from 'electron';
 import type {
   EditorHostSubscription,
   HostToEditorMessage,
   OperationResult,
   EditorToHostMessage,
+  WorkspaceSearchResult,
 } from '@easyview/contracts';
 import type {
   DesktopMenuCommand,
@@ -20,11 +21,15 @@ import type {
   WorkspaceContextCommand,
   DesktopTabContextCommand,
   DesktopWorkspaceState,
+  RecentFolder,
   WorkspaceEntry,
   WorkspaceTreeSortMode,
   HttpPreviewRequest,
 } from '../contracts';
 import type { EasyViewDesktopApi } from './desktopApi';
+import { DEFAULT_LOCALE, normalizeLocale, setLocale, type Locale } from '@easyview/contracts/i18n';
+import { DESKTOP_LOCALE_ARGUMENT_PREFIX } from '../contracts/desktop';
+import { tPreload } from './preload.i18n';
 
 function assertString(value: unknown, name: string): asserts value is string {
   if (typeof value !== 'string' || value.length === 0) {
@@ -33,8 +38,13 @@ function assertString(value: unknown, name: string): asserts value is string {
 }
 
 function assertRelativePath(value: unknown): asserts value is string {
-  if (typeof value !== 'string' || value.includes('\0')) throw new TypeError('relativePath 无效');
+  if (typeof value !== 'string' || value.includes('\0')) throw new TypeError(tPreload('invalidArgument', { name: 'relativePath' }));
 }
+
+const locale: Locale = normalizeLocale(
+  process.argv.find((argument) => argument.startsWith(DESKTOP_LOCALE_ARGUMENT_PREFIX))?.slice(DESKTOP_LOCALE_ARGUMENT_PREFIX.length),
+) ?? DEFAULT_LOCALE;
+setLocale(locale);
 
 function subscription(unsubscribe: () => void): EditorHostSubscription {
   return { unsubscribe };
@@ -93,6 +103,8 @@ const api: EasyViewDesktopApi = {
   app: {
     getTheme: () => ipcRenderer.invoke('app.getTheme') as Promise<OperationResult<DesktopThemeMode>>,
     newWindow: () => ipcRenderer.invoke('app.newWindow') as Promise<OperationResult<boolean>>,
+    getZoomFactor: () => webFrame.getZoomFactor(),
+    locale,
     onThemeChanged: (listener) => {
       const handler = (_event: Electron.IpcRendererEvent, theme: DesktopThemeMode) => listener(theme);
       ipcRenderer.on('app.themeChanged', handler);
@@ -101,42 +113,60 @@ const api: EasyViewDesktopApi = {
   },
   workspace: {
     openFolder: () => ipcRenderer.invoke('workspace.openFolder'),
+    openRecentFolder: (folderPath: string) => {
+      assertString(folderPath, 'folderPath');
+      return ipcRenderer.invoke('workspace.openRecentFolder', folderPath);
+    },
+    getRecentFolders: () => ipcRenderer.invoke('workspace.getRecentFolders') as Promise<OperationResult<RecentFolder[]>>,
+    removeRecentFolder: (folderPath: string) => {
+      assertString(folderPath, 'folderPath');
+      return ipcRenderer.invoke('workspace.removeRecentFolder', folderPath) as Promise<OperationResult<boolean>>;
+    },
+    onRootChanged: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, state: DesktopWorkspaceState) => listener(state);
+      ipcRenderer.on('workspace.rootChanged', handler);
+      return subscription(() => ipcRenderer.removeListener('workspace.rootChanged', handler));
+    },
     getState: () => ipcRenderer.invoke('workspace.getState'),
     setState: (state: DesktopWorkspaceState) => ipcRenderer.invoke('workspace.setState', state),
     readDirectory: (relativePath: string) => {
       assertRelativePath(relativePath);
       return ipcRenderer.invoke('workspace.readDirectory', relativePath) as Promise<OperationResult<WorkspaceEntry[]>>;
     },
+    search: (query: string) => {
+      if (typeof query !== 'string') throw new TypeError(tPreload('invalidArgument', { name: 'query' }));
+      return ipcRenderer.invoke('workspace.search', query) as Promise<OperationResult<WorkspaceSearchResult>>;
+    },
     getSortMode: () => ipcRenderer.invoke('workspace.getSortMode') as Promise<OperationResult<WorkspaceTreeSortMode>>,
     setSortMode: (sortMode: WorkspaceTreeSortMode) => {
       if (sortMode !== 'name' && sortMode !== 'created' && sortMode !== 'custom') {
-        throw new TypeError('排序方式无效');
+        throw new TypeError(tPreload('invalidSortMode'));
       }
       return ipcRenderer.invoke('workspace.setSortMode', sortMode) as Promise<OperationResult<WorkspaceTreeSortMode>>;
     },
     getShowCreatedAt: () => ipcRenderer.invoke('workspace.getShowCreatedAt') as Promise<OperationResult<boolean>>,
     setShowCreatedAt: (showCreatedAt: boolean) => {
-      if (typeof showCreatedAt !== 'boolean') throw new TypeError('showCreatedAt 无效');
+      if (typeof showCreatedAt !== 'boolean') throw new TypeError(tPreload('invalidArgument', { name: 'showCreatedAt' }));
       return ipcRenderer.invoke('workspace.setShowCreatedAt', showCreatedAt) as Promise<OperationResult<boolean>>;
     },
     getShowUpdatedAt: () => ipcRenderer.invoke('workspace.getShowUpdatedAt') as Promise<OperationResult<boolean>>,
     setShowUpdatedAt: (showUpdatedAt: boolean) => {
-      if (typeof showUpdatedAt !== 'boolean') throw new TypeError('showUpdatedAt 无效');
+      if (typeof showUpdatedAt !== 'boolean') throw new TypeError(tPreload('invalidArgument', { name: 'showUpdatedAt' }));
       return ipcRenderer.invoke('workspace.setShowUpdatedAt', showUpdatedAt) as Promise<OperationResult<boolean>>;
     },
     getShowDotEntries: () => ipcRenderer.invoke('workspace.getShowDotEntries') as Promise<OperationResult<boolean>>,
     setShowDotEntries: (showDotEntries: boolean) => {
-      if (typeof showDotEntries !== 'boolean') throw new TypeError('showDotEntries 无效');
+      if (typeof showDotEntries !== 'boolean') throw new TypeError(tPreload('invalidArgument', { name: 'showDotEntries' }));
       return ipcRenderer.invoke('workspace.setShowDotEntries', showDotEntries) as Promise<OperationResult<boolean>>;
     },
     getShowTimestampHover: () => ipcRenderer.invoke('workspace.getShowTimestampHover') as Promise<OperationResult<boolean>>,
     setShowTimestampHover: (showTimestampHover: boolean) => {
-      if (typeof showTimestampHover !== 'boolean') throw new TypeError('showTimestampHover 无效');
+      if (typeof showTimestampHover !== 'boolean') throw new TypeError(tPreload('invalidArgument', { name: 'showTimestampHover' }));
       return ipcRenderer.invoke('workspace.setShowTimestampHover', showTimestampHover) as Promise<OperationResult<boolean>>;
     },
     create: (request: WorkspaceCreateRequest) => {
       assertRelativePath(request?.parentRelativePath);
-      if (!request || (request.kind !== 'file' && request.kind !== 'directory')) throw new TypeError('新建节点参数无效');
+      if (!request || (request.kind !== 'file' && request.kind !== 'directory')) throw new TypeError(tPreload('invalidCreate'));
       assertString(request.name, 'name');
       return ipcRenderer.invoke('workspace.create', request) as Promise<OperationResult<WorkspaceEntry>>;
     },
@@ -153,7 +183,7 @@ const api: EasyViewDesktopApi = {
     reorder: (request: WorkspaceReorderRequest) => {
       assertRelativePath(request?.parentRelativePath);
       assertString(request?.movedName, 'movedName');
-      if (!Array.isArray(request?.siblingNames)) throw new TypeError('siblingNames 无效');
+      if (!Array.isArray(request?.siblingNames)) throw new TypeError(tPreload('invalidArgument', { name: 'siblingNames' }));
       return ipcRenderer.invoke('workspace.reorder', request) as Promise<OperationResult<boolean>>;
     },
     delete: (request: WorkspaceDeleteRequest) => {
@@ -178,7 +208,7 @@ const api: EasyViewDesktopApi = {
     },
     showContextMenu: (relativePath: string, kind: WorkspaceEntry['kind']) => {
       assertRelativePath(relativePath);
-      if (kind !== 'file' && kind !== 'directory' && kind !== 'symlink') throw new TypeError('节点类型无效');
+      if (kind !== 'file' && kind !== 'directory' && kind !== 'symlink') throw new TypeError(tPreload('invalidKind'));
       return ipcRenderer.invoke('workspace.showContextMenu', { relativePath, kind });
     },
     openEntry: (relativePath: string) => {
@@ -260,7 +290,7 @@ const api: EasyViewDesktopApi = {
       });
     },
     sendHttp: (request: HttpPreviewRequest) => {
-      if (!request || typeof request.url !== 'string') throw new TypeError('HTTP 请求无效');
+      if (!request || typeof request.url !== 'string') throw new TypeError(tPreload('invalidHttpRequest'));
       return ipcRenderer.invoke('preview.http.send', request);
     },
     decompileJava: (sessionId: string) => {

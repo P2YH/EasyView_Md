@@ -3,6 +3,7 @@
  */
 
 import type { NodeSpec } from 'prosemirror-model';
+import { tSchema } from './schema.i18n';
 
 const doc: NodeSpec = {
   content: 'frontmatter? block+',
@@ -287,7 +288,7 @@ const table_of_contents: NodeSpec = {
   draggable: true,
   parseDOM: [{ tag: 'div.toc-block' }],
   toDOM() {
-    return ['div', { class: 'toc-block', contenteditable: 'false' }, 'Table of Contents'];
+    return ['div', { class: 'toc-block', contenteditable: 'false' }, tSchema('tableOfContents')];
   },
 };
 

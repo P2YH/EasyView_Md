@@ -23,6 +23,8 @@ import {
   type WorkspaceExplorerSortConfig,
 } from './webview/workspace-explorer-messages';
 import { openMarkdownInEasyViewEditor } from '../application/document/openMarkdownEditor';
+import { getLocale } from '@easyview/contracts/i18n';
+import { tWorkspace } from './workspace.i18n';
 
 const VIEW_ID = 'easyviewMd.workspaceFiles';
 const VIEW_CONTAINER_COMMAND = 'workbench.view.extension.easyviewMd-workspacePanel';
@@ -67,21 +69,28 @@ export function registerWorkspaceExplorer(context: vscode.ExtensionContext): vsc
     }),
     vscode.commands.registerCommand('easyviewMd.workspace.configureSort', () => {
       if (!provider.getRootUri()) {
-        void vscode.window.showInformationMessage('Open a folder or workspace to configure sorting.');
+        void vscode.window.showInformationMessage(tWorkspace('noRoot.sort'));
         return;
       }
       provider.postContextCommand('toggleSortMenu');
     }),
+    vscode.commands.registerCommand('easyviewMd.workspace.search', () => {
+      if (!provider.getRootUri()) {
+        void vscode.window.showInformationMessage(tWorkspace('noRoot.search'));
+        return;
+      }
+      provider.postContextCommand('toggleSearch');
+    }),
     vscode.commands.registerCommand('easyviewMd.workspace.newFile', () => {
       if (!provider.getRootUri()) {
-        void vscode.window.showInformationMessage('Open a folder or workspace to create files.');
+        void vscode.window.showInformationMessage(tWorkspace('noRoot.createFile'));
         return;
       }
       provider.postContextCommand('beginCreateFile');
     }),
     vscode.commands.registerCommand('easyviewMd.workspace.newFolder', () => {
       if (!provider.getRootUri()) {
-        void vscode.window.showInformationMessage('Open a folder or workspace to create folders.');
+        void vscode.window.showInformationMessage(tWorkspace('noRoot.createFolder'));
         return;
       }
       provider.postContextCommand('beginCreateFolder');
@@ -107,7 +116,7 @@ export function registerWorkspaceExplorer(context: vscode.ExtensionContext): vsc
       try {
         const opened = await vscode.env.openExternal(uri);
         if (!opened) {
-          throw new Error(`Unable to open ${workspaceBasename(uri)} with the default application.`);
+          throw new Error(tWorkspace('openExternal.failed', { name: workspaceBasename(uri) }));
         }
       } catch (error) {
         void vscode.window.showErrorMessage(errorMessage(error));
@@ -212,7 +221,7 @@ class WorkspaceExplorerViewProvider implements vscode.WebviewViewProvider, vscod
     this.view = webviewView;
     this.viewReady = false;
     this.readyAttempts = 0;
-    webviewView.title = this.rootFolder?.name || 'Files';
+    webviewView.title = this.rootFolder?.name || tWorkspace('viewTitle');
 
     const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
     webviewView.webview.options = {
@@ -251,7 +260,7 @@ class WorkspaceExplorerViewProvider implements vscode.WebviewViewProvider, vscod
       this.readyTimer = undefined;
       if (this.view !== view || this.viewReady) return;
       if (this.readyAttempts >= WEBVIEW_READY_RETRIES) {
-        void vscode.window.showErrorMessage('EasyView_Md Files could not load its view. Reload the window to retry.');
+        void vscode.window.showErrorMessage(tWorkspace('view.loadFailed'));
         return;
       }
       this.readyAttempts += 1;
@@ -308,13 +317,14 @@ class WorkspaceExplorerViewProvider implements vscode.WebviewViewProvider, vscod
 
     const label = paths.length === 1
       ? `“${path.posix.basename(paths[0])}”`
-      : `${paths.length} selected items`;
+      : tWorkspace('delete.selectedItems', { count: paths.length });
+    const moveToTrashAction = tWorkspace('delete.moveToTrash');
     const confirmation = await vscode.window.showWarningMessage(
-      `Delete ${label}? Items will be moved to the Trash when available.`,
+      tWorkspace('delete.confirm', { label }),
       { modal: true },
-      'Move to Trash',
+      moveToTrashAction,
     );
-    if (confirmation !== 'Move to Trash') return;
+    if (confirmation !== moveToTrashAction) return;
 
     for (const relativePath of paths) {
       await this.treeService.delete(root, relativePath);
@@ -376,7 +386,7 @@ class WorkspaceExplorerViewProvider implements vscode.WebviewViewProvider, vscod
     const active = resolveActiveResourceUri();
     if (active) candidates.push(active);
     if (candidates.length === 0) {
-      void vscode.window.showInformationMessage('No file to reveal in IndexArea.');
+      void vscode.window.showInformationMessage(tWorkspace('reveal.noFile'));
       return;
     }
     this.updateRoot({ bootstrap: false });
@@ -394,7 +404,7 @@ class WorkspaceExplorerViewProvider implements vscode.WebviewViewProvider, vscod
       }
     }
     if (!relativePath) {
-      void vscode.window.showInformationMessage(`${workspaceBasename(candidates[0]!)} is not in IndexArea.`);
+      void vscode.window.showInformationMessage(tWorkspace('reveal.notInIndexArea', { name: workspaceBasename(candidates[0]!) }));
       return;
     }
     await vscode.commands.executeCommand(`${VIEW_ID}.focus`);
@@ -450,7 +460,7 @@ class WorkspaceExplorerViewProvider implements vscode.WebviewViewProvider, vscod
     this.rootFolder = nextRoot;
 
     if (this.view) {
-      this.view.title = nextRoot?.name || 'Files';
+      this.view.title = nextRoot?.name || tWorkspace('viewTitle');
     }
 
     if (changed) {
@@ -576,7 +586,7 @@ class WorkspaceExplorerViewProvider implements vscode.WebviewViewProvider, vscod
         // Focus the native application before transferring focus to its webview.
         if (process.platform === 'darwin') {
           const bundleEnd = process.execPath.indexOf('.app/');
-          if (bundleEnd < 0) throw new Error('Cannot locate the editor application bundle.');
+          if (bundleEnd < 0) throw new Error(tWorkspace('focus.bundleNotFound'));
           const application = process.execPath.slice(0, bundleEnd + 4);
           await promisify(execFile)('/usr/bin/osascript', [
             '-e', `tell application ${JSON.stringify(application)} to activate`,
@@ -589,6 +599,9 @@ class WorkspaceExplorerViewProvider implements vscode.WebviewViewProvider, vscod
       }
       case 'listChildren':
         await this.handleListChildren(message.requestId, message.relativePath);
+        return;
+      case 'search':
+        await this.handleSearch(message.requestId, message.query);
         return;
       case 'setExpanded':
         if (message.expanded) this.expandedRelativePaths.add(message.relativePath);
@@ -729,7 +742,7 @@ class WorkspaceExplorerViewProvider implements vscode.WebviewViewProvider, vscod
         requestId,
         ok: false,
         relativePath,
-        message: 'No active workspace root.',
+        message: tWorkspace('noRoot.active'),
       });
       return;
     }
@@ -757,9 +770,30 @@ class WorkspaceExplorerViewProvider implements vscode.WebviewViewProvider, vscod
     }
   }
 
+  private async handleSearch(requestId: string, query: string): Promise<void> {
+    const root = this.rootFolder?.uri;
+    if (!root || typeof query !== 'string' || query.length > 200) {
+      this.postEvent({ type: 'searchResult', requestId, ok: false, message: tWorkspace('search.invalid') });
+      return;
+    }
+    try {
+      const result = await this.treeService.search(root, query);
+      for (const entry of result.entries) this.entryKindByPath.set(entry.relativePath, entry.kind);
+      this.postEvent({
+        type: 'searchResult',
+        requestId,
+        ok: true,
+        entries: result.entries.map(toExplorerEntry),
+        truncated: result.truncated,
+      });
+    } catch (error) {
+      this.postEvent({ type: 'searchResult', requestId, ok: false, message: errorMessage(error) });
+    }
+  }
+
   private requireRoot(): vscode.Uri {
     const root = this.rootFolder?.uri;
-    if (!root) throw new Error('No active workspace root.');
+    if (!root) throw new Error(tWorkspace('noRoot.active'));
     return root;
   }
 
@@ -777,7 +811,7 @@ class WorkspaceExplorerViewProvider implements vscode.WebviewViewProvider, vscod
     if (uri.scheme !== 'file') return;
     const opened = await vscode.env.openExternal(uri);
     if (!opened) {
-      throw new Error(`Unable to open ${workspaceBasename(uri)} with the default application.`);
+      throw new Error(tWorkspace('openExternal.failed', { name: workspaceBasename(uri) }));
     }
   }
 
@@ -785,12 +819,12 @@ class WorkspaceExplorerViewProvider implements vscode.WebviewViewProvider, vscod
     const root = this.requireRoot();
     const uri = uriFromRelativePath(root, relativePath);
     if (uri.scheme !== 'file' || workspaceRelativePath(root, uri) !== relativePath) {
-      throw new Error('Only local PDF and Word files inside the workspace can be converted.');
+      throw new Error(tWorkspace('convert.workspaceOnly'));
     }
     const extension = path.extname(uri.fsPath).toLowerCase();
     const command = extension === '.pdf' ? 'easyviewMd.convertPdfToMarkdown'
       : extension === '.docx' || extension === '.doc' ? 'easyviewMd.convertWordToMarkdown' : null;
-    if (!command) throw new Error('Select a PDF, DOCX or DOC file.');
+    if (!command) throw new Error(tWorkspace('convert.selectFile'));
     await vscode.commands.executeCommand(command, uri);
   }
 
@@ -945,10 +979,10 @@ class WorkspaceExplorerViewProvider implements vscode.WebviewViewProvider, vscod
     const root = this.requireRoot();
     try {
       if (!this.entryClipboard) {
-        throw new Error('Clipboard is empty.');
+        throw new Error(tWorkspace('paste.clipboardEmpty'));
       }
       if (this.entryClipboard.rootUri !== root.toString(true)) {
-        throw new Error('Clipboard entry belongs to another workspace root.');
+        throw new Error(tWorkspace('paste.otherRoot'));
       }
       let lastEntry: VscodeWorkspaceEntry | undefined;
       for (const sourceRelativePath of this.entryClipboard.relativePaths) {
@@ -997,7 +1031,7 @@ class WorkspaceExplorerViewProvider implements vscode.WebviewViewProvider, vscod
         }));
         lastEntry = await this.treeService.importExternalItems(root, message.targetParentRelativePath, items);
       }
-      if (!lastEntry) throw new Error('No files were dropped.');
+      if (!lastEntry) throw new Error(tWorkspace('import.noFiles'));
       this.postEvent({
         type: 'opResult',
         requestId: message.requestId,
@@ -1089,7 +1123,7 @@ function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.Uri): s
     vscode.Uri.joinPath(extensionUri, 'dist', 'workspace-webview.js'),
   );
   return /* html */ `<!DOCTYPE html>
-<html lang="en">
+<html lang="${getLocale()}">
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy"
@@ -1100,7 +1134,7 @@ function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.Uri): s
       font-src ${webview.cspSource};
       connect-src ${webview.cspSource};">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Files</title>
+  <title>${tWorkspace('viewTitle')}</title>
 </head>
 <body>
   <div id="workspace-explorer-root"></div>

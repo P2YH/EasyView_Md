@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { isMarkdownDocument, parseMarkdownDocument } from './markdownModel';
+import { tNative } from './nativeEditor.i18n';
 
 export class NativeMarkdownCodeLensProvider implements vscode.CodeLensProvider {
   public static register(context: vscode.ExtensionContext): vscode.Disposable {
@@ -21,12 +22,12 @@ export class NativeMarkdownCodeLensProvider implements vscode.CodeLensProvider {
     for (const heading of info.headings) {
       const range = new vscode.Range(heading.line, 0, heading.line, 0);
       lenses.push(new vscode.CodeLens(range, {
-        title: 'Copy anchor',
+        title: tNative('codeLens.copyAnchor'),
         command: 'easyviewMd.copyHeadingAnchor',
         arguments: [document.uri, heading.line],
       }));
       lenses.push(new vscode.CodeLens(range, {
-        title: 'Insert link',
+        title: tNative('codeLens.insertLink'),
         command: 'easyviewMd.insertHeadingLink',
         arguments: [document.uri, heading.line],
       }));
@@ -34,7 +35,7 @@ export class NativeMarkdownCodeLensProvider implements vscode.CodeLensProvider {
 
     if (info.headings.length > 0) {
       lenses.unshift(new vscode.CodeLens(new vscode.Range(0, 0, 0, 0), {
-        title: 'Insert TOC',
+        title: tNative('codeLens.insertToc'),
         command: 'easyviewMd.insertToc',
         arguments: [document.uri],
       }));

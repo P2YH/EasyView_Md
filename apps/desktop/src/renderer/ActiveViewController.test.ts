@@ -93,6 +93,23 @@ describe('ActiveViewController split panes', () => {
     expect(activate).toHaveBeenCalledWith('a');
   });
 
+  it('keeps pane nodes (and editor focus) in place when only tab state changes', async () => {
+    const { controller, splitRoot } = createController();
+    await controller.showSnapshot(snapshot());
+    const editable = document.createElement('div');
+    editable.tabIndex = 0;
+    controller.editorMounts().get('group-b')?.append(editable);
+    editable.focus();
+    const split = splitRoot.firstElementChild;
+    const dirty = snapshot();
+    Object.assign(dirty.groups[1].tabs[0], { dirty: true });
+    await controller.showSnapshot(dirty);
+    expect(splitRoot.firstElementChild).toBe(split);
+    expect(document.activeElement).toBe(editable);
+    await controller.showSnapshot(snapshot({ layout: { ...snapshot().layout, orientation: 'vertical' } as DesktopTabSnapshot['layout'] }));
+    expect(splitRoot.querySelector('.desktop-split')?.getAttribute('data-orientation')).toBe('vertical');
+  });
+
   it('releases a historical view when its adopted pane is reassigned to another group', async () => {
     const { controller } = createController();
     await controller.showSnapshot(snapshot());

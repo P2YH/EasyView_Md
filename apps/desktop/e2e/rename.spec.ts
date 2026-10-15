@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { EasyViewDesktopApi } from '../src/preload/desktopApi';
-import { terminateElectron } from './support/electronApp';
+import { resumeRestoredSession, terminateElectron } from './support/electronApp';
 
 test('renames the original document through document and workspace commands while saves follow the new path', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'easyview-desktop-rename-'));
@@ -31,6 +31,7 @@ test('renames the original document through document and workspace commands whil
   });
   try {
     const page = await application.firstWindow();
+    await resumeRestoredSession(page);
     const errors: string[] = [];
     page.on('dialog', (dialog) => { errors.push(dialog.message()); void dialog.dismiss(); });
     await expect(page.locator('.ProseMirror')).toContainText('Original.');

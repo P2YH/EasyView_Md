@@ -8,6 +8,7 @@ import { Plugin, PluginKey, TextSelection } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { isCode, isPlantUml } from '../../../editor/lib/CodeDetection';
 import { findBlockNodes, type NodeWithPos, findParentNode } from '../../../editor/lib/NodeFinder';
+import { tBlocks } from '../blocks.i18n';
 
 export const pluginKey = new PluginKey('plantuml');
 
@@ -87,7 +88,7 @@ class PlantUmlRenderer {
     const zoomIn = document.createElement('button');
     zoomIn.className = 'mermaid-zoom-btn';
     zoomIn.textContent = '+';
-    zoomIn.title = 'Zoom in';
+    zoomIn.title = tBlocks('zoom.in');
     zoomIn.addEventListener('click', (event) => {
       event.stopPropagation();
       this.scale = Math.min(this.scale * 1.25, 5);
@@ -97,7 +98,7 @@ class PlantUmlRenderer {
     const zoomOut = document.createElement('button');
     zoomOut.className = 'mermaid-zoom-btn';
     zoomOut.textContent = '−';
-    zoomOut.title = 'Zoom out';
+    zoomOut.title = tBlocks('zoom.out');
     zoomOut.addEventListener('click', (event) => {
       event.stopPropagation();
       this.scale = Math.max(this.scale / 1.25, 0.2);
@@ -107,7 +108,7 @@ class PlantUmlRenderer {
     const zoomReset = document.createElement('button');
     zoomReset.className = 'mermaid-zoom-btn';
     zoomReset.textContent = '1:1';
-    zoomReset.title = 'Reset zoom';
+    zoomReset.title = tBlocks('zoom.reset');
     zoomReset.addEventListener('click', (event) => {
       event.stopPropagation();
       this.resetZoomPan();
@@ -172,7 +173,7 @@ class PlantUmlRenderer {
     if (!rawSource.trim()) {
       this.element.classList.add('empty');
       this.element.classList.remove('parse-error');
-      this.element.textContent = 'Empty PlantUML diagram';
+      this.element.textContent = tBlocks('plantuml.empty');
       return;
     }
 
@@ -187,14 +188,14 @@ class PlantUmlRenderer {
 
     const image = document.createElement('img');
     image.src = url;
-    image.alt = 'PlantUML diagram';
+    image.alt = tBlocks('plantuml.diagram');
     image.decoding = 'async';
     image.loading = 'lazy';
     image.draggable = false;
     image.className = 'plantuml-diagram-image';
     image.addEventListener('error', () => {
       this.element.classList.add('parse-error');
-      this.element.textContent = 'Failed to render PlantUML diagram';
+      this.element.textContent = tBlocks('plantuml.failed');
     }, { once: true });
 
     this.element.appendChild(image);

@@ -4,12 +4,13 @@
 
 import { EditorView } from 'prosemirror-view';
 import { isHtmlTagActive, toggleHtmlTag } from '../../../editor/EditorCommands';
+import { tToolbar } from './toolbar.i18n';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface HtmlTagDef {
   tag: string;
-  title: string;
+  title: Parameters<typeof tToolbar>[0];
   icon: string;
 }
 
@@ -18,32 +19,32 @@ interface HtmlTagDef {
 const htmlTags: HtmlTagDef[] = [
   {
     tag: 'kbd',
-    title: 'Keyboard Key',
+    title: 'htmlTag.kbd',
     icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h2M11 10h2M15 10h2M8 14h8"/></svg>',
   },
   {
     tag: 'sub',
-    title: 'Subscript',
+    title: 'htmlTag.sub',
     icon: '<span style="font-size:13px">X<span style="font-size:9px;vertical-align:sub">2</span></span>',
   },
   {
     tag: 'sup',
-    title: 'Superscript',
+    title: 'htmlTag.sup',
     icon: '<span style="font-size:13px">X<span style="font-size:9px;vertical-align:super">2</span></span>',
   },
   {
     tag: 'var',
-    title: 'Variable',
+    title: 'htmlTag.var',
     icon: '<span style="font-size:14px;font-style:italic;font-family:Georgia,Times,serif">x</span>',
   },
   {
     tag: 'small',
-    title: 'Small Text',
+    title: 'htmlTag.small',
     icon: '<span style="font-size:14px;line-height:1">A<span style="font-size:9px">a</span></span>',
   },
   {
     tag: 'samp',
-    title: 'Sample Output',
+    title: 'htmlTag.samp',
     icon: '<span style="font-size:11px;font-family:var(--vscode-editor-font-family,monospace)">$_</span>',
   },
 ];
@@ -64,7 +65,6 @@ export class HtmlTagDropdown {
       const btn = document.createElement('button');
       btn.className = 'html-tag-btn';
       btn.innerHTML = def.icon;
-      btn.title = `${def.title} <${def.tag}>`;
       btn.dataset.tag = def.tag;
       btn.addEventListener('mousedown', (e) => {
         e.preventDefault();
@@ -93,6 +93,7 @@ export class HtmlTagDropdown {
     this.view = view;
     this.el.classList.add('visible');
     this.isVisible = true;
+    this.updateTitles();
     this.updateActiveStates();
     requestAnimationFrame(() => this.updatePosition());
 
@@ -121,6 +122,13 @@ export class HtmlTagDropdown {
   }
 
   get visible() { return this.isVisible; }
+
+  private updateTitles() {
+    for (const def of htmlTags) {
+      const btn = this.el.querySelector<HTMLElement>(`.html-tag-btn[data-tag="${def.tag}"]`);
+      if (btn) btn.title = `${tToolbar(def.title)} <${def.tag}>`;
+    }
+  }
 
   private updateActiveStates() {
     if (!this.view) return;

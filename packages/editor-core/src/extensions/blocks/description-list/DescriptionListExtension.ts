@@ -14,6 +14,7 @@
 
 import type { EditorView } from 'prosemirror-view';
 import { Extension, type SlashMenuItem } from '../../../editor/EditorExtension';
+import { tBlocks } from '../blocks.i18n';
 
 export class DescriptionListExtension extends Extension {
   get name() {
@@ -23,17 +24,17 @@ export class DescriptionListExtension extends Extension {
   get slashMenuItems(): SlashMenuItem[] {
     return [
       {
-        label: 'Description list',
+        label: tBlocks('slash.descriptionList'),
         keywords: ['description', 'definition', 'term', 'glossary', 'dl', 'dt', 'dd'],
         icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>',
         group: 'insert',
         action(view: EditorView) {
           const { state, dispatch } = view;
           const { schema } = state;
-          const term = schema.nodes.description_term.create(null, schema.text('Term'));
+          const term = schema.nodes.description_term.create(null, schema.text(tBlocks('descriptionList.term')));
           const detail = schema.nodes.description_detail.create(
             null,
-            schema.nodes.paragraph.create(null, schema.text('Definition'))
+            schema.nodes.paragraph.create(null, schema.text(tBlocks('descriptionList.definition')))
           );
           const dl = schema.nodes.description_list.create(null, [term, detail]);
           dispatch(state.tr.replaceSelectionWith(dl).scrollIntoView());

@@ -4,6 +4,7 @@
 
 import { EditorView } from 'prosemirror-view';
 import { createEditorDomContext, type EditorDomContext } from '../../../runtime/editorDomContext';
+import { tImage } from './image.i18n';
 
 export class ImageToolbar {
   private el: HTMLDivElement;
@@ -45,7 +46,7 @@ export class ImageToolbar {
     // Preview large image button
     this.previewBtn = this.dom.document.createElement('button');
     this.previewBtn.className = 'link-edit-btn';
-    this.previewBtn.title = 'View image';
+    this.previewBtn.title = tImage('toolbar.view');
     this.previewBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
     this.previewBtn.addEventListener('mousedown', (e) => {
       e.preventDefault();
@@ -56,7 +57,7 @@ export class ImageToolbar {
     // Replace with URL button
     this.replaceUrlBtn = this.dom.document.createElement('button');
     this.replaceUrlBtn.className = 'link-edit-btn';
-    this.replaceUrlBtn.title = 'Replace with URL';
+    this.replaceUrlBtn.title = tImage('toolbar.replaceUrl');
     this.replaceUrlBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
     this.replaceUrlBtn.addEventListener('mousedown', (e) => {
       e.preventDefault();
@@ -66,7 +67,7 @@ export class ImageToolbar {
     // Browse file button
     this.browseBtn = this.dom.document.createElement('button');
     this.browseBtn.className = 'link-edit-btn';
-    this.browseBtn.title = 'Browse for image...';
+    this.browseBtn.title = tImage('toolbar.browse');
     this.browseBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
     this.browseBtn.addEventListener('mousedown', (e) => {
       e.preventDefault();
@@ -76,7 +77,7 @@ export class ImageToolbar {
     // Delete button
     this.deleteBtn = this.dom.document.createElement('button');
     this.deleteBtn.className = 'link-edit-btn';
-    this.deleteBtn.title = 'Delete image';
+    this.deleteBtn.title = tImage('toolbar.delete');
     this.deleteBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
     this.deleteBtn.addEventListener('mousedown', (e) => {
       e.preventDefault();
@@ -98,7 +99,7 @@ export class ImageToolbar {
     this.urlInput = this.dom.document.createElement('input');
     this.urlInput.className = 'link-edit-input';
     this.urlInput.type = 'url';
-    this.urlInput.placeholder = 'Enter image URL...';
+    this.urlInput.placeholder = tImage('toolbar.urlPlaceholder');
     this.urlInput.spellcheck = false;
     this.urlInput.addEventListener('keydown', (e) => {
       e.stopPropagation();
@@ -108,7 +109,7 @@ export class ImageToolbar {
 
     this.applyUrlBtn = this.dom.document.createElement('button');
     this.applyUrlBtn.className = 'link-edit-btn';
-    this.applyUrlBtn.title = 'Apply';
+    this.applyUrlBtn.title = tImage('toolbar.apply');
     this.applyUrlBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
     this.applyUrlBtn.addEventListener('mousedown', (e) => {
       e.preventDefault();
@@ -125,12 +126,12 @@ export class ImageToolbar {
 
     const altLabel = this.dom.document.createElement('span');
     altLabel.className = 'image-toolbar-label';
-    altLabel.textContent = 'Alt';
+    altLabel.textContent = tImage('toolbar.altLabel');
 
     this.altInput = this.dom.document.createElement('input');
     this.altInput.className = 'image-toolbar-alt-input';
     this.altInput.type = 'text';
-    this.altInput.placeholder = 'Alt text...';
+    this.altInput.placeholder = tImage('toolbar.altPlaceholder');
     this.altInput.spellcheck = false;
     this.altInput.addEventListener('keydown', (e) => {
       e.stopPropagation();
@@ -326,7 +327,7 @@ export class ImageToolbar {
     const closeBtn = this.dom.document.createElement('button');
     closeBtn.className = 'image-preview-close';
     closeBtn.type = 'button';
-    closeBtn.title = 'Close';
+    closeBtn.title = tImage('preview.close');
     closeBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
     closeBtn.addEventListener('click', () => this.closePreview());
 

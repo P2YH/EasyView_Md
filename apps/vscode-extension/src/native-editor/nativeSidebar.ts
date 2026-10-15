@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
 import { computeGitLineRanges } from '../application/git/gitChangeTracker';
 import { isMarkdownDocument, parseMarkdownDocument } from './markdownModel';
+import { tNative } from './nativeEditor.i18n';
 
 type NodeKind = 'section' | 'heading' | 'task' | 'link' | 'image' | 'git';
+type SectionId = 'outline' | 'tasks' | 'links' | 'images' | 'git';
 
 class NativeMarkdownTreeItem extends vscode.TreeItem {
   constructor(
@@ -10,7 +12,8 @@ class NativeMarkdownTreeItem extends vscode.TreeItem {
     public readonly kind: NodeKind,
     public readonly uri?: vscode.Uri,
     public readonly line?: number,
-    collapsibleState: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.None
+    collapsibleState: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.None,
+    public readonly section?: SectionId,
   ) {
     super(label, collapsibleState);
     this.contextValue = kind;
@@ -18,7 +21,7 @@ class NativeMarkdownTreeItem extends vscode.TreeItem {
     if (uri && typeof line === 'number') {
       this.command = {
         command: 'easyviewMd.revealLine',
-        title: 'Reveal',
+        title: tNative('sidebar.reveal'),
         arguments: [uri, line],
       };
     }
@@ -86,42 +89,47 @@ export class NativeMarkdownSidebarProvider implements vscode.TreeDataProvider<Na
 
     if (!element) {
       return [
-        new NativeMarkdownTreeItem(`Outline (${info.headings.length})`, 'section', undefined, undefined, vscode.TreeItemCollapsibleState.Expanded),
-        new NativeMarkdownTreeItem(`Tasks (${info.tasks.length})`, 'section', undefined, undefined, vscode.TreeItemCollapsibleState.Collapsed),
-        new NativeMarkdownTreeItem(`Links (${info.links.length})`, 'section', undefined, undefined, vscode.TreeItemCollapsibleState.Collapsed),
-        new NativeMarkdownTreeItem(`Images (${info.images.length})`, 'section', undefined, undefined, vscode.TreeItemCollapsibleState.Collapsed),
-        new NativeMarkdownTreeItem('Git Changes', 'section', undefined, undefined, vscode.TreeItemCollapsibleState.Collapsed),
+        new NativeMarkdownTreeItem(tNative('sidebar.outline', { count: info.headings.length }), 'section', undefined, undefined, vscode.TreeItemCollapsibleState.Expanded, 'outline'),
+        new NativeMarkdownTreeItem(tNative('sidebar.tasks', { count: info.tasks.length }), 'section', undefined, undefined, vscode.TreeItemCollapsibleState.Collapsed, 'tasks'),
+        new NativeMarkdownTreeItem(tNative('sidebar.links', { count: info.links.length }), 'section', undefined, undefined, vscode.TreeItemCollapsibleState.Collapsed, 'links'),
+        new NativeMarkdownTreeItem(tNative('sidebar.images', { count: info.images.length }), 'section', undefined, undefined, vscode.TreeItemCollapsibleState.Collapsed, 'images'),
+        new NativeMarkdownTreeItem(tNative('sidebar.gitChanges'), 'section', undefined, undefined, vscode.TreeItemCollapsibleState.Collapsed, 'git'),
       ];
     }
 
-    if (element.label?.toString().startsWith('Outline')) {
+    if (element.section === 'outline') {
       return info.headings.map((heading) =>
         new NativeMarkdownTreeItem(`${'#'.repeat(heading.level)} ${heading.text}`, 'heading', uri, heading.line)
       );
     }
 
-    if (element.label?.toString().startsWith('Tasks')) {
+    if (element.section === 'tasks') {
       return info.tasks.map((task) =>
         new NativeMarkdownTreeItem(`${task.checked ? '[x]' : '[ ]'} ${task.text}`, 'task', uri, task.line)
       );
     }
 
-    if (element.label?.toString().startsWith('Links')) {
+    if (element.section === 'links') {
       return info.links.map((link) =>
         new NativeMarkdownTreeItem(`${link.text} -> ${link.target}`, 'link', uri, link.line)
       );
     }
 
-    if (element.label?.toString().startsWith('Images')) {
+    if (element.section === 'images') {
       return info.images.map((image) =>
         new NativeMarkdownTreeItem(`${image.text} -> ${image.target}`, 'image', uri, image.line)
       );
     }
 
-    if (element.label?.toString() === 'Git Changes') {
+    if (element.section === 'git') {
       const ranges = await computeGitLineRanges(uri, editor.document.getText());
       return ranges.map((range) =>
-        new NativeMarkdownTreeItem(`${range.kind}: ${range.startLine}-${range.endLine}`, 'git', uri, range.startLine - 1)
+        new NativeMarkdownTreeItem(
+          tNative(range.kind === 'added' ? 'sidebar.gitAdded' : 'sidebar.gitModified', { start: range.startLine, end: range.endLine }),
+          'git',
+          uri,
+          range.startLine - 1,
+        )
       );
     }
 

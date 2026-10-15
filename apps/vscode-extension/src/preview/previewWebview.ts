@@ -15,6 +15,7 @@ import {
   type PreviewThemeMode,
   type PreviewThemeStorage,
 } from '@easyview/preview-ui';
+import { tPreview } from './preview.i18n';
 
 declare global {
   interface Window {
@@ -117,7 +118,7 @@ class ExtensionPreviewHost implements PreviewHost {
   };
 
   async readText(sessionId: string): Promise<PreviewTextResult> {
-    if (!vscode) throw new Error('VS Code API 不可用');
+    if (!vscode) throw new Error(tPreview('vscodeApiUnavailable'));
     const id = crypto.randomUUID();
     return new Promise<PreviewTextResult>((resolve, reject) => {
       const handle = (event: MessageEvent) => {
@@ -125,7 +126,7 @@ class ExtensionPreviewHost implements PreviewHost {
         if (!data || data.type !== 'readTextResult' || data.id !== id) return;
         window.removeEventListener('message', handle);
         if (data.ok) resolve(data.value as PreviewTextResult);
-        else reject(new Error(data.message || '文本读取失败'));
+        else reject(new Error(data.message || tPreview('readTextFailed')));
       };
       window.addEventListener('message', handle);
       vscode.postMessage({ type: 'readText', id, sessionId });
@@ -133,7 +134,7 @@ class ExtensionPreviewHost implements PreviewHost {
   }
 
   async writeBytes(sessionId: string, bytes: Uint8Array): Promise<PreviewWriteResult> {
-    if (!vscode) throw new Error('VS Code API 不可用');
+    if (!vscode) throw new Error(tPreview('vscodeApiUnavailable'));
     const id = crypto.randomUUID();
     const bytesBase64 = uint8ToBase64(bytes);
     return new Promise<PreviewWriteResult>((resolve, reject) => {
@@ -157,7 +158,7 @@ class ExtensionPreviewHost implements PreviewHost {
           }
           resolve(value);
         } else {
-          reject(new Error(data.message || '表格保存失败'));
+          reject(new Error(data.message || tPreview('saveTableFailed')));
         }
       };
       window.addEventListener('message', handle);

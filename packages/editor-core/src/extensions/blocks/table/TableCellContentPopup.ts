@@ -8,6 +8,7 @@ import {
   saveCellPopupContent,
   handlePopupImageSelected,
 } from './cellPopupEditor';
+import { tTable } from './table.i18n';
 
 let activePopup: HTMLDivElement | null = null;
 let activeCell: HTMLTableCellElement | null = null;
@@ -107,7 +108,7 @@ export function showTableCellContentPopup(cell: HTMLTableCellElement, runtime: E
   const popup = document.createElement('div');
   popup.className = `easyview-table-cell-popup easyview-table-cell-popup--${getPopupSize(located.node)} ProseMirror`;
   popup.setAttribute('role', 'dialog');
-  popup.setAttribute('aria-label', 'Edit table cell');
+  popup.setAttribute('aria-label', tTable('cellPopup.label'));
   const popupEditor = createCellPopupEditor(located.node, popup);
   if (!popupEditor) return;
   document.body.appendChild(popup);

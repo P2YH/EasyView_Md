@@ -17,7 +17,7 @@ export {
 export { PreviewShell, type PreviewShellProps } from './PreviewShell';
 export {
   PREVIEW_THEME_ICONS,
-  PREVIEW_THEME_TITLES,
+  previewThemeTitle,
   createLocalPreviewThemeStorage,
   cyclePreviewThemeMode,
   previewThemeCssVars,

@@ -9,6 +9,7 @@ import { htmlTagDropdown } from './ToolbarHtmlDropdown';
 import type { ToolbarButton } from '../../../editor/EditorCommands';
 import { isMarkActive } from '../../../editor/EditorCommands';
 import { createEditorDomContext, type EditorDomContext } from '../../../runtime/editorDomContext';
+import { tToolbar } from './toolbar.i18n';
 
 
 // ─── FloatingToolbar ─────────────────────────────────────────────────────────
@@ -146,7 +147,7 @@ export class FloatingToolbar {
     this.el = this.dom.document.createElement('div');
     this.el.className = 'floating-toolbar';
     this.el.setAttribute('role', 'toolbar');
-    this.el.setAttribute('aria-label', 'Formatting toolbar');
+    this.el.setAttribute('aria-label', tToolbar('floating.label'));
     this.render();
     this.dom.overlayRoot.appendChild(this.el);
 
@@ -228,7 +229,7 @@ export class FloatingToolbar {
     const selection = { from: view.state.selection.from, to: view.state.selection.to };
     const popover = this.dom.document.createElement('div');
     popover.className = 'easyview-text-color-popover';
-    popover.setAttribute('aria-label', 'Text color picker');
+    popover.setAttribute('aria-label', tToolbar('floating.colorPicker'));
     const colors = ['#111827', '#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#2563eb', '#7c3aed', '#c026d3', '#d946ef', '#64748b', '#ffffff'];
 
     const applyColor = (color: string) => {
@@ -246,7 +247,7 @@ export class FloatingToolbar {
       swatch.className = 'easyview-text-color-swatch';
       swatch.style.background = color;
       swatch.title = color;
-      swatch.setAttribute('aria-label', `Set text color ${color}`);
+      swatch.setAttribute('aria-label', tToolbar('floating.setColor', { color }));
       swatch.addEventListener('mousedown', (event) => {
         event.preventDefault();
         event.stopPropagation();

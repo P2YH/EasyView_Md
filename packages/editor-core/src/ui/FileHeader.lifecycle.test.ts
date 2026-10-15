@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetLocale, setLocale } from '@easyview/contracts/i18n';
 import { createFileHeader, type FileHeaderDeps } from './FileHeader';
 import { EditorAppearanceStore } from './EditorAppearance';
 import { createEditorDomContext } from '../runtime/editorDomContext';
@@ -31,9 +32,14 @@ function createHeader(capabilities: Partial<typeof DEFAULT_CAPABILITIES> = {}, o
   });
 }
 
+beforeEach(() => {
+  setLocale('en');
+});
+
 afterEach(() => {
   document.body.innerHTML = '';
   localStorage.clear();
+  resetLocale();
 });
 
 describe('FileHeader lifecycle', () => {

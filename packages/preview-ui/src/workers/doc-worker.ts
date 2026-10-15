@@ -10,7 +10,7 @@ self.onmessage = (event: MessageEvent<RenderRequest>) => {
     const response: RenderResponse = { id, ok: true, html: rendered.html, css: rendered.css };
     self.postMessage(response);
   } catch (error) {
-    const response: RenderResponse = { id, ok: false, error: error instanceof Error ? error.message : '旧版 Word 文档解析失败' };
+    const response: RenderResponse = { id, ok: false, error: error instanceof Error ? error.message : 'Failed to parse legacy Word document' };
     self.postMessage(response);
   }
 };

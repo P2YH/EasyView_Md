@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { tTerminal } from './terminal.i18n';
 
 const execFileAsync = promisify(execFile);
 export interface ITermSession { id: string; name: string; windowId: number; window: number; tab: number; pane: number }
@@ -46,6 +47,6 @@ export async function getITermSnapshot(): Promise<ITermSnapshot> {
 }
 
 export async function pasteIntoITermSession(id: string, text: string): Promise<void> {
-  if (/[\x00-\x08\x0b-\x1f\x7f]/.test(text)) throw new Error('Outline path contains unsupported control characters.');
+  if (/[\x00-\x08\x0b-\x1f\x7f]/.test(text)) throw new Error(tTerminal('iterm.controlCharacters'));
   await run('paste', id, text);
 }

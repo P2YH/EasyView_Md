@@ -55,7 +55,7 @@ describe('DesktopWorkspaceCore', () => {
       absolutePath: path.join(root, 'notes.md'),
       relativePath: 'notes.md',
     });
-    await expect(core.create({ parentRelativePath: '', name: 'notes.md', kind: 'file' })).rejects.toThrow('already exists');
+    await expect(core.create({ parentRelativePath: '', name: 'notes.md', kind: 'file' })).rejects.toThrow('同名文件或文件夹已存在');
     await expect(core.create({ parentRelativePath: '../', name: 'escape.md', kind: 'file' })).rejects.toThrow();
     await expect(core.create({ parentRelativePath: '', name: '../escape.md', kind: 'file' })).rejects.toThrow();
   });

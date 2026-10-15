@@ -25,6 +25,7 @@ import { Decoration, DecorationSet } from 'prosemirror-view';
 import { Extension } from '../../../editor/EditorExtension';
 import { pluginKey as mermaidPluginKey } from '../../blocks/mermaid/MermaidPlugin';
 import { _isMouseDragging } from '../../../editor/EditorCore';
+import { tBlockDrag } from './blockDrag.i18n';
 
 // ─── SVG Grip Icon ───────────────────────────────────────────────────────────
 
@@ -279,7 +280,7 @@ function blockDragPlugin(): Plugin {
     handle.className = 'block-drag-handle';
     handle.contentEditable = 'false';
     handle.innerHTML = GRIP_ICON;
-    handle.title = 'Drag to reorder';
+    handle.title = tBlockDrag('handle.title');
 
     // Mouse-based drag: mousedown → mousemove (threshold) → mouseup (drop)
     // preventDefault on mousedown prevents text selection and native drag,

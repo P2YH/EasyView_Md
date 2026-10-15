@@ -1,7 +1,9 @@
 import { isTimelineMarkdown, type TimelineClient, type TimelineEntry, type TimelineSource, type TimelineUiState } from '@easyview/contracts';
+import { getLocale } from '@easyview/contracts/i18n';
+import { tTimeline } from './timeline.i18n';
 const SOURCES: TimelineSource[] = ['local', 'vscode', 'cursor', 'git'];
-const LABELS: Record<TimelineSource, string> = { local: '本地', vscode: 'VS Code', cursor: 'Cursor', git: 'Git' };
-const FILTER_LABELS: Record<TimelineSource, string> = { local: 'Local History', vscode: 'VS Code History', cursor: 'Cursor History', git: 'Git History' };
+const sourceLabel = (source: TimelineSource): string => tTimeline(`source.${source}`);
+const filterLabel = (source: TimelineSource): string => tTimeline(`filter.${source}`);
 /** Owned DOM listeners, one active query and one selected-file subscription; no timers. */
 export class TimelinePanel {
   readonly element = document.createElement('section');
@@ -74,23 +76,23 @@ export class TimelinePanel {
       const page = await this.client.list(this.filePath!, this.sources, more ? this.cursor : undefined, abort.signal);
       if (abort.signal.aborted || revision !== this.revision || this.destroyed) return;
       this.entries = more ? [...this.entries, ...page.entries] : page.entries;
-      this.cursor = page.cursor; this.render(page.errors.map((e) => `${LABELS[e.source]}：${e.message}`).join('\n'));
+      this.cursor = page.cursor; this.render(page.errors.map((e) => tTimeline('sourceError', { source: sourceLabel(e.source), message: e.message })).join('\n'));
     } catch (error) {
       if (!abort.signal.aborted && revision === this.revision) this.render(error instanceof Error ? error.message : String(error));
     } finally { if (this.abort === abort) this.abort = undefined; }
   }
   private render(error?: string): void {
-    this.header.textContent = `${this.state.expanded ? '⌄' : '›'}  TIMELINE`;
+    this.header.textContent = `${this.state.expanded ? '⌄' : '›'}  ${tTimeline('title')}`;
     this.header.setAttribute('aria-expanded', String(this.state.expanded));
-    this.header.title = this.filePath ?? '选择 Markdown 文件';
+    this.header.title = this.filePath ?? tTimeline('selectMarkdown');
     this.body.hidden = !this.state.expanded;
     const previousScroll = this.body.querySelector<HTMLElement>('.easyview-timeline-list')?.scrollTop ?? 0;
     this.body.replaceChildren(); this.layout();
     this.tools.replaceChildren();
-    const refresh = document.createElement('button'); refresh.type = 'button'; refresh.textContent = '↻'; refresh.title = 'Refresh'; refresh.setAttribute('aria-label', 'Refresh Timeline'); refresh.onclick = this.refresh;
+    const refresh = document.createElement('button'); refresh.type = 'button'; refresh.textContent = '↻'; refresh.title = tTimeline('refresh'); refresh.setAttribute('aria-label', tTimeline('refreshTimeline')); refresh.onclick = this.refresh;
     this.tools.append(refresh);
-    if (this.client.configureSettings) { const settings = document.createElement('button'); settings.type = 'button'; settings.textContent = '⚙'; settings.title = 'Local History Settings'; settings.onclick = () => { void this.client.configureSettings!().catch((error) => this.render(String(error))); }; this.tools.append(settings); }
-    const filter = document.createElement('button'); filter.type = 'button'; filter.className = 'easyview-timeline-filter'; filter.title = 'Filter Sources'; filter.setAttribute('aria-label', 'Filter Sources'); filter.setAttribute('aria-haspopup', 'menu');
+    if (this.client.configureSettings) { const settings = document.createElement('button'); settings.type = 'button'; settings.textContent = '⚙'; settings.title = tTimeline('settings'); settings.onclick = () => { void this.client.configureSettings!().catch((error) => this.render(String(error))); }; this.tools.append(settings); }
+    const filter = document.createElement('button'); filter.type = 'button'; filter.className = 'easyview-timeline-filter'; filter.title = tTimeline('filterSources'); filter.setAttribute('aria-label', tTimeline('filterSources')); filter.setAttribute('aria-haspopup', 'menu');
     filter.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h18l-7 8v7l-4 2v-9Z"/></svg>';
     filter.classList.toggle('active', this.sources.length !== SOURCES.length);
     filter.setAttribute('aria-expanded', String(this.menu?.classList.contains('easyview-timeline-filter-menu') ?? false));
@@ -101,7 +103,7 @@ export class TimelinePanel {
     if (error) { const notice = document.createElement('div'); notice.className = 'easyview-timeline-notice'; notice.textContent = error; list.append(notice); }
     if (!this.entries.length) {
       const empty = document.createElement('div'); empty.className = 'easyview-timeline-notice';
-      empty.textContent = !this.filePath || !isTimelineMarkdown(this.filePath) ? '选择已保存的 Markdown 文件以查看历史' : '暂无历史版本'; list.append(empty);
+      empty.textContent = !this.filePath || !isTimelineMarkdown(this.filePath) ? tTimeline('selectSavedMarkdown') : tTimeline('empty'); list.append(empty);
     }
     const canvas = document.createElement('div'); canvas.style.position = 'relative'; canvas.style.height = `${this.entries.length * 32}px`;
     list.append(canvas);
@@ -115,10 +117,10 @@ export class TimelinePanel {
       row.dataset.timelineEntryKey = this.entryKey(entry);
       row.classList.toggle('selected', row.dataset.timelineEntryKey === this.selectedEntryKey);
       row.setAttribute('aria-pressed', String(row.dataset.timelineEntryKey === this.selectedEntryKey));
-      row.title = `${entry.label}\n${LABELS[entry.source]} · ${entry.author ?? ''} · ${new Date(entry.timestamp).toLocaleString()}${entry.revision ? '\n'+entry.revision : ''}`;
+      row.title = `${entry.label}\n${sourceLabel(entry.source)} · ${entry.author ?? ''} · ${new Date(entry.timestamp).toLocaleString(getLocale())}${entry.revision ? '\n'+entry.revision : ''}`;
       const marker = document.createElement('span'); marker.textContent = entry.source === 'git' ? '⑂' : '○';
       const label = document.createElement('span'); label.className = 'easyview-timeline-label'; label.textContent = entry.label;
-      const meta = document.createElement('span'); meta.className = 'easyview-timeline-meta'; meta.textContent = `${LABELS[entry.source]} ${entry.author ?? ''} ${(new Date(entry.timestamp).toDateString() === new Date().toDateString() ? new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : new Date(entry.timestamp).toLocaleDateString())}`;
+      const meta = document.createElement('span'); meta.className = 'easyview-timeline-meta'; meta.textContent = `${sourceLabel(entry.source)} ${entry.author ?? ''} ${(new Date(entry.timestamp).toDateString() === new Date().toDateString() ? new Date(entry.timestamp).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' }) : new Date(entry.timestamp).toLocaleDateString(getLocale()))}`;
       row.append(marker, label, meta);
       row.onclick = () => { this.selectEntry(entry); void this.runAction(entry, false); };
       row.oncontextmenu = (event) => { event.preventDefault(); this.selectEntry(entry); this.showMenu(entry, event); };
@@ -127,7 +129,7 @@ export class TimelinePanel {
     };
     list.addEventListener('scroll', renderRows, { passive: true });
     renderRows();
-    if (this.cursor) { const more = document.createElement('button'); more.textContent = '加载更多'; more.onclick = () => { void this.load(true); }; list.append(more); }
+    if (this.cursor) { const more = document.createElement('button'); more.textContent = tTimeline('loadMore'); more.onclick = () => { void this.load(true); }; list.append(more); }
     this.body.append(list);
     list.scrollTop = previousScroll;
     renderRows();
@@ -149,17 +151,17 @@ export class TimelinePanel {
   private showMenu(entry: TimelineEntry, event: MouseEvent): void {
     this.removeMenu(); const menu = document.createElement('div'); menu.className = 'easyview-timeline-menu workspace-file-context-menu'; menu.setAttribute('role', 'menu');
     const button = document.createElement('button'); button.type = 'button'; button.setAttribute('role', 'menuitem');
-    const label = document.createElement('span'); label.className = 'workspace-menu-item-label'; label.textContent = 'Restore This Version'; button.append(label);
+    const label = document.createElement('span'); label.className = 'workspace-menu-item-label'; label.textContent = tTimeline('restoreVersion'); button.append(label);
     button.onclick = () => { this.removeMenu(); void this.runAction(entry, true); };
     menu.append(button); this.mountMenu(menu, event.clientX, event.clientY);
   }
   private showFilterMenu(anchor: HTMLElement): void {
     this.removeMenu();
-    const menu = document.createElement('div'); menu.className = 'easyview-timeline-filter-menu workspace-file-context-menu'; menu.setAttribute('role', 'menu'); menu.setAttribute('aria-label', 'Timeline Sources');
+    const menu = document.createElement('div'); menu.className = 'easyview-timeline-filter-menu workspace-file-context-menu'; menu.setAttribute('role', 'menu'); menu.setAttribute('aria-label', tTimeline('sources'));
     for (const source of SOURCES) {
       const button = document.createElement('button'); button.type = 'button'; button.setAttribute('role', 'menuitemcheckbox'); button.style.gap = '8px';
       const check = document.createElement('span'); check.className = 'workspace-menu-item-icon'; check.setAttribute('aria-hidden', 'true');
-      const label = document.createElement('span'); label.className = 'workspace-menu-item-label'; label.style.flex = '1'; label.textContent = FILTER_LABELS[source];
+      const label = document.createElement('span'); label.className = 'workspace-menu-item-label'; label.style.flex = '1'; label.textContent = filterLabel(source);
       const update = () => { const selected = this.sources.includes(source); check.textContent = selected ? '✓' : ''; button.setAttribute('aria-checked', String(selected)); };
       button.onclick = () => {
         this.sources = SOURCES.filter((item) => item === source ? !this.sources.includes(item) : this.sources.includes(item));

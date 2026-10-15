@@ -19,7 +19,7 @@ export class RpcTimelineClient implements TimelineClient {
   private request<T>(method: string, payload: unknown, signal: AbortSignal): Promise<T> {
     signal.throwIfAborted(); const id = String(++this.nextId);
     return new Promise<T>((resolve, reject) => {
-      const aborted = () => { this.pending.delete(id); this.port.post({ type: 'timeline.cancel', id }); reject(new Error('查询已取消')); };
+      const aborted = () => { this.pending.delete(id); this.port.post({ type: 'timeline.cancel', id }); reject(new Error('Timeline query cancelled')); };
       const cleanup = () => signal.removeEventListener('abort', aborted);
       this.pending.set(id, { resolve: (value) => { cleanup(); resolve(value); }, reject: (error) => { cleanup(); reject(error); } });
       signal.addEventListener('abort', aborted, { once: true });
@@ -35,5 +35,5 @@ export class RpcTimelineClient implements TimelineClient {
   }
   loadState(): TimelineUiState | undefined { return this.port.loadState(); }
   saveState(state: TimelineUiState): void { this.port.saveState(state); }
-  dispose(): void { this.subscription.dispose(); for (const pending of this.pending.values()) pending.reject(new Error('Timeline 已关闭')); this.pending.clear(); this.listeners.clear(); this.port.post({ type: 'timeline.watch', filePath: null }); }
+  dispose(): void { this.subscription.dispose(); for (const pending of this.pending.values()) pending.reject(new Error('Timeline closed')); this.pending.clear(); this.listeners.clear(); this.port.post({ type: 'timeline.watch', filePath: null }); }
 }

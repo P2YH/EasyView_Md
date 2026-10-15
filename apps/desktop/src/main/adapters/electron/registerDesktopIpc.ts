@@ -4,7 +4,10 @@ import type { TimelineRequestMessage } from '@easyview/contracts';
 import { clipboard, dialog, ipcMain, nativeTheme, shell } from 'electron';
 import path from 'node:path';
 import { isEditorToHostMessage } from '@easyview/contracts';
+import { DESKTOP_ACCENTS, DESKTOP_APPEARANCE_MODES } from '../../../contracts';
 import type {
+  DesktopAccent,
+  DesktopAppearanceMode,
   DesktopTabContextCommand,
   HttpPreviewRequest,
   WorkspaceCreateRequest,
@@ -72,6 +75,9 @@ import {
   showWorkspaceContextMenu,
 } from '../../application/workspace/workspaceWorkflow';
 import { rendererWindow } from '../../application/host/desktopRuntime';
+import { recentFolderStore } from '../../application/workspace/recentFolders';
+import { tRuntime } from '../../application/host/desktopRuntime.i18n';
+import { tIpc } from './desktopIpc.i18n';
 
 function registerHandle<TArgs extends unknown[], TResult>(
   channel: string,
@@ -79,7 +85,7 @@ function registerHandle<TArgs extends unknown[], TResult>(
 ): void {
   ipcMain.handle(channel, (event, ...args) => {
     const context = getWindowContextForSender(event.sender);
-    if (!context) return failure('UNKNOWN', '拒绝非当前窗口的请求');
+    if (!context) return failure('UNKNOWN', tRuntime('request.untrustedWindow'));
     return runInWindowContext(context, () => handler(event, ...(args as TArgs)));
   });
 }
@@ -121,8 +127,8 @@ export function registerDesktopIpc(): void {
   registerHandle('timeline.diagnostics', async (event) => { const denied = assertTrustedRenderer(event); if (denied) return denied; return success(await desktopTimelineDiagnostics(event.sender.id)); });
   registerHandle('timeline.comparison', (event, tabId: string) => {
     const denied = assertTrustedRenderer(event); if (denied) return denied;
-    if (tabRegistry.get(tabId)?.kind !== 'history') return failure('NOT_FOUND', '历史标签页不存在');
-    const comparison = getHistoryComparison(tabId); return comparison ? success(comparison) : failure('NOT_FOUND', '历史比较不存在');
+    if (tabRegistry.get(tabId)?.kind !== 'history') return failure('NOT_FOUND', tIpc('timeline.historyTabNotFound'));
+    const comparison = getHistoryComparison(tabId); return comparison ? success(comparison) : failure('NOT_FOUND', tIpc('timeline.comparisonNotFound'));
   });
   registerHandle('timeline.settings.get', async (event) => { const denied = assertTrustedRenderer(event); if (denied) return denied; return success(await getHistorySettings()); });
   registerHandle('timeline.settings.set', async (event, settings: unknown) => { const denied = assertTrustedRenderer(event); if (denied) return denied; await setHistorySettings(settings); return success(true); });
@@ -136,9 +142,9 @@ export function registerDesktopIpc(): void {
   registerHandle('document.save', async (event, request: { sessionId?: unknown; content: unknown }) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
-    if (typeof request?.content !== 'string') return failure('INVALID_ARGUMENT', 'content 必须是字符串');
+    if (typeof request?.content !== 'string') return failure('INVALID_ARGUMENT', tIpc('document.contentNotString'));
     const sessionId = typeof request.sessionId === 'string' ? request.sessionId : activeEditorTab()?.id;
-    if (!sessionId) return failure('NOT_FOUND', '文档会话不存在');
+    if (!sessionId) return failure('NOT_FOUND', tIpc('document.sessionNotFound'));
     return saveSession(sessionId, request.content);
   });
 
@@ -146,13 +152,13 @@ export function registerDesktopIpc(): void {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
     if (typeof request?.content !== 'string' || typeof request.suggestedFileName !== 'string') {
-      return failure('INVALID_ARGUMENT', '保存参数无效');
+      return failure('INVALID_ARGUMENT', tIpc('document.invalidSaveArguments'));
     }
     if (request.lineEnding !== '\n' && request.lineEnding !== '\r\n') {
-      return failure('INVALID_ARGUMENT', '换行符无效');
+      return failure('INVALID_ARGUMENT', tIpc('document.invalidLineEnding'));
     }
     const sessionId = typeof request.sessionId === 'string' ? request.sessionId : activeEditorTab()?.id;
-    if (!sessionId) return failure('NOT_FOUND', '文档会话不存在');
+    if (!sessionId) return failure('NOT_FOUND', tIpc('document.sessionNotFound'));
     return saveAsSession(sessionId, request.content, request.suggestedFileName, request.lineEnding);
   });
 
@@ -160,7 +166,7 @@ export function registerDesktopIpc(): void {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
     const sessionId = typeof request?.sessionId === 'string' ? request.sessionId : activeEditorTab()?.id;
-    if (!sessionId) return failure('NOT_FOUND', '文档会话不存在');
+    if (!sessionId) return failure('NOT_FOUND', tIpc('document.sessionNotFound'));
     return renameSession(sessionId, request?.fileName);
   });
 
@@ -173,7 +179,7 @@ export function registerDesktopIpc(): void {
   registerHandle('external.open', async (event, value: unknown) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
-    if (!isAllowedExternalUrl(value)) return failure('INVALID_ARGUMENT', '只允许打开 http/https 链接');
+    if (!isAllowedExternalUrl(value)) return failure('INVALID_ARGUMENT', tIpc('external.onlyHttp'));
     await shell.openExternal(value);
     return success(true);
   });
@@ -181,7 +187,7 @@ export function registerDesktopIpc(): void {
   registerHandle('clipboard.writeText', async (event, value: unknown) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
-    if (typeof value !== 'string') return failure('INVALID_ARGUMENT', '剪贴板内容无效');
+    if (typeof value !== 'string') return failure('INVALID_ARGUMENT', tIpc('clipboard.invalidContent'));
     clipboard.writeText(value);
     return success(true);
   });
@@ -208,49 +214,49 @@ export function registerDesktopIpc(): void {
   registerHandle('tabs.openWorkspaceEntry', async (event, relativePath: unknown) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
-    if (typeof relativePath !== 'string') return failure('INVALID_ARGUMENT', '工作区路径无效');
+    if (typeof relativePath !== 'string') return failure('INVALID_ARGUMENT', tIpc('workspace.invalidPath'));
     return openWorkspaceEntryTab(relativePath);
   });
 
   registerHandle('tabs.activate', async (event, tabId: unknown) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
-    if (typeof tabId !== 'string') return failure('INVALID_ARGUMENT', '标签标识无效');
+    if (typeof tabId !== 'string') return failure('INVALID_ARGUMENT', tIpc('tabs.invalidId'));
     return activateTab(tabId);
   });
 
   registerHandle('tabs.close', async (event, tabId: unknown) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
-    if (typeof tabId !== 'string') return failure('INVALID_ARGUMENT', '标签标识无效');
+    if (typeof tabId !== 'string') return failure('INVALID_ARGUMENT', tIpc('tabs.invalidId'));
     return closeTab(tabId);
   });
 
   registerHandle('tabs.closeOthers', async (event, tabId: unknown) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
-    if (typeof tabId !== 'string') return failure('INVALID_ARGUMENT', '标签标识无效');
+    if (typeof tabId !== 'string') return failure('INVALID_ARGUMENT', tIpc('tabs.invalidId'));
     return closeOtherTabs(tabId);
   });
 
   registerHandle('tabs.closeAll', async (event, tabId: unknown) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
-    if (typeof tabId !== 'string') return failure('INVALID_ARGUMENT', '标签标识无效');
+    if (typeof tabId !== 'string') return failure('INVALID_ARGUMENT', tIpc('tabs.invalidId'));
     return closeGroupTabs(tabId);
   });
 
   registerHandle('tabs.openPreview', async (event, relativePath: unknown) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
-    if (typeof relativePath !== 'string') return failure('INVALID_ARGUMENT', '工作区路径无效');
+    if (typeof relativePath !== 'string') return failure('INVALID_ARGUMENT', tIpc('workspace.invalidPath'));
     return openWorkspacePreview(relativePath);
   });
 
   registerHandle('tabs.showContextMenu', (event, tabId: unknown) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
-    if (typeof tabId !== 'string' || !tabRegistry.get(tabId)) return failure('NOT_FOUND', '标签页不存在');
+    if (typeof tabId !== 'string' || !tabRegistry.get(tabId)) return failure('NOT_FOUND', tIpc('tabs.notFound'));
     showTabContextMenu(event.sender, tabId);
     return success(true);
   });
@@ -259,7 +265,7 @@ export function registerDesktopIpc(): void {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
     if (!isRecord(request) || typeof request.tabId !== 'string' || typeof request.command !== 'string') {
-      return failure('INVALID_ARGUMENT', '标签菜单命令无效');
+      return failure('INVALID_ARGUMENT', tIpc('tabs.invalidContextCommand'));
     }
     return executeTabContextCommand(request.tabId, request.command as DesktopTabContextCommand);
   });
@@ -269,7 +275,7 @@ export function registerDesktopIpc(): void {
     if (denied) return denied;
     const rootPath = workspaceRoot();
     const relativePath = typeof request === 'string' ? request : isRecord(request) && typeof request.relativePath === 'string' ? request.relativePath : null;
-    if (!rootPath || !relativePath) return failure('INVALID_ARGUMENT', '预览请求无效');
+    if (!rootPath || !relativePath) return failure('INVALID_ARGUMENT', tIpc('preview.invalidRequest'));
     try {
       return success(await previewSessions.open(rootPath, relativePath));
     } catch (error) {
@@ -280,7 +286,7 @@ export function registerDesktopIpc(): void {
   registerHandle('preview.close', async (event, sessionId: unknown) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
-    if (typeof sessionId !== 'string') return failure('INVALID_ARGUMENT', '预览会话标识无效');
+    if (typeof sessionId !== 'string') return failure('INVALID_ARGUMENT', tIpc('preview.invalidSessionId'));
     try {
       return success(previewSessions.close(sessionId));
     } catch (error) {
@@ -291,7 +297,7 @@ export function registerDesktopIpc(): void {
   registerHandle('preview.readText', async (event, sessionId: unknown) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
-    if (typeof sessionId !== 'string') return failure('INVALID_ARGUMENT', '预览会话标识无效');
+    if (typeof sessionId !== 'string') return failure('INVALID_ARGUMENT', tIpc('preview.invalidSessionId'));
     try {
       return success(await previewSessions.readText(sessionId));
     } catch (error) {
@@ -302,9 +308,9 @@ export function registerDesktopIpc(): void {
   registerHandle('preview.writeBytes', async (event, request: unknown) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
-    if (!isRecord(request) || typeof request.sessionId !== 'string') return failure('INVALID_ARGUMENT', '预览写入请求无效');
+    if (!isRecord(request) || typeof request.sessionId !== 'string') return failure('INVALID_ARGUMENT', tIpc('preview.invalidWriteRequest'));
     const bytes = decodePreviewBytes(request.bytes, request.encoding);
-    if (!bytes) return failure('INVALID_ARGUMENT', '预览写入内容无效');
+    if (!bytes) return failure('INVALID_ARGUMENT', tIpc('preview.invalidWriteContent'));
     try {
       const descriptor = await previewSessions.writeBytes(request.sessionId, bytes);
       return success({ size: descriptor.size, mtimeMs: descriptor.mtimeMs });
@@ -316,7 +322,7 @@ export function registerDesktopIpc(): void {
   registerHandle('preview.http.send', async (event, request: unknown) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
-    if (!isRecord(request) || typeof request.url !== 'string') return failure('INVALID_ARGUMENT', 'HTTP 请求无效');
+    if (!isRecord(request) || typeof request.url !== 'string') return failure('INVALID_ARGUMENT', tIpc('preview.invalidHttpRequest'));
     try {
       return success(await requestHttpPreview(request as unknown as HttpPreviewRequest));
     } catch (error) {
@@ -327,7 +333,7 @@ export function registerDesktopIpc(): void {
   registerHandle('preview.java.decompile', async (event, sessionId: unknown) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
-    if (typeof sessionId !== 'string') return failure('INVALID_ARGUMENT', '预览会话标识无效');
+    if (typeof sessionId !== 'string') return failure('INVALID_ARGUMENT', tIpc('preview.invalidSessionId'));
     try {
       return success(await javaDecompileService.decompile(sessionId));
     } catch (error) {
@@ -338,7 +344,7 @@ export function registerDesktopIpc(): void {
   registerHandle('system.openWithDefaultApp', async (event, relativePath: unknown) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
-    if (typeof relativePath !== 'string') return failure('INVALID_ARGUMENT', '工作区路径无效');
+    if (typeof relativePath !== 'string') return failure('INVALID_ARGUMENT', tIpc('workspace.invalidPath'));
     try {
       const targetPath = await resolveWorkspaceFilePath(relativePath);
       const error = await shell.openPath(targetPath);
@@ -351,7 +357,7 @@ export function registerDesktopIpc(): void {
   registerHandle('system.revealInFolder', async (event, relativePath: unknown) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
-    if (typeof relativePath !== 'string') return failure('INVALID_ARGUMENT', '工作区路径无效');
+    if (typeof relativePath !== 'string') return failure('INVALID_ARGUMENT', tIpc('workspace.invalidPath'));
     try {
       shell.showItemInFolder(await resolveWorkspaceFilePath(relativePath));
       return success(true);
@@ -363,8 +369,8 @@ export function registerDesktopIpc(): void {
   registerHandle('archive.list', async (event, request: unknown) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
-    if (!isRecord(request) || typeof request.sessionId !== 'string') return failure('INVALID_ARGUMENT', '压缩包请求无效');
-    if (request.password !== undefined) return failure('DEPENDENCY_MISSING', '加密压缩包暂不支持预览');
+    if (!isRecord(request) || typeof request.sessionId !== 'string') return failure('INVALID_ARGUMENT', tIpc('archive.invalidRequest'));
+    if (request.password !== undefined) return failure('DEPENDENCY_MISSING', tIpc('archive.encryptedPreviewUnsupported'));
     try {
       return success(await archivePreviewService.list(request.sessionId));
     } catch (error) {
@@ -376,9 +382,9 @@ export function registerDesktopIpc(): void {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
     if (!isRecord(request) || typeof request.sessionId !== 'string' || typeof request.entryPath !== 'string') {
-      return failure('INVALID_ARGUMENT', '压缩包条目请求无效');
+      return failure('INVALID_ARGUMENT', tIpc('archive.invalidEntryRequest'));
     }
-    if (request.password !== undefined) return failure('DEPENDENCY_MISSING', '加密压缩包暂不支持预览');
+    if (request.password !== undefined) return failure('DEPENDENCY_MISSING', tIpc('archive.encryptedPreviewUnsupported'));
     try {
       return success(await archivePreviewService.openEntry(request.sessionId, request.entryPath));
     } catch (error) {
@@ -390,12 +396,12 @@ export function registerDesktopIpc(): void {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
     if (!isRecord(request) || typeof request.sessionId !== 'string' || typeof request.entryPath !== 'string') {
-      return failure('INVALID_ARGUMENT', '压缩包条目请求无效');
+      return failure('INVALID_ARGUMENT', tIpc('archive.invalidEntryRequest'));
     }
-    if (request.password !== undefined) return failure('DEPENDENCY_MISSING', '加密压缩包暂不支持导出');
+    if (request.password !== undefined) return failure('DEPENDENCY_MISSING', tIpc('archive.encryptedExportUnsupported'));
     try {
-      const selected = await dialog.showSaveDialog(getMainWindow()!, { title: '导出压缩包条目', defaultPath: path.basename(request.entryPath) });
-      if (selected.canceled || !selected.filePath) return failure('CANCELLED', '已取消导出压缩包条目');
+      const selected = await dialog.showSaveDialog(getMainWindow()!, { title: tIpc('archive.exportTitle'), defaultPath: path.basename(request.entryPath) });
+      if (selected.canceled || !selected.filePath) return failure('CANCELLED', tIpc('archive.exportCancelled'));
       await archivePreviewService.exportEntry(request.sessionId, request.entryPath, selected.filePath);
       return success(true);
     } catch (error) {
@@ -409,6 +415,30 @@ export function registerDesktopIpc(): void {
     return openWorkspaceFolder();
   });
 
+  registerHandle('workspace.openRecentFolder', async (event, folderPath: unknown) => {
+    const denied = assertTrustedRenderer(event);
+    if (denied) return denied;
+    if (typeof folderPath !== 'string' || !(await recentFolderStore().paths()).includes(folderPath)) {
+      return failure('INVALID_ARGUMENT', tIpc('workspace.recentFolderOnly'));
+    }
+    return openWorkspaceFolder(folderPath);
+  });
+
+  registerHandle('workspace.getRecentFolders', async (event) => {
+    const denied = assertTrustedRenderer(event);
+    if (denied) return denied;
+    return success(await recentFolderStore().list());
+  });
+
+  registerHandle('workspace.removeRecentFolder', async (event, folderPath: unknown) => {
+    const denied = assertTrustedRenderer(event);
+    if (denied) return denied;
+    if (typeof folderPath !== 'string') return failure('INVALID_ARGUMENT', tIpc('workspace.invalidFolderPath'));
+    await recentFolderStore().forget(folderPath);
+    createMenu();
+    return success(true);
+  });
+
   registerHandle('workspace.getState', (event) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
@@ -418,7 +448,7 @@ export function registerDesktopIpc(): void {
   registerHandle('workspace.setState', (event, value: unknown) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
-    if (!isRecord(value)) return failure('INVALID_ARGUMENT', '工作区状态无效');
+    if (!isRecord(value)) return failure('INVALID_ARGUMENT', tIpc('workspace.invalidState'));
     const next = setWorkspaceState({
       expandedRelativePaths: Array.isArray(value.expandedRelativePaths)
         ? value.expandedRelativePaths.filter((item): item is string => typeof item === 'string')
@@ -436,9 +466,20 @@ export function registerDesktopIpc(): void {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
     const rootPath = workspaceRoot();
-    if (!rootPath || typeof relativePath !== 'string') return failure('INVALID_ARGUMENT', '没有可读取的工作区目录');
+    if (!rootPath || typeof relativePath !== 'string') return failure('INVALID_ARGUMENT', tIpc('workspace.noReadableDirectory'));
     try {
       return success(await workspaceCore.listChildren(relativePath));
+    } catch (error) {
+      return failure('INVALID_ARGUMENT', desktopWorkspaceErrorMessage(error));
+    }
+  });
+
+  registerHandle('workspace.search', async (event, query: unknown) => {
+    const denied = assertTrustedRenderer(event);
+    if (denied) return denied;
+    if (!workspaceRoot() || typeof query !== 'string' || query.length > 200) return failure('INVALID_ARGUMENT', tIpc('workspace.invalidSearch'));
+    try {
+      return success(await workspaceCore.search(query));
     } catch (error) {
       return failure('INVALID_ARGUMENT', desktopWorkspaceErrorMessage(error));
     }
@@ -447,7 +488,7 @@ export function registerDesktopIpc(): void {
   registerHandle('workspace.getSortMode', (event) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
-    if (!workspaceRoot()) return failure('INVALID_ARGUMENT', '尚未打开工作区');
+    if (!workspaceRoot()) return failure('INVALID_ARGUMENT', tIpc('workspace.notOpen'));
     return success(workspaceCore.getSortMode());
   });
 
@@ -455,7 +496,7 @@ export function registerDesktopIpc(): void {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
     if (sortMode !== 'name' && sortMode !== 'created' && sortMode !== 'custom') {
-      return failure('INVALID_ARGUMENT', '排序方式无效');
+      return failure('INVALID_ARGUMENT', tIpc('workspace.invalidSortMode'));
     }
     try {
       const next = await workspaceCore.setSortMode(sortMode as WorkspaceTreeSortMode);
@@ -471,18 +512,18 @@ export function registerDesktopIpc(): void {
     channelSet: string,
     read: () => boolean,
     write: (value: boolean) => Promise<boolean>,
-    invalid: string,
+    invalid: Parameters<typeof tIpc>[0],
   ): void => {
     registerHandle(channelGet, (event) => {
       const denied = assertTrustedRenderer(event);
       if (denied) return denied;
-      if (!workspaceRoot()) return failure('INVALID_ARGUMENT', '尚未打开工作区');
+      if (!workspaceRoot()) return failure('INVALID_ARGUMENT', tIpc('workspace.notOpen'));
       return success(read());
     });
     registerHandle(channelSet, async (event, value: unknown) => {
       const denied = assertTrustedRenderer(event);
       if (denied) return denied;
-      if (typeof value !== 'boolean') return failure('INVALID_ARGUMENT', invalid);
+      if (typeof value !== 'boolean') return failure('INVALID_ARGUMENT', tIpc(invalid));
       try {
         const next = await write(value);
         sendToWindow('workspace.changed', null);
@@ -493,19 +534,19 @@ export function registerDesktopIpc(): void {
     });
   };
 
-  booleanWorkspaceSetting('workspace.getShowCreatedAt', 'workspace.setShowCreatedAt', () => workspaceCore.getShowCreatedAt(), (value) => workspaceCore.setShowCreatedAt(value), '创建时间显示参数无效');
-  booleanWorkspaceSetting('workspace.getShowUpdatedAt', 'workspace.setShowUpdatedAt', () => workspaceCore.getShowUpdatedAt(), (value) => workspaceCore.setShowUpdatedAt(value), '更新时间显示参数无效');
-  booleanWorkspaceSetting('workspace.getShowDotEntries', 'workspace.setShowDotEntries', () => workspaceCore.getShowDotEntries(), (value) => workspaceCore.setShowDotEntries(value), '点开头条目显示参数无效');
-  booleanWorkspaceSetting('workspace.getShowTimestampHover', 'workspace.setShowTimestampHover', () => workspaceCore.getShowTimestampHover(), (value) => workspaceCore.setShowTimestampHover(value), '时间悬停显示参数无效');
+  booleanWorkspaceSetting('workspace.getShowCreatedAt', 'workspace.setShowCreatedAt', () => workspaceCore.getShowCreatedAt(), (value) => workspaceCore.setShowCreatedAt(value), 'workspace.invalidShowCreatedAt');
+  booleanWorkspaceSetting('workspace.getShowUpdatedAt', 'workspace.setShowUpdatedAt', () => workspaceCore.getShowUpdatedAt(), (value) => workspaceCore.setShowUpdatedAt(value), 'workspace.invalidShowUpdatedAt');
+  booleanWorkspaceSetting('workspace.getShowDotEntries', 'workspace.setShowDotEntries', () => workspaceCore.getShowDotEntries(), (value) => workspaceCore.setShowDotEntries(value), 'workspace.invalidShowDotEntries');
+  booleanWorkspaceSetting('workspace.getShowTimestampHover', 'workspace.setShowTimestampHover', () => workspaceCore.getShowTimestampHover(), (value) => workspaceCore.setShowTimestampHover(value), 'workspace.invalidShowTimestampHover');
 
   registerHandle('workspace.create', async (event, request: WorkspaceCreateRequest) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
     const rootPath = workspaceRoot();
     if (!rootPath || !request || typeof request.parentRelativePath !== 'string' || typeof request.name !== 'string') {
-      return failure('INVALID_ARGUMENT', '新建节点参数无效');
+      return failure('INVALID_ARGUMENT', tIpc('workspace.invalidCreate'));
     }
-    if (request.kind !== 'file' && request.kind !== 'directory') return failure('INVALID_ARGUMENT', '节点类型无效');
+    if (request.kind !== 'file' && request.kind !== 'directory') return failure('INVALID_ARGUMENT', tIpc('workspace.invalidKind'));
     try {
       const entry = await workspaceCore.create(request);
       sendToWindow('workspace.changed', [request.parentRelativePath]);
@@ -518,7 +559,7 @@ export function registerDesktopIpc(): void {
   registerHandle('workspace.rename', async (event, request: WorkspaceRenameRequest) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
-    if (!request || typeof request.relativePath !== 'string' || typeof request.newName !== 'string') return failure('INVALID_ARGUMENT', '重命名参数无效');
+    if (!request || typeof request.relativePath !== 'string' || typeof request.newName !== 'string') return failure('INVALID_ARGUMENT', tIpc('workspace.invalidRename'));
     return renameWorkspaceEntry(request);
   });
 
@@ -526,7 +567,7 @@ export function registerDesktopIpc(): void {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
     if (!request || typeof request.relativePath !== 'string' || typeof request.targetParentRelativePath !== 'string') {
-      return failure('INVALID_ARGUMENT', '移动参数无效');
+      return failure('INVALID_ARGUMENT', tIpc('workspace.invalidMove'));
     }
     try {
       const entry = await workspaceCore.move(request);
@@ -549,7 +590,7 @@ export function registerDesktopIpc(): void {
       || typeof request.movedName !== 'string'
       || !Array.isArray(request.siblingNames)
     ) {
-      return failure('INVALID_ARGUMENT', '排序参数无效');
+      return failure('INVALID_ARGUMENT', tIpc('workspace.invalidReorder'));
     }
     try {
       await workspaceCore.reorder(
@@ -568,28 +609,28 @@ export function registerDesktopIpc(): void {
   registerHandle('workspace.delete', async (event, request: WorkspaceDeleteRequest) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
-    if (!request || typeof request.relativePath !== 'string') return failure('INVALID_ARGUMENT', '删除参数无效');
+    if (!request || typeof request.relativePath !== 'string') return failure('INVALID_ARGUMENT', tIpc('workspace.invalidDelete'));
     return deleteWorkspaceEntry(request, rendererWindow(event.sender));
   });
 
   registerHandle('workspace.copyClipboard', (event, relativePath: unknown) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
-    if (typeof relativePath !== 'string') return failure('INVALID_ARGUMENT', '复制路径无效');
+    if (typeof relativePath !== 'string') return failure('INVALID_ARGUMENT', tIpc('workspace.invalidCopyPath'));
     return copyWorkspaceEntryToClipboard(relativePath);
   });
 
   registerHandle('workspace.pasteClipboard', async (event, request: WorkspacePasteRequest) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
-    if (!request || typeof request.targetRelativePath !== 'string') return failure('INVALID_ARGUMENT', '粘贴目标无效');
+    if (!request || typeof request.targetRelativePath !== 'string') return failure('INVALID_ARGUMENT', tIpc('workspace.invalidPasteTarget'));
     return pasteWorkspaceClipboard(request, rendererWindow(event.sender));
   });
 
   registerHandle('workspace.importExternal', async (event, request: WorkspaceImportExternalRequest) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
-    if (!request || typeof request.targetParentRelativePath !== 'string') return failure('INVALID_ARGUMENT', '导入目标无效');
+    if (!request || typeof request.targetParentRelativePath !== 'string') return failure('INVALID_ARGUMENT', tIpc('workspace.invalidImportTarget'));
     return importExternalWorkspaceEntries(request, rendererWindow(event.sender));
   });
 
@@ -597,7 +638,7 @@ export function registerDesktopIpc(): void {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
     const rootPath = workspaceRoot();
-    if (!rootPath || typeof relativePath !== 'string') return failure('INVALID_ARGUMENT', '工作区路径无效');
+    if (!rootPath || typeof relativePath !== 'string') return failure('INVALID_ARGUMENT', tIpc('workspace.invalidPath'));
     try { return success(workspaceCore.resourcePaths(relativePath)); }
     catch (error) { return failure('INVALID_ARGUMENT', desktopWorkspaceErrorMessage(error)); }
   });
@@ -606,7 +647,7 @@ export function registerDesktopIpc(): void {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
     if (!isRecord(request) || typeof request.relativePath !== 'string' || !['file', 'directory', 'symlink'].includes(String(request.kind))) {
-      return failure('INVALID_ARGUMENT', '目录菜单参数无效');
+      return failure('INVALID_ARGUMENT', tIpc('workspace.invalidContextMenu'));
     }
     showWorkspaceContextMenu(event.sender, request.relativePath, request.kind as WorkspaceEntry['kind']);
     return success(true);
@@ -615,7 +656,7 @@ export function registerDesktopIpc(): void {
   registerHandle('workspace.openEntry', async (event, relativePath: unknown) => {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
-    if (typeof relativePath !== 'string') return failure('INVALID_ARGUMENT', '工作区路径无效');
+    if (typeof relativePath !== 'string') return failure('INVALID_ARGUMENT', tIpc('workspace.invalidPath'));
     const result = await openWorkspaceEntryTab(relativePath);
     return result.ok ? success(true) : result;
   });
@@ -628,6 +669,9 @@ export function registerDesktopIpc(): void {
       || typeof value.fullWidth !== 'boolean'
       || typeof value.tableWrap !== 'boolean'
       || typeof value.hasActiveDocument !== 'boolean'
+      || !DESKTOP_APPEARANCE_MODES.includes(value.themeMode as DesktopAppearanceMode)
+      || typeof value.themeDepth !== 'number' || !Number.isFinite(value.themeDepth)
+      || !DESKTOP_ACCENTS.includes(value.accent as DesktopAccent)
     ) return;
     setDesktopMenuState({
       sourceMode: value.sourceMode,
@@ -635,6 +679,9 @@ export function registerDesktopIpc(): void {
       fullWidth: value.fullWidth,
       tableWrap: value.tableWrap,
       hasActiveDocument: value.hasActiveDocument,
+      themeMode: value.themeMode as DesktopAppearanceMode,
+      themeDepth: Math.max(0, Math.min(100, value.themeDepth)),
+      accent: value.accent as DesktopAccent,
     });
     createMenu();
   });
@@ -642,8 +689,8 @@ export function registerDesktopIpc(): void {
   registerEvent('editor.message', (event, value: unknown) => {
     if (!trustedRenderer(event) || !isEditorToHostMessage(value)) return;
     void handleEditorMessage(value).catch((error) => {
-      console.error('[EasyView_Md] 处理编辑器消息失败:', error);
-      void showOperationError(failure('UNKNOWN', error instanceof Error ? error.message : '桌面操作失败'));
+      console.error('[EasyView_Md] Failed to handle editor message:', error);
+      void showOperationError(failure('UNKNOWN', error instanceof Error ? error.message : tIpc('editor.operationFailed')));
     });
   });
 }

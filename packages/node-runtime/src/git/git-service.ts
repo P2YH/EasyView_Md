@@ -2,6 +2,7 @@ import { execFile as execFileCallback } from "node:child_process";
 import { realpath, stat } from "node:fs/promises";
 import * as path from "node:path";
 import { promisify } from "node:util";
+import { tGit } from "./git.i18n";
 
 const execFile = promisify(execFileCallback);
 
@@ -99,7 +100,7 @@ async function runGit(
   } catch (error) {
     throw new GitServiceError(
       "COMMAND_FAILED",
-      `Git 命令执行失败（git ${args.join(" ")}）：${commandErrorMessage(error)}`,
+      tGit("commandFailed", { args: args.join(" "), detail: commandErrorMessage(error) }),
       error,
     );
   }
@@ -107,7 +108,7 @@ async function runGit(
 
 async function resolveExistingPath(inputPath: string): Promise<string> {
   if (typeof inputPath !== "string" || inputPath.trim() === "") {
-    throw new GitServiceError("INVALID_PATH", "路径不能为空。");
+    throw new GitServiceError("INVALID_PATH", tGit("pathEmpty"));
   }
 
   const resolvedPath = path.resolve(inputPath);
@@ -116,7 +117,7 @@ async function resolveExistingPath(inputPath: string): Promise<string> {
   } catch (error) {
     throw new GitServiceError(
       "NOT_FOUND",
-      `路径不存在或无法访问：${resolvedPath}`,
+      tGit("pathNotFound", { path: resolvedPath }),
       error,
     );
   }
@@ -141,7 +142,7 @@ async function resolveRepositoryRoot(startPath: string): Promise<string | null> 
   } catch (error) {
     const commandError = error as GitCommandError;
     if (commandError.code === "ENOENT") {
-      throw new GitServiceError("COMMAND_FAILED", "未找到 git 可执行文件。", error);
+      throw new GitServiceError("COMMAND_FAILED", tGit("gitNotFound"), error);
     }
     return null;
   }
@@ -152,7 +153,7 @@ async function requireRepository(startPath: string): Promise<GitRepository> {
   if (!rootPath) {
     throw new GitServiceError(
       "NOT_REPOSITORY",
-      `路径不属于 Git 仓库：${path.resolve(startPath)}`,
+      tGit("notRepository", { path: path.resolve(startPath) }),
     );
   }
   return { rootPath };
@@ -171,21 +172,21 @@ async function resolveRepositoryFile(
   } catch (error) {
     const commandError = error as NodeJS.ErrnoException;
     if (commandError.code !== "ENOENT") {
-      throw new GitServiceError("NOT_FOUND", `文件无法访问：${requestedPath}`, error);
+      throw new GitServiceError("NOT_FOUND", tGit("fileInaccessible", { path: requestedPath }), error);
     }
     const parentPath = path.dirname(requestedPath);
     try {
       const realParentPath = await realpath(parentPath);
       absolutePath = path.join(realParentPath, path.basename(requestedPath));
     } catch (parentError) {
-      throw new GitServiceError("NOT_FOUND", `文件不存在：${requestedPath}`, parentError);
+      throw new GitServiceError("NOT_FOUND", tGit("fileNotFound", { path: requestedPath }), parentError);
     }
   }
 
   if (!isPathInside(repository.rootPath, absolutePath) || absolutePath === repository.rootPath) {
     throw new GitServiceError(
       "OUTSIDE_REPOSITORY",
-      `文件必须位于仓库内：${requestedPath}`,
+      tGit("outsideRepository", { path: requestedPath }),
     );
   }
 
@@ -289,7 +290,7 @@ export async function getIndexObjectId(
   if (!match) {
     throw new GitServiceError(
       "COMMAND_FAILED",
-      `无法解析 Git index 条目：${resolved.relativePath}`,
+      tGit("invalidIndexEntry", { path: resolved.relativePath }),
     );
   }
   return match[1];
@@ -338,7 +339,7 @@ export async function stageFileContent(
     await writeFile(tempFile, content, "utf8");
     const objectId = (await runGit(resolved.repository.rootPath, ["hash-object", "-w", tempFile])).trim();
     if (!/^[0-9a-f]{40,}$/i.test(objectId)) {
-      throw new GitServiceError("COMMAND_FAILED", `无法写入 Git 对象：${objectId}`);
+      throw new GitServiceError("COMMAND_FAILED", tGit("writeObjectFailed", { objectId }));
     }
     let mode = "100644";
     try {
@@ -371,7 +372,7 @@ export async function commitFile(
   message: string,
 ): Promise<GitCommitResult> {
   if (typeof message !== "string" || message.trim() === "") {
-    throw new GitServiceError("INVALID_ARGUMENT", "提交信息不能为空。");
+    throw new GitServiceError("INVALID_ARGUMENT", tGit("commitMessageEmpty"));
   }
 
   const resolved = await resolveRepositoryFile(repositoryPath, filePath);
@@ -392,7 +393,7 @@ export async function commitFile(
     repository: resolved.repository,
     filePath: resolved.absolutePath,
     commitHash,
-    output: `已提交文件 ${resolved.relativePath}。`,
+    output: tGit("committed", { path: resolved.relativePath }),
   };
 }
 
@@ -402,7 +403,7 @@ export async function getUpstreamStatus(
   const repository = await requireRepository(repositoryPath);
   const branch = (await runGit(repository.rootPath, ["branch", "--show-current"])).trim();
   if (!branch) {
-    throw new GitServiceError("INVALID_ARGUMENT", "当前处于 detached HEAD，无法查询上游分支。");
+    throw new GitServiceError("INVALID_ARGUMENT", tGit("detachedHead"));
   }
 
   let upstream: string | null = null;
@@ -424,7 +425,7 @@ export async function getUpstreamStatus(
   ).trim().split(/\s+/).map(Number);
 
   if (counts.length !== 2 || counts.some((value) => !Number.isInteger(value) || value < 0)) {
-    throw new GitServiceError("COMMAND_FAILED", `无法解析分支同步状态：${counts.join(" ")}`);
+    throw new GitServiceError("COMMAND_FAILED", tGit("invalidSyncStatus", { counts: counts.join(" ") }));
   }
 
   return { repository, branch, upstream, ahead: counts[0], behind: counts[1] };
@@ -435,7 +436,7 @@ export async function push(repositoryPath: string): Promise<GitPushResult> {
   if (!status.upstream) {
     throw new GitServiceError(
       "NO_UPSTREAM",
-      `当前分支 ${status.branch} 未配置上游分支，无法推送。`,
+      tGit("noUpstream", { branch: status.branch }),
     );
   }
 

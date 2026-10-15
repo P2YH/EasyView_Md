@@ -14,6 +14,7 @@ import {
   validateWorkspaceEntryName,
 } from './workspace-path';
 import { sortWorkspaceEntries } from './workspace-tree-order';
+import { tWorkspaceError } from './workspace.i18n';
 
 export interface WorkspaceTreeSortProvider {
   getSortMode(): WorkspaceTreeSortMode;
@@ -55,7 +56,7 @@ export class WorkspaceTreeModel {
     if (knownNode && knownNode.kind !== 'directory') {
       const code = knownNode.kind === 'symlink' ? 'SYMLINK_NOT_TRAVERSABLE' : 'NOT_DIRECTORY';
       return Promise.reject(
-        new WorkspaceOperationError(code, `Workspace entry is not a traversable directory: ${directoryPath}`),
+        new WorkspaceOperationError(code, tWorkspaceError('entryNotTraversable', { path: directoryPath })),
       );
     }
 

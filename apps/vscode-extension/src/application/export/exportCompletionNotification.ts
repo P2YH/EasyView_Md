@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { openWithDefaultApp } from '../document/openWithDefaultApp';
+import { tExport } from './export.i18n';
 
 /**
  * Show the post-export toast with an open action.
@@ -12,7 +13,7 @@ import { openWithDefaultApp } from '../document/openWithDefaultApp';
 export function showExportCompletionNotification(
   message: string,
   filePath: string,
-  openActionLabel = 'Open File',
+  openActionLabel = tExport('openFile'),
 ): void {
   setTimeout(() => {
     void vscode.window

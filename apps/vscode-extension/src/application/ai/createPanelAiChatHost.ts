@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { AiChatHost } from '@easyview/node-runtime';
 import type { HostToEditorMessage } from '@easyview/contracts';
+import { tDocument } from '../document/document.i18n';
 
 const AI_CHAT_API_KEY_SECRET = 'easyview.aiChat.apiKey';
 const AI_CHAT_WEB_SEARCH_API_KEY_SECRET = 'easyview.aiChat.webSearch.braveApiKey';
@@ -54,7 +55,7 @@ export function createPanelAiChatHost(
           canSelectFolders: false,
           canSelectMany: true,
           filters: {
-            Images: ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp'],
+            [tDocument('image.filterName')]: ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp'],
           },
         });
         if (!selected?.length) return [];

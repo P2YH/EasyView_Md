@@ -4,6 +4,7 @@ import { gunzip, inflateRaw } from 'node:zlib';
 import { promisify } from 'node:util';
 import type { ArchiveEntry, ArchiveEntryPreview } from '../../../contracts';
 import { PreviewSessionError, PreviewSessionStore } from './PreviewSession';
+import { tPreviewService } from './preview.i18n';
 
 const inflateRawAsync = promisify(inflateRaw);
 const gunzipAsync = promisify(gunzip);
@@ -37,7 +38,7 @@ export class ArchivePreviewService {
   }
 
   private async readEntry(sessionId: string, entryPath: string): Promise<{ entry: ArchiveEntry; content: Buffer }> {
-    if (typeof entryPath !== 'string' || !entryPath || entryPath.includes('\0')) throw new PreviewSessionError('invalid', '压缩包条目路径无效');
+    if (typeof entryPath !== 'string' || !entryPath || entryPath.includes('\0')) throw new PreviewSessionError('invalid', tPreviewService('archive.invalidEntryPath'));
     const fileName = await this.fileName(sessionId);
     const { bytes } = await this.readArchive(sessionId, fileName);
     const extension = archiveExtension(fileName);
@@ -46,38 +47,38 @@ export class ArchivePreviewService {
     if (extension === '.zip' || extension === '.epub') {
       const entries = parseZipEntries(bytes);
       const zipEntry = entries.find((candidate) => candidate.path === entryPath);
-      if (!zipEntry) throw new PreviewSessionError('not-found', '压缩包条目不存在');
+      if (!zipEntry) throw new PreviewSessionError('not-found', tPreviewService('archive.entryNotFound'));
       entry = zipEntry;
       content = await extractZipEntry(bytes, zipEntry);
     } else if (extension === '.tar' || extension === '.tar.gz' || extension === '.tgz') {
       const tarEntry = findTarEntry(bytes, entryPath);
-      if (!tarEntry) throw new PreviewSessionError('not-found', '压缩包条目不存在');
+      if (!tarEntry) throw new PreviewSessionError('not-found', tPreviewService('archive.entryNotFound'));
       entry = tarEntry.entry;
       content = tarEntry.content;
     } else if (extension === '.gz') {
       const expectedPath = fileName.slice(0, -3) || 'content';
-      if (entryPath !== expectedPath) throw new PreviewSessionError('not-found', '压缩包条目不存在');
+      if (entryPath !== expectedPath) throw new PreviewSessionError('not-found', tPreviewService('archive.entryNotFound'));
       entry = { path: expectedPath, directory: false, compressedSize: 0, uncompressedSize: bytes.length };
       content = bytes;
     } else {
-      throw new PreviewSessionError('unsupported', `暂不支持读取 ${extension} 压缩包条目；需要对应的解压运行时`);
+      throw new PreviewSessionError('unsupported', tPreviewService('archive.unsupportedEntryFormat', { extension }));
     }
-    if (entry.directory) throw new PreviewSessionError('invalid', '目录条目不能直接预览');
-    if (content.length > MAX_ENTRY_PREVIEW_BYTES) throw new PreviewSessionError('invalid', '压缩包条目超过 4 MiB 安全预览上限');
+    if (entry.directory) throw new PreviewSessionError('invalid', tPreviewService('archive.directoryEntry'));
+    if (content.length > MAX_ENTRY_PREVIEW_BYTES) throw new PreviewSessionError('invalid', tPreviewService('archive.entryTooLarge'));
     return { entry, content };
   }
 
   private async readArchive(sessionId: string, fileName: string): Promise<{ bytes: Buffer }> {
     const descriptor = await this.sessions.descriptor(sessionId);
-    if (descriptor.route !== 'archive' && descriptor.route !== 'epub') throw new PreviewSessionError('invalid', '当前文件不是压缩包');
+    if (descriptor.route !== 'archive' && descriptor.route !== 'epub') throw new PreviewSessionError('invalid', tPreviewService('archive.notArchive'));
     const source = await fs.readFile(await this.sessions.filePath(sessionId));
     const extension = archiveExtension(fileName);
     if (extension === '.tar.gz' || extension === '.tgz' || extension === '.gz') {
       try {
         return { bytes: await gunzipAsync(source, { maxOutputLength: MAX_EXPANDED_BYTES }) };
       } catch (error) {
-        if (error instanceof RangeError || (error as NodeJS.ErrnoException).code === 'ERR_BUFFER_TOO_LARGE') throw new PreviewSessionError('invalid', 'GZIP 解压后大小超过安全上限');
-        throw new PreviewSessionError('invalid', 'GZIP 文件损坏或无法解压');
+        if (error instanceof RangeError || (error as NodeJS.ErrnoException).code === 'ERR_BUFFER_TOO_LARGE') throw new PreviewSessionError('invalid', tPreviewService('archive.gzipTooLarge'));
+        throw new PreviewSessionError('invalid', tPreviewService('archive.gzipCorrupt'));
       }
     }
     return { bytes: source };
@@ -95,7 +96,7 @@ export class ArchivePreviewService {
       const entryPath = fileName.slice(0, -3) || 'content';
       return [{ path: entryPath, directory: false, compressedSize: 0, uncompressedSize: bytes.length }];
     }
-    throw new PreviewSessionError('unsupported', `暂不支持读取 ${extension} 压缩包目录；需要对应的解压运行时`);
+    throw new PreviewSessionError('unsupported', tPreviewService('archive.unsupportedListFormat', { extension }));
   }
 }
 
@@ -110,21 +111,21 @@ function archiveExtension(fileName: string): string {
 
 function parseZipEntries(bytes: Buffer): InternalZipEntry[] {
   const eocdOffset = findEndOfCentralDirectory(bytes);
-  if (eocdOffset < 0) throw new PreviewSessionError('invalid', '不是有效的 ZIP 文件');
+  if (eocdOffset < 0) throw new PreviewSessionError('invalid', tPreviewService('archive.invalidZip'));
   const disk = bytes.readUInt16LE(eocdOffset + 4);
   const centralDirectoryDisk = bytes.readUInt16LE(eocdOffset + 6);
   const entryCount = bytes.readUInt16LE(eocdOffset + 10);
   const centralDirectorySize = bytes.readUInt32LE(eocdOffset + 12);
   const centralDirectoryOffset = bytes.readUInt32LE(eocdOffset + 16);
-  if (disk !== 0 || centralDirectoryDisk !== 0 || entryCount === 0xffff || centralDirectoryOffset === 0xffffffff) throw new PreviewSessionError('unsupported', '暂不支持 ZIP64 或分卷 ZIP 文件');
-  if (entryCount > MAX_ARCHIVE_ENTRIES) throw new PreviewSessionError('invalid', '压缩包条目数超过安全上限');
-  if (centralDirectoryOffset + centralDirectorySize > bytes.length) throw new PreviewSessionError('invalid', 'ZIP 中央目录损坏');
+  if (disk !== 0 || centralDirectoryDisk !== 0 || entryCount === 0xffff || centralDirectoryOffset === 0xffffffff) throw new PreviewSessionError('unsupported', tPreviewService('archive.zip64Unsupported'));
+  if (entryCount > MAX_ARCHIVE_ENTRIES) throw new PreviewSessionError('invalid', tPreviewService('archive.tooManyEntries'));
+  if (centralDirectoryOffset + centralDirectorySize > bytes.length) throw new PreviewSessionError('invalid', tPreviewService('archive.zipCentralDirectoryCorrupt'));
 
   const entries: InternalZipEntry[] = [];
   let offset = centralDirectoryOffset;
   let expandedBytes = 0;
   for (let index = 0; index < entryCount; index += 1) {
-    if (offset + 46 > bytes.length || bytes.readUInt32LE(offset) !== 0x02014b50) throw new PreviewSessionError('invalid', 'ZIP 中央目录损坏');
+    if (offset + 46 > bytes.length || bytes.readUInt32LE(offset) !== 0x02014b50) throw new PreviewSessionError('invalid', tPreviewService('archive.zipCentralDirectoryCorrupt'));
     const flags = bytes.readUInt16LE(offset + 8);
     const compressionMethod = bytes.readUInt16LE(offset + 10);
     const dosTime = bytes.readUInt16LE(offset + 12);
@@ -136,13 +137,13 @@ function parseZipEntries(bytes: Buffer): InternalZipEntry[] {
     const commentLength = bytes.readUInt16LE(offset + 32);
     const localHeaderOffset = bytes.readUInt32LE(offset + 42);
     const end = offset + 46 + nameLength + extraLength + commentLength;
-    if (end > bytes.length) throw new PreviewSessionError('invalid', 'ZIP 条目损坏');
-    if ((flags & 0x1) !== 0) throw new PreviewSessionError('unsupported', '不支持读取加密 ZIP 文件');
+    if (end > bytes.length) throw new PreviewSessionError('invalid', tPreviewService('archive.zipEntryCorrupt'));
+    if ((flags & 0x1) !== 0) throw new PreviewSessionError('unsupported', tPreviewService('archive.zipEncrypted'));
     const name = decodeZipName(bytes.subarray(offset + 46, offset + 46 + nameLength), (flags & 0x800) !== 0);
     assertSafeArchivePath(name);
     expandedBytes += uncompressedSize;
-    if (expandedBytes > MAX_EXPANDED_BYTES) throw new PreviewSessionError('invalid', '压缩包解压后总大小超过安全上限');
-    if (compressedSize > 0 && uncompressedSize / compressedSize > 100) throw new PreviewSessionError('invalid', '压缩包条目压缩比超过安全上限');
+    if (expandedBytes > MAX_EXPANDED_BYTES) throw new PreviewSessionError('invalid', tPreviewService('archive.expandedTooLarge'));
+    if (compressedSize > 0 && uncompressedSize / compressedSize > 100) throw new PreviewSessionError('invalid', tPreviewService('archive.compressionRatioTooHigh'));
     const lastModified = dosDateTimeToIso(dosDate, dosTime);
     entries.push({
       path: name,
@@ -160,19 +161,19 @@ function parseZipEntries(bytes: Buffer): InternalZipEntry[] {
 
 async function extractZipEntry(bytes: Buffer, entry: InternalZipEntry): Promise<Buffer> {
   if (entry.directory) return Buffer.alloc(0);
-  if (entry.uncompressedSize > MAX_ENTRY_PREVIEW_BYTES || entry.compressedSize > MAX_ENTRY_PREVIEW_BYTES) throw new PreviewSessionError('invalid', '压缩包条目超过 4 MiB 安全预览上限');
+  if (entry.uncompressedSize > MAX_ENTRY_PREVIEW_BYTES || entry.compressedSize > MAX_ENTRY_PREVIEW_BYTES) throw new PreviewSessionError('invalid', tPreviewService('archive.entryTooLarge'));
   const offset = entry.localHeaderOffset;
-  if (offset + 30 > bytes.length || bytes.readUInt32LE(offset) !== 0x04034b50) throw new PreviewSessionError('invalid', 'ZIP 本地文件头损坏');
+  if (offset + 30 > bytes.length || bytes.readUInt32LE(offset) !== 0x04034b50) throw new PreviewSessionError('invalid', tPreviewService('archive.zipLocalHeaderCorrupt'));
   const nameLength = bytes.readUInt16LE(offset + 26);
   const extraLength = bytes.readUInt16LE(offset + 28);
   const start = offset + 30 + nameLength + extraLength;
   const end = start + entry.compressedSize;
-  if (end > bytes.length) throw new PreviewSessionError('invalid', 'ZIP 条目数据损坏');
+  if (end > bytes.length) throw new PreviewSessionError('invalid', tPreviewService('archive.zipEntryDataCorrupt'));
   const compressed = bytes.subarray(start, end);
   if (entry.compressionMethod === 0) return Buffer.from(compressed);
-  if (entry.compressionMethod !== 8) throw new PreviewSessionError('unsupported', 'ZIP 条目使用了暂不支持的压缩算法');
+  if (entry.compressionMethod !== 8) throw new PreviewSessionError('unsupported', tPreviewService('archive.zipCompressionUnsupported'));
   const inflated = await inflateRawAsync(compressed, { maxOutputLength: MAX_ENTRY_PREVIEW_BYTES });
-  if (inflated.length !== entry.uncompressedSize) throw new PreviewSessionError('invalid', 'ZIP 条目大小校验失败');
+  if (inflated.length !== entry.uncompressedSize) throw new PreviewSessionError('invalid', tPreviewService('archive.zipSizeMismatch'));
   return inflated;
 }
 
@@ -190,9 +191,9 @@ function parseTarEntries(bytes: Buffer): Array<{ entry: ArchiveEntry; payloadOff
     const type = header[156];
     assertSafeArchivePath(entryPath);
     expandedBytes += size;
-    if (entries.length >= MAX_ARCHIVE_ENTRIES || expandedBytes > MAX_EXPANDED_BYTES) throw new PreviewSessionError('invalid', '压缩包内容超过安全上限');
+    if (entries.length >= MAX_ARCHIVE_ENTRIES || expandedBytes > MAX_EXPANDED_BYTES) throw new PreviewSessionError('invalid', tPreviewService('archive.contentTooLarge'));
     const payloadOffset = offset + 512;
-    if (payloadOffset + size > bytes.length) throw new PreviewSessionError('invalid', 'TAR 条目数据损坏');
+    if (payloadOffset + size > bytes.length) throw new PreviewSessionError('invalid', tPreviewService('archive.tarEntryDataCorrupt'));
     entries.push({ entry: { path: entryPath, directory: type === 53 || entryPath.endsWith('/'), compressedSize: size, uncompressedSize: size }, payloadOffset });
     offset = payloadOffset + Math.ceil(size / 512) * 512;
   }
@@ -202,7 +203,7 @@ function parseTarEntries(bytes: Buffer): Array<{ entry: ArchiveEntry; payloadOff
 function findTarEntry(bytes: Buffer, entryPath: string): { entry: ArchiveEntry; content: Buffer } | null {
   const item = parseTarEntries(bytes).find((candidate) => candidate.entry.path === entryPath);
   if (!item) return null;
-  if (item.entry.uncompressedSize > MAX_ENTRY_PREVIEW_BYTES) throw new PreviewSessionError('invalid', '压缩包条目超过 4 MiB 安全预览上限');
+  if (item.entry.uncompressedSize > MAX_ENTRY_PREVIEW_BYTES) throw new PreviewSessionError('invalid', tPreviewService('archive.entryTooLarge'));
   return { entry: item.entry, content: bytes.subarray(item.payloadOffset, item.payloadOffset + item.entry.uncompressedSize) };
 }
 
@@ -239,9 +240,9 @@ function findEndOfCentralDirectory(bytes: Buffer): number {
 function decodeZipName(bytes: Buffer, utf8: boolean): string { return bytes.toString(utf8 ? 'utf8' : 'latin1'); }
 
 function assertSafeArchivePath(value: string): void {
-  if (!value || value.includes('\0') || value.includes('\\') || path.posix.isAbsolute(value)) throw new PreviewSessionError('invalid', '压缩包包含不安全路径');
+  if (!value || value.includes('\0') || value.includes('\\') || path.posix.isAbsolute(value)) throw new PreviewSessionError('invalid', tPreviewService('archive.unsafePath'));
   const normalized = path.posix.normalize(value);
-  if (normalized === '..' || normalized.startsWith('../')) throw new PreviewSessionError('invalid', '压缩包包含路径穿越条目');
+  if (normalized === '..' || normalized.startsWith('../')) throw new PreviewSessionError('invalid', tPreviewService('archive.pathTraversal'));
 }
 
 function readTarString(bytes: Buffer): string {
@@ -252,9 +253,9 @@ function readTarString(bytes: Buffer): string {
 function parseTarOctal(bytes: Buffer): number {
   const value = readTarString(bytes).replace(/\0/g, '').trim();
   if (!value) return 0;
-  if (!/^[0-7]+$/.test(value)) throw new PreviewSessionError('invalid', 'TAR 条目大小无效');
+  if (!/^[0-7]+$/.test(value)) throw new PreviewSessionError('invalid', tPreviewService('archive.tarInvalidSize'));
   const parsed = Number.parseInt(value, 8);
-  if (!Number.isSafeInteger(parsed) || parsed < 0) throw new PreviewSessionError('invalid', 'TAR 条目大小无效');
+  if (!Number.isSafeInteger(parsed) || parsed < 0) throw new PreviewSessionError('invalid', tPreviewService('archive.tarInvalidSize'));
   return parsed;
 }
 

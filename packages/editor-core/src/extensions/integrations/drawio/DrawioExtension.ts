@@ -6,6 +6,7 @@
 
 import type { NodeSpec } from 'prosemirror-model';
 import { Extension } from '../../../editor/EditorExtension';
+import { tDrawio } from './drawio.i18n';
 
 // ─── Drawio Extension ────────────────────────────────────────────────────────
 
@@ -45,8 +46,8 @@ export class DrawioExtension extends Extension {
               class: 'drawio-block',
               contenteditable: 'false',
             },
-            ['div', { class: 'drawio-block-label' }, node.attrs.title || 'Draw.io Diagram'],
-            ['div', { class: 'drawio-block-placeholder' }, 'Click to edit in Draw.io'],
+            ['div', { class: 'drawio-block-label' }, node.attrs.title || tDrawio('block.defaultTitle')],
+            ['div', { class: 'drawio-block-placeholder' }, tDrawio('block.editHint')],
           ];
         },
       },

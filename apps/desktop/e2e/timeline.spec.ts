@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { terminateElectron } from './support/electronApp';
+import { resumeRestoredSession, terminateElectron } from './support/electronApp';
 test('Timeline views and restores versions without changing Git, and releases 100 history views', async () => {
   test.setTimeout(180000);
   const temporary = await mkdtemp(join(tmpdir(),'easyview-timeline-e2e-'));
@@ -20,6 +20,7 @@ test('Timeline views and restores versions without changing Git, and releases 10
   const errors:string[]=[];
   try {
     const page=await application.firstWindow();page.on('pageerror',error=>errors.push(error.message));
+    await resumeRestoredSession(page);
     await expect(page.locator('.ProseMirror')).toContainText('Updated.');
     const timeline=page.locator('.easyview-timeline');await expect(timeline).toBeVisible();
     await expect(timeline.locator('.easyview-timeline-entry')).toHaveCount(2);
@@ -87,7 +88,7 @@ test('Timeline views and restores versions without changing Git, and releases 10
     expect(idleAfter.queries).toBe(idleBefore.queries);expect(idleAfter.snapshots).toBe(0);expect(idleAfter.requests).toBe(0);expect(idleAfter.queues).toBe(0);expect(idleAfter.pending).toBe(0);
     await timeline.locator('.easyview-timeline-header').click();
     await application.evaluate(({dialog})=>{dialog.showMessageBox=async()=>({response:1,checkboxChecked:false});});
-    await initial.click({button:'right'});await page.getByRole('menuitem',{name:'Restore This Version'}).click();
+    await initial.click({button:'right'});await page.getByRole('menuitem',{name:'恢复此版本'}).click();
     await expect.poll(()=>readFile(file,'utf8')).toContain('Original.');
     await expect(page.locator('.ProseMirror')).toContainText('Original.');
     expect(git('write-tree')).toBe(index);expect(git('rev-parse','HEAD')).toBe(head);
@@ -97,7 +98,7 @@ test('Timeline views and restores versions without changing Git, and releases 10
     await expect(page.locator('.easyview-change-view .cm-content')).toContainText('Original.');
     await expect(page.locator('.easyview-change-deletion-text')).toContainText('Updated.');
     await localVersion.click({ button: 'right' });
-    await page.getByRole('menuitem', { name: 'Restore This Version' }).click();
+    await page.getByRole('menuitem', { name: '恢复此版本' }).click();
     await expect.poll(() => readFile(file,'utf8')).toContain('Updated.');
     expect(git('write-tree')).toBe(index); expect(git('rev-parse','HEAD')).toBe(head);
     const splitIds = await page.evaluate(async () => {

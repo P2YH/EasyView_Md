@@ -1,8 +1,8 @@
 {
   "name": "easyview-md",
   "displayName": "EasyView_Md",
-  "description": "A visual Markdown editor for VS Code with rich editing, document conversion, and export tools.",
-  "version": "2.0.183",
+  "description": "%extension.description%",
+  "version": "2.0.191",
   "publisher": "zhangxy",
   "license": "MIT",
   "private": true,
@@ -54,6 +54,7 @@
     "onView:easyviewMd.workspaceFiles",
     "onCommand:easyviewMd.workspace.refresh",
     "onCommand:easyviewMd.workspace.configureSort",
+    "onCommand:easyviewMd.workspace.search",
     "onCommand:easyviewMd.workspace.newFile",
     "onCommand:easyviewMd.workspace.newFolder",
     "onCommand:easyviewMd.workspace.revealCurrentFile",
@@ -88,7 +89,7 @@
       },
       {
         "viewType": "easyviewMd.filePreview",
-        "displayName": "EasyView Preview",
+        "displayName": "%customEditor.preview.displayName%",
         "selector": [
           {
             "filenamePattern": "*.txt"
@@ -274,7 +275,7 @@
     "commands": [
       {
         "command": "easyviewMd.openEditor",
-        "title": "Open with EasyView_Md",
+        "title": "%command.openEditor.title%",
         "category": "EasyView_Md",
         "icon": {
           "light": "dist/brand/easyview-editor-light.svg",
@@ -283,148 +284,154 @@
       },
       {
         "command": "easyviewMd.openNativeEditor",
-        "title": "Open in Native Markdown Editor",
+        "title": "%command.openNativeEditor.title%",
         "category": "EasyView_Md",
         "icon": "$(code)"
       },
       {
         "command": "easyviewMd.convertWordToMarkdown",
-        "title": "Convert to Markdown with EasyView_Md",
+        "title": "%command.convertWordToMarkdown.title%",
         "category": "EasyView_Md"
       },
       {
         "command": "easyviewMd.convertPdfToMarkdown",
-        "title": "Convert to Markdown with EasyView_Md",
+        "title": "%command.convertPdfToMarkdown.title%",
         "category": "EasyView_Md"
       },
       {
         "command": "easyviewMd.exportHtmlLight",
-        "title": "Export to HTML (Light)",
+        "title": "%command.exportHtmlLight.title%",
         "category": "EasyView_Md"
       },
       {
         "command": "easyviewMd.exportHtmlDark",
-        "title": "Export to HTML (Dark)",
+        "title": "%command.exportHtmlDark.title%",
         "category": "EasyView_Md"
       },
       {
         "command": "easyviewMd.exportPdfLight",
-        "title": "Export to PDF (Light)",
+        "title": "%command.exportPdfLight.title%",
         "category": "EasyView_Md"
       },
       {
         "command": "easyviewMd.exportPdfDark",
-        "title": "Export to PDF (Dark)",
+        "title": "%command.exportPdfDark.title%",
         "category": "EasyView_Md"
       },
       {
         "command": "easyviewMd.showEditorDiagnostics",
-        "title": "Show Editor Diagnostics",
+        "title": "%command.showEditorDiagnostics.title%",
         "category": "EasyView_Md"
       },
       {
         "command": "easyviewMd.stageFile",
-        "title": "Stage Current File",
+        "title": "%command.stageFile.title%",
         "category": "EasyView_Md"
       },
       {
         "command": "easyviewMd.cycleProductTheme",
-        "title": "Cycle Product Theme",
+        "title": "%command.cycleProductTheme.title%",
         "category": "EasyView_Md"
       },
       {
         "command": "easyviewMd.workspace.refresh",
-        "title": "Refresh",
+        "title": "%command.workspace.refresh.title%",
         "category": "EasyView_Md",
         "icon": "$(refresh)"
       },
       {
         "command": "easyviewMd.workspace.configureSort",
-        "title": "Configure Sort",
+        "title": "%command.workspace.configureSort.title%",
         "category": "EasyView_Md",
         "icon": "$(sort-precedence)"
       },
       {
+        "command": "easyviewMd.workspace.search",
+        "title": "%command.workspace.search.title%",
+        "category": "EasyView_Md",
+        "icon": "$(search)"
+      },
+      {
         "command": "easyviewMd.workspace.newFile",
-        "title": "New File",
+        "title": "%command.workspace.newFile.title%",
         "category": "EasyView_Md",
         "icon": "$(new-file)"
       },
       {
         "command": "easyviewMd.workspace.newFolder",
-        "title": "New Folder",
+        "title": "%command.workspace.newFolder.title%",
         "category": "EasyView_Md",
         "icon": "$(new-folder)"
       },
       {
         "command": "easyviewMd.workspace.revealCurrentFile",
-        "title": "Reveal Current File",
+        "title": "%command.workspace.revealCurrentFile.title%",
         "category": "EasyView_Md",
         "icon": "$(target)"
       },
       {
         "command": "easyviewMd.workspace.revealInIndexArea",
-        "title": "Reveal in IndexArea",
+        "title": "%command.workspace.revealInIndexArea.title%",
         "category": "EasyView_Md"
       },
       {
         "command": "easyviewMd.workspace.openPreview",
-        "title": "Open Preview",
+        "title": "%command.workspace.openPreview.title%",
         "category": "EasyView_Md"
       },
       {
         "command": "easyviewMd.workspace.openExternal",
-        "title": "Open with Default Application",
+        "title": "%command.workspace.openExternal.title%",
         "category": "EasyView_Md"
       },
       {
         "command": "easyviewMd.workspace.revealMac",
-        "title": "Reveal in Finder",
+        "title": "%command.workspace.revealMac.title%",
         "category": "EasyView_Md"
       },
       {
         "command": "easyviewMd.workspace.revealWindows",
-        "title": "Reveal in File Explorer",
+        "title": "%command.workspace.revealWindows.title%",
         "category": "EasyView_Md"
       },
       {
         "command": "easyviewMd.workspace.revealLinux",
-        "title": "Open Containing Folder",
+        "title": "%command.workspace.revealLinux.title%",
         "category": "EasyView_Md"
       },
       {
         "command": "easyviewMd.workspace.copyResourceUri",
-        "title": "Copy",
+        "title": "%command.workspace.copyResourceUri.title%",
         "category": "EasyView_Md"
       },
       {
         "command": "easyviewMd.workspace.paste",
-        "title": "Paste",
+        "title": "%command.workspace.paste.title%",
         "category": "EasyView_Md"
       },
       {
         "command": "easyviewMd.workspace.copyPath",
-        "title": "Copy Path",
+        "title": "%command.workspace.copyPath.title%",
         "category": "EasyView_Md"
       },
       {
         "command": "easyviewMd.workspace.copyRelativePath",
-        "title": "Copy Relative Path",
+        "title": "%command.workspace.copyRelativePath.title%",
         "category": "EasyView_Md"
       },
       {
         "command": "easyviewMd.workspace.rename",
-        "title": "Rename",
+        "title": "%command.workspace.rename.title%",
         "category": "EasyView_Md"
       },
       {
         "command": "easyviewMd.workspace.delete",
-        "title": "Delete",
+        "title": "%command.workspace.delete.title%",
         "category": "EasyView_Md"
       },
       {
         "command": "easyviewMd.workspace.collapseAll",
-        "title": "Collapse All",
+        "title": "%command.workspace.collapseAll.title%",
         "category": "EasyView_Md",
         "icon": "$(collapse-all)"
       }
@@ -476,6 +483,11 @@
         }
       ],
       "view/title": [
+        {
+          "command": "easyviewMd.workspace.search",
+          "when": "view == easyviewMd.workspaceFiles",
+          "group": "navigation@0"
+        },
         {
           "command": "easyviewMd.workspace.configureSort",
           "when": "view == easyviewMd.workspaceFiles",
@@ -584,36 +596,36 @@
           ],
           "default": "auto",
           "enumDescriptions": [
-            "Comma (US, UK, etc.)",
-            "Semicolon (Russia, Germany, France, etc.)",
-            "Auto-detect based on system locale (may not work correctly)"
+            "%config.csvDelimiter.enumDescriptions.0%",
+            "%config.csvDelimiter.enumDescriptions.1%",
+            "%config.csvDelimiter.enumDescriptions.2%"
           ],
-          "description": "CSV delimiter to use when exporting tables"
+          "description": "%config.csvDelimiter.description%"
         },
         "easyviewMd.nativeDecorations.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable lightweight inline markdown decorations in the native VS Code editor."
+          "description": "%config.nativeDecorations.enabled.description%"
         },
         "easyviewMd.nativeDecorations.mermaid.enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Enable experimental Mermaid flowchart previews in the native VS Code editor. Disabled by default because VS Code requires a visible contributed view for the webview renderer."
+          "description": "%config.nativeDecorations.mermaid.enabled.description%"
         },
         "easyviewMd.nativeDecorations.tables.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable conservative Markdown table styling in the native VS Code editor without replacing table source text."
+          "description": "%config.nativeDecorations.tables.enabled.description%"
         },
         "easyviewMd.nativeEditor.forceMonospaceFont": {
           "type": "boolean",
           "default": true,
-          "description": "Force Markdown native source editors to use a CJK-aware monospace font family when opened from EasyView_Md."
+          "description": "%config.nativeEditor.forceMonospaceFont.description%"
         },
         "easyviewMd.workspace.focusFilesOnStartup": {
           "type": "boolean",
           "default": true,
-          "description": "After window startup or reload, show the EasyView_Md Files sidebar for an open workspace and hide the sidebar in an empty welcome window. Disable to keep the host editor's sidebar restore behavior."
+          "description": "%config.workspace.focusFilesOnStartup.description%"
         }
       }
     },
@@ -631,7 +643,7 @@
         {
           "type": "webview",
           "id": "easyviewMd.workspaceFiles",
-          "name": "Files",
+          "name": "%view.files.name%",
           "contextualTitle": "IndexArea"
         }
       ]

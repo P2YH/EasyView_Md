@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
+import { tExtension } from './extension.i18n';
 
 const LAST_ACTIVATED_VERSION_KEY = 'easyviewMd.lastActivatedVersion';
-const VIEW_RELEASE_NOTES_ACTION = 'View Release Notes';
 const RELEASE_NOTES_URL = 'https://github.com/tiantianmanmanzou/EasyView_Md/blob/main/README.md';
 
 /** Record the installed version and notify only when a previously installed version changed. */
@@ -17,11 +17,12 @@ export async function notifyExtensionUpdated(
     return false;
   }
 
+  const viewReleaseNotesAction = tExtension('update.viewReleaseNotes');
   const action = await vscode.window.showInformationMessage(
-    `EasyView_Md updated from v${previousVersion} to v${currentVersion}.`,
-    VIEW_RELEASE_NOTES_ACTION,
+    tExtension('update.message', { previous: previousVersion, current: currentVersion }),
+    viewReleaseNotesAction,
   );
-  if (action === VIEW_RELEASE_NOTES_ACTION) {
+  if (action === viewReleaseNotesAction) {
     await vscode.env.openExternal(vscode.Uri.parse(RELEASE_NOTES_URL));
   }
   return true;

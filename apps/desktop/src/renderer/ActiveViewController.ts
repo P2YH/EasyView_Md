@@ -45,6 +45,7 @@ export class ActiveViewController {
   private readonly creatingIslands = new Map<string, Promise<PreviewIsland>>();
   private previewRequest = 0;
   private snapshot: DesktopTabSnapshot | null = null;
+  private renderedLayoutKey: string | null = null;
 
   constructor(private readonly options: ActiveViewControllerOptions) {
     this.adoptPrimaryPane();
@@ -151,6 +152,11 @@ export class ActiveViewController {
     for (const group of snapshot.groups) {
       if (!this.panes.has(group.id)) this.createAndStorePane(group.id);
     }
+    // Re-parenting a pane blurs the focused editor, so only rebuild when the split structure changes.
+    const layoutKey = JSON.stringify(snapshot.layout);
+    const attached = [...this.panes.values()].every((pane) => this.options.splitRoot.contains(pane.root));
+    if (layoutKey === this.renderedLayoutKey && attached) return;
+    this.renderedLayoutKey = layoutKey;
     this.options.splitRoot.replaceChildren(this.buildLayout(snapshot.layout));
   }
 

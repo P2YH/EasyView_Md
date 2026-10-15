@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { SETTINGS_COMMENT_RE } from '@easyview/markdown-core/editor-settings';
 import { NATIVE_MARKDOWN_MONOSPACE_FONT_FAMILY } from './nativeEditorFont';
 import { NativeMermaidRenderer } from './nativeMermaidRenderer';
+import { findHorizontalRuleLines } from '@easyview/markdown-core/horizontal-rule';
 
 type OffsetRange = { start: number; end: number };
 
@@ -135,6 +136,22 @@ export class NativeMarkdownDecorator implements vscode.Disposable {
     opacity: '0.45',
   });
 
+  // Whole-line styles only reach the full-width overlay through the border/background
+  // properties, so the centered rule is injected via `borderStyle`. The overlay sits
+  // beneath the text layer.
+  private readonly horizontalRuleDecoration = vscode.window.createTextEditorDecorationType({
+    isWholeLine: true,
+    borderStyle: [
+      'none',
+      'background-image: linear-gradient(to bottom, transparent calc(50% - 1px), var(--vscode-textSeparator-foreground, rgba(128, 128, 128, 0.45)) calc(50% - 1px), var(--vscode-textSeparator-foreground, rgba(128, 128, 128, 0.45)) calc(50% + 1px), transparent calc(50% + 1px))',
+      'background-repeat: no-repeat',
+    ].join('; '),
+  });
+
+  private readonly horizontalRuleMarkerDecoration = vscode.window.createTextEditorDecorationType({
+    color: 'transparent',
+  });
+
   private initialize(): void {
     this.disposables.push(
       vscode.window.onDidChangeActiveTextEditor((editor) => {
@@ -205,6 +222,8 @@ export class NativeMarkdownDecorator implements vscode.Disposable {
     this.tableBlockDecoration.dispose();
     this.tablePipeDecoration.dispose();
     this.tableSeparatorDecoration.dispose();
+    this.horizontalRuleDecoration.dispose();
+    this.horizontalRuleMarkerDecoration.dispose();
     for (const entry of this.mermaidDecorations.values()) {
       entry.decorationType.dispose();
     }
@@ -245,6 +264,8 @@ export class NativeMarkdownDecorator implements vscode.Disposable {
     editor.setDecorations(this.tableBlockDecoration, []);
     editor.setDecorations(this.tablePipeDecoration, []);
     editor.setDecorations(this.tableSeparatorDecoration, []);
+    editor.setDecorations(this.horizontalRuleDecoration, []);
+    editor.setDecorations(this.horizontalRuleMarkerDecoration, []);
     this.clearMermaidDecorations(editor);
   }
 
@@ -290,6 +311,16 @@ export class NativeMarkdownDecorator implements vscode.Disposable {
       tableBlockRanges.push(new vscode.Range(block.startLine, 0, block.endLine, editor.document.lineAt(block.endLine).text.length));
     }
 
+    const lineTexts = Array.from({ length: editor.document.lineCount }, (_, index) => editor.document.lineAt(index).text);
+    const horizontalRuleLines = new Set(findHorizontalRuleLines(lineTexts));
+    const horizontalRuleRanges: vscode.Range[] = [];
+    const horizontalRuleMarkerRanges: vscode.Range[] = [];
+    for (const lineIndex of horizontalRuleLines) {
+      const range = new vscode.Range(lineIndex, 0, lineIndex, lineTexts[lineIndex].length);
+      horizontalRuleRanges.push(range);
+      if (!activeLines.has(lineIndex)) horizontalRuleMarkerRanges.push(range);
+    }
+
     for (let lineIndex = 0; lineIndex < editor.document.lineCount; lineIndex++) {
       const line = editor.document.lineAt(lineIndex);
       if (!line.isEmptyOrWhitespace) {
@@ -301,7 +332,7 @@ export class NativeMarkdownDecorator implements vscode.Disposable {
       }
 
       const listMarkerMatch = /^(\s*)([-*+]|\d+[.)])(\s+)/.exec(line.text);
-      if (listMarkerMatch && !activeLines.has(lineIndex)) {
+      if (listMarkerMatch && !activeLines.has(lineIndex) && !horizontalRuleLines.has(lineIndex)) {
         const startCharacter = listMarkerMatch[1].length;
         const endCharacter = startCharacter + listMarkerMatch[2].length + listMarkerMatch[3].length;
         const markerText = /^\d/.test(listMarkerMatch[2]) ? listMarkerMatch[2] : '•';
@@ -376,6 +407,8 @@ export class NativeMarkdownDecorator implements vscode.Disposable {
     editor.setDecorations(this.tableBlockDecoration, tableBlockRanges);
     editor.setDecorations(this.tablePipeDecoration, tablePipeRanges);
     editor.setDecorations(this.tableSeparatorDecoration, tableSeparatorRanges);
+    editor.setDecorations(this.horizontalRuleDecoration, horizontalRuleRanges);
+    editor.setDecorations(this.horizontalRuleMarkerDecoration, horizontalRuleMarkerRanges);
 
     void this.updateMermaidDecorations(editor, mermaidBlocks);
   }

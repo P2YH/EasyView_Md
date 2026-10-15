@@ -17,12 +17,14 @@ import {
   joinWorkspaceRelativePath,
   normalizeWorkspaceRelativePath,
   parentWorkspaceRelativePath,
+  searchWorkspaceTree,
   validateWorkspaceEntryName as validateSharedWorkspaceEntryName,
   WORKSPACE_TREE_ORDER_RELATIVE_PATH,
   WorkspaceFileOperationService,
   WorkspaceTreeModel,
   WorkspaceTreeOrderState,
 } from '@easyview/node-runtime';
+import { tWorkspace } from './workspace.i18n';
 
 export type { WorkspaceCreateRequest, WorkspaceEntry, WorkspaceEntryKind };
 
@@ -52,7 +54,7 @@ export class VscodeWorkspaceGateway implements WorkspaceGateway {
 
   uriFor(rootId: string, relativePath: string): vscode.Uri {
     const root = this.roots.get(rootId);
-    if (!root) throw new WorkspaceOperationError('ROOT_NOT_FOUND', 'Workspace root is not registered.');
+    if (!root) throw new WorkspaceOperationError('ROOT_NOT_FOUND', tWorkspace('op.rootNotRegistered'));
     return relativePath ? vscode.Uri.joinPath(root, ...relativePath.split('/')) : root;
   }
 
@@ -94,7 +96,7 @@ export class VscodeWorkspaceGateway implements WorkspaceGateway {
       const edit = new vscode.WorkspaceEdit();
       edit.createFile(target, { overwrite: false, ignoreIfExists: false });
       if (!await vscode.workspace.applyEdit(edit)) {
-        throw new WorkspaceOperationError('IO_ERROR', `Unable to create ${request.name}.`);
+        throw new WorkspaceOperationError('IO_ERROR', tWorkspace('op.createFailed', { name: request.name }));
       }
     }
     return {
@@ -114,7 +116,7 @@ export class VscodeWorkspaceGateway implements WorkspaceGateway {
     const target = this.uriFor(rootId, relativePath);
     const sourceStat = await vscode.workspace.fs.stat(source);
     if (!await renameMarkdownResource(source, target)) {
-      throw new WorkspaceOperationError('IO_ERROR', `Unable to rename ${workspaceBasename(source)}.`);
+      throw new WorkspaceOperationError('IO_ERROR', tWorkspace('op.renameFailed', { name: workspaceBasename(source) }));
     }
     return {
       id: createWorkspaceNodeId(rootId, relativePath),
@@ -141,13 +143,13 @@ export class VscodeWorkspaceGateway implements WorkspaceGateway {
       const sourcePath = normalizeUriPath(source.path);
       const parentPath = normalizeUriPath(this.uriFor(rootId, targetParentRelativePath).path);
       if (parentPath === sourcePath || parentPath.startsWith(`${sourcePath}/`)) {
-        throw new WorkspaceOperationError('INVALID_PATH', 'Cannot move a folder into itself or its descendants.');
+        throw new WorkspaceOperationError('INVALID_PATH', tWorkspace('op.moveIntoSelf'));
       }
     }
     const edit = new vscode.WorkspaceEdit();
     edit.renameFile(source, target, { overwrite: false, ignoreIfExists: false });
     if (!await vscode.workspace.applyEdit(edit)) {
-      throw new WorkspaceOperationError('IO_ERROR', `Unable to move ${workspaceBasename(source)}.`);
+      throw new WorkspaceOperationError('IO_ERROR', tWorkspace('op.moveFailed', { name: workspaceBasename(source) }));
     }
     return {
       id: createWorkspaceNodeId(rootId, relativePath),
@@ -169,7 +171,7 @@ export class VscodeWorkspaceGateway implements WorkspaceGateway {
     } catch (error) {
       throw new WorkspaceOperationError(
         'IO_ERROR',
-        `Unable to delete ${workspaceBasename(target)}.`,
+        tWorkspace('op.deleteFailed', { name: workspaceBasename(target) }),
         { cause: error },
       );
     }
@@ -184,14 +186,14 @@ export class VscodeWorkspaceGateway implements WorkspaceGateway {
     const parent = this.uriFor(rootId, targetParentRelativePath);
     const sourceStat = await vscode.workspace.fs.stat(source);
     if ((sourceStat.type & vscode.FileType.SymbolicLink) !== 0) {
-      throw new WorkspaceOperationError('SYMLINK_NOT_TRAVERSABLE', 'Copying symbolic links is not supported.');
+      throw new WorkspaceOperationError('SYMLINK_NOT_TRAVERSABLE', tWorkspace('op.copySymlink'));
     }
     const isDirectory = (sourceStat.type & vscode.FileType.Directory) !== 0;
     if (isDirectory) {
       const sourcePath = normalizeUriPath(source.path);
       const parentPath = normalizeUriPath(parent.path);
       if (parentPath === sourcePath || parentPath.startsWith(`${sourcePath}/`)) {
-        throw new WorkspaceOperationError('INVALID_PATH', 'Cannot paste a folder into itself or its descendants.');
+        throw new WorkspaceOperationError('INVALID_PATH', tWorkspace('op.pasteIntoSelf'));
       }
     }
     const target = await uniqueCopyTargetUri(parent, workspaceBasename(source), isDirectory);
@@ -200,7 +202,7 @@ export class VscodeWorkspaceGateway implements WorkspaceGateway {
     } catch (error) {
       throw new WorkspaceOperationError(
         'IO_ERROR',
-        `Unable to paste ${workspaceBasename(source)}.`,
+        tWorkspace('op.pasteFailed', { name: workspaceBasename(source) }),
         { cause: error },
       );
     }
@@ -323,6 +325,16 @@ export class WorkspaceTreeService {
     }));
   }
 
+  async search(root: vscode.Uri, query: string): Promise<{ entries: VscodeWorkspaceEntry[]; truncated: boolean }> {
+    const rootId = this.gateway.registerRoot(root);
+    const result = await searchWorkspaceTree(this.model, rootId, query, { showDotEntries: this.getShowDotEntries() });
+    const writable = vscode.workspace.fs.isWritableFileSystem(root.scheme) !== false;
+    return {
+      entries: result.entries.map((entry) => ({ ...entry, uri: this.gateway.uriFor(rootId, entry.relativePath), writable })),
+      truncated: result.truncated,
+    };
+  }
+
   invalidate(root: vscode.Uri, relativePaths: readonly string[]): void {
     this.model.invalidate(this.gateway.registerRoot(root), relativePaths);
   }
@@ -391,7 +403,7 @@ export class WorkspaceTreeService {
     const parent = this.gateway.uriFor(rootId, targetParentRelativePath);
     const sourceStat = await vscode.workspace.fs.stat(source);
     if ((sourceStat.type & vscode.FileType.SymbolicLink) !== 0) {
-      throw new WorkspaceOperationError('SYMLINK_NOT_TRAVERSABLE', 'Importing symbolic links is not supported.');
+      throw new WorkspaceOperationError('SYMLINK_NOT_TRAVERSABLE', tWorkspace('op.importSymlink'));
     }
     const isDirectory = (sourceStat.type & vscode.FileType.Directory) !== 0;
     const target = await uniqueCopyTargetUri(parent, workspaceBasename(source), isDirectory);
@@ -400,7 +412,7 @@ export class WorkspaceTreeService {
     } catch (error) {
       throw new WorkspaceOperationError(
         'IO_ERROR',
-        `Unable to import ${workspaceBasename(source)}.`,
+        tWorkspace('op.importFailed', { name: workspaceBasename(source) }),
         { cause: error },
       );
     }
@@ -536,7 +548,7 @@ export function validateWorkspaceEntryName(name: string): string | undefined {
     validateSharedWorkspaceEntryName(name);
     return undefined;
   } catch (error) {
-    return error instanceof Error ? error.message : 'The file name is not valid.';
+    return error instanceof Error ? error.message : tWorkspace('op.invalidName');
   }
 }
 
@@ -565,7 +577,7 @@ export async function uniqueWorkspaceCreateName(
   parent: vscode.Uri,
   kind: 'file' | 'directory',
 ): Promise<string> {
-  const baseName = kind === 'directory' ? 'New Folder' : 'untitled.md';
+  const baseName = kind === 'directory' ? tWorkspace('op.defaultFolderName') : 'untitled.md';
   const extension = kind === 'directory' ? '' : path.posix.extname(baseName);
   const stem = kind === 'directory' ? baseName : path.posix.basename(baseName, extension);
   let index = 0;

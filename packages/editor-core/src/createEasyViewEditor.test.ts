@@ -113,7 +113,7 @@ describe('createEasyViewEditor entry boundary', () => {
     expect(root.classList.contains('inlinemd-booting')).toBe(false);
     expect(root.classList.contains('inlinemd-ready')).toBe(true);
     expect(root.querySelector('.ProseMirror')?.textContent).toContain('Heading');
-    expect(document.querySelector('.ai-changes-toast.visible .ai-changes-toast-summary')?.textContent).toBe('No changes');
+    expect(document.querySelector('.ai-changes-toast.visible')).toBeNull();
 
     editor.dispose();
     localStorage.removeItem('mdpre-external-follow-scroll');

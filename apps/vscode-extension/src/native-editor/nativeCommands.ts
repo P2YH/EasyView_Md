@@ -7,6 +7,7 @@ import { findChromiumBinary, printToPdf } from '../application/export/providerEx
 import { roundPdfCorners } from '../application/export/pdfRoundCorners';
 import { activeMarkdownEditor, isMarkdownDocument, parseMarkdownDocument } from './markdownModel';
 import { renameMarkdownResource } from '../application/document/renameMarkdownResource';
+import { tNative } from './nativeEditor.i18n';
 
 
 async function documentForUri(uri?: vscode.Uri): Promise<vscode.TextDocument | undefined> {
@@ -54,7 +55,7 @@ async function renderMarkdownHtml(document: vscode.TextDocument, isDark: boolean
 async function exportHtml(isDark: boolean): Promise<void> {
   const document = activeMarkdownEditor()?.document;
   if (!document) {
-    vscode.window.showInformationMessage('Open a Markdown file first.');
+    vscode.window.showInformationMessage(tNative('openMarkdownFirst'));
     return;
   }
 
@@ -67,19 +68,19 @@ async function exportHtml(isDark: boolean): Promise<void> {
 
   const html = await renderMarkdownHtml(document, isDark);
   await vscode.workspace.fs.writeFile(saveUri, Buffer.from(html, 'utf8'));
-  vscode.window.showInformationMessage(`Exported HTML to ${path.basename(saveUri.fsPath)}`);
+  vscode.window.showInformationMessage(tNative('export.htmlExported', { name: path.basename(saveUri.fsPath) }));
 }
 
 async function exportPdf(isDark: boolean): Promise<void> {
   const document = activeMarkdownEditor()?.document;
   if (!document) {
-    vscode.window.showInformationMessage('Open a Markdown file first.');
+    vscode.window.showInformationMessage(tNative('openMarkdownFirst'));
     return;
   }
 
   const chrome = findChromiumBinary();
   if (!chrome) {
-    vscode.window.showErrorMessage('PDF export needs Chrome, Edge, or Chromium installed.');
+    vscode.window.showErrorMessage(tNative('export.pdfNeedsChromium'));
     return;
   }
 
@@ -95,10 +96,10 @@ async function exportPdf(isDark: boolean): Promise<void> {
   try {
     await fs.writeFile(tempHtml, await renderMarkdownHtml(document, isDark), 'utf8');
     const result = await printToPdf(chrome, tempHtml, tempPdf);
-    if (!result) throw new Error('Chromium did not create a PDF.');
+    if (!result) throw new Error(tNative('export.pdfNotCreated'));
     const rounded = await roundPdfCorners(await fs.readFile(tempPdf));
     await vscode.workspace.fs.writeFile(saveUri, Buffer.from(rounded));
-    vscode.window.showInformationMessage(`Exported PDF to ${path.basename(saveUri.fsPath)}`);
+    vscode.window.showInformationMessage(tNative('export.pdfExported', { name: path.basename(saveUri.fsPath) }));
   } finally {
     await fs.rm(tempHtml, { force: true });
     await fs.rm(tempPdf, { force: true });
@@ -114,7 +115,7 @@ export function registerNativeMarkdownCommands(context: vscode.ExtensionContext)
 
   disposables.push(vscode.commands.registerCommand('easyviewMd.openNativeEditor', async (uri?: vscode.Uri) => {
     const editor = await editorForUri(uri);
-    if (!editor) vscode.window.showInformationMessage('Open a Markdown file first.');
+    if (!editor) vscode.window.showInformationMessage(tNative('openMarkdownFirst'));
   }));
 
   disposables.push(vscode.commands.registerCommand('easyviewMd.revealLine', async (uri: vscode.Uri, line: number) => {
@@ -131,7 +132,7 @@ export function registerNativeMarkdownCommands(context: vscode.ExtensionContext)
     const heading = parseMarkdownDocument(document).headings.find((item) => item.line === line);
     if (!heading) return;
     await vscode.env.clipboard.writeText(`#${heading.anchor}`);
-    vscode.window.showInformationMessage(`Copied #${heading.anchor}`);
+    vscode.window.showInformationMessage(tNative('command.anchorCopied', { anchor: heading.anchor }));
   }));
 
   disposables.push(vscode.commands.registerCommand('easyviewMd.insertHeadingLink', async (uri?: vscode.Uri, line?: number) => {
@@ -155,23 +156,23 @@ export function registerNativeMarkdownCommands(context: vscode.ExtensionContext)
   disposables.push(vscode.commands.registerCommand('easyviewMd.insertTable', async () => {
     const editor = activeMarkdownEditor();
     if (!editor) {
-      vscode.window.showInformationMessage('Open a Markdown file first.');
+      vscode.window.showInformationMessage(tNative('openMarkdownFirst'));
       return;
     }
-    await editor.edit((edit) => edit.insert(editor.selection.active, '| Column 1 | Column 2 |\n| --- | --- |\n|  |  |\n'));
+    await editor.edit((edit) => edit.insert(editor.selection.active, tNative('table.template')));
   }));
 
   disposables.push(vscode.commands.registerCommand('easyviewMd.insertImage', async () => {
     const editor = activeMarkdownEditor();
     if (!editor) {
-      vscode.window.showInformationMessage('Open a Markdown file first.');
+      vscode.window.showInformationMessage(tNative('openMarkdownFirst'));
       return;
     }
     const selected = await vscode.window.showOpenDialog({
       canSelectFiles: true,
       canSelectFolders: false,
       canSelectMany: false,
-      filters: { Images: ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp', 'ico'] },
+      filters: { [tNative('command.imageFilterName')]: ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp', 'ico'] },
       defaultUri: vscode.Uri.file(path.dirname(editor.document.uri.fsPath)),
     });
     const image = selected?.[0];
@@ -184,12 +185,12 @@ export function registerNativeMarkdownCommands(context: vscode.ExtensionContext)
   disposables.push(vscode.commands.registerCommand('easyviewMd.renameFile', async () => {
     const document = activeMarkdownEditor()?.document;
     if (!document || document.uri.scheme !== 'file') {
-      vscode.window.showInformationMessage('Open a Markdown file first.');
+      vscode.window.showInformationMessage(tNative('openMarkdownFirst'));
       return;
     }
     const ext = path.extname(document.uri.fsPath);
     const current = path.basename(document.uri.fsPath, ext);
-    const next = await vscode.window.showInputBox({ value: current, prompt: 'New file name' });
+    const next = await vscode.window.showInputBox({ value: current, prompt: tNative('command.newFileName') });
     if (!next || next === current) return;
     const nextUri = vscode.Uri.file(path.join(path.dirname(document.uri.fsPath), `${next}${ext}`));
     if (await renameMarkdownResource(document.uri, nextUri)) await editorForUri(nextUri);
@@ -198,13 +199,13 @@ export function registerNativeMarkdownCommands(context: vscode.ExtensionContext)
   disposables.push(vscode.commands.registerCommand('easyviewMd.stageFile', async () => {
     const document = activeMarkdownEditor()?.document;
     if (!document || document.uri.scheme !== 'file') {
-      vscode.window.showInformationMessage('Open a Markdown file first.');
+      vscode.window.showInformationMessage(tNative('openMarkdownFirst'));
       return;
     }
     const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
     const cwd = workspaceFolder?.uri.fsPath ?? path.dirname(document.uri.fsPath);
     await stageGitFile(cwd, document.uri.fsPath);
-    vscode.window.showInformationMessage(`Staged ${path.basename(document.uri.fsPath)}`);
+    vscode.window.showInformationMessage(tNative('command.staged', { name: path.basename(document.uri.fsPath) }));
     vscode.commands.executeCommand('easyviewMd.refreshNativePanel');
   }));
 

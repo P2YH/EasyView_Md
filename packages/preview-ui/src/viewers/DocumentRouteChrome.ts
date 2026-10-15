@@ -1,10 +1,10 @@
 import * as React from 'react';
 import {
   PREVIEW_THEME_ICONS,
-  PREVIEW_THEME_TITLES,
   createLocalPreviewThemeStorage,
   cyclePreviewThemeMode,
   previewThemeCssVars,
+  previewThemeTitle,
   resolvePreviewThemeMode,
   useLiftPreviewThemeSurface,
   type PreviewThemeMode,
@@ -12,6 +12,7 @@ import {
 } from '../theme';
 import { appearanceFromThemeMode, h, PreviewToolbarPinIcon } from './shared';
 import { usePreviewAssets } from '../assets';
+import { tPreview } from '../preview.i18n';
 
 const TOOLBAR_PINNED_STORAGE_KEY = 'easyview.preview.toolbarPinned';
 const WORD_COMMENTS_SIDEBAR_STORAGE_KEY = 'easyview.preview.word.commentsSidebarOpen';
@@ -182,8 +183,8 @@ export function DocumentThemeButton(props: {
   return h('button', {
     type: 'button',
     className: 'preview-chrome-btn preview-chrome-btn--icon preview-toolbar-theme',
-    title: PREVIEW_THEME_TITLES[props.themeMode],
-    'aria-label': PREVIEW_THEME_TITLES[props.themeMode],
+    title: previewThemeTitle(props.themeMode),
+    'aria-label': previewThemeTitle(props.themeMode),
     'data-mode': props.themeMode,
     onClick: props.onCycleTheme,
     dangerouslySetInnerHTML: { __html: PREVIEW_THEME_ICONS[props.themeMode] },
@@ -196,8 +197,8 @@ export function DocumentCollapseButton(props: {
   return h('button', {
     type: 'button',
     className: 'preview-chrome-btn preview-chrome-btn--icon preview-toolbar-toggle preview-toolbar-collapse-dock',
-    title: '收起预览工具栏',
-    'aria-label': '收起预览工具栏',
+    title: tPreview('toolbar.collapse'),
+    'aria-label': tPreview('toolbar.collapse'),
     'aria-expanded': true,
     onClick: props.onTogglePinned,
   }, h(PreviewToolbarPinIcon, { expand: false }));
@@ -208,15 +209,15 @@ export function DocumentChromeActions(props: DocumentChromeActionsProps): React.
   const documentGroup = (props.onSave || props.documentActions)
     ? h('div', {
         role: 'group',
-        'aria-label': '文档操作',
+        'aria-label': tPreview('chrome.documentActions'),
         'data-toolbar-group': 'document',
       },
         props.onSave
           ? h('button', {
               type: 'button',
               className: 'preview-chrome-btn preview-chrome-btn--icon preview-document-route-save',
-              title: props.saveMessage || (props.dirty ? '保存更改' : '已保存'),
-              'aria-label': props.saving ? '保存中' : '保存',
+              title: props.saveMessage || (props.dirty ? tPreview('chrome.saveChanges') : tPreview('chrome.saved')),
+              'aria-label': props.saving ? tPreview('chrome.saving') : tPreview('chrome.save'),
               disabled: props.saveDisabled || props.saving || props.dirty === false,
               onClick: (event: React.MouseEvent<HTMLButtonElement>) => {
                 event.stopPropagation();
@@ -232,7 +233,7 @@ export function DocumentChromeActions(props: DocumentChromeActionsProps): React.
 
   const viewGroup = h('div', {
     role: 'group',
-    'aria-label': '视图',
+    'aria-label': tPreview('chrome.view'),
     'data-toolbar-group': 'view',
   },
     h(DocumentThemeButton, {
@@ -261,8 +262,8 @@ export function DocumentToolbarExpandButton(props: {
   return h('button', {
     type: 'button',
     className: 'preview-chrome-btn preview-chrome-btn--icon preview-toolbar-toggle preview-toolbar-expand-dock',
-    'data-tooltip': '展开预览工具栏',
-    'aria-label': '展开预览工具栏',
+    'data-tooltip': tPreview('toolbar.expand'),
+    'aria-label': tPreview('toolbar.expand'),
     'aria-expanded': false,
     onClick: props.onTogglePinned,
   }, h(PreviewToolbarPinIcon, { expand: true }));

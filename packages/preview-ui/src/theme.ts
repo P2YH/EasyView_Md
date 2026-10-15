@@ -8,6 +8,7 @@ import {
   readLocalProductTheme,
   writeLocalFileTheme,
 } from '@easyview/contracts';
+import { tPreview } from './preview.i18n';
 
 export type PreviewThemeMode = EasyViewThemeMode;
 
@@ -112,11 +113,9 @@ export const PREVIEW_THEME_ICONS: Record<PreviewThemeMode, string> = {
   dark: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.2 10.4A6 6 0 0 1 5.6 2.8 6 6 0 1 0 13.2 10.4Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>',
 };
 
-export const PREVIEW_THEME_TITLES: Record<PreviewThemeMode, string> = {
-  light: '亮色主题（点击切换本文件）',
-  gray: '灰色主题（点击切换本文件）',
-  dark: '暗色主题（点击切换本文件）',
-};
+export function previewThemeTitle(mode: PreviewThemeMode): string {
+  return tPreview(`theme.${mode}`);
+}
 
 /** Resolve which elements should receive preview theme tokens. */
 export function resolvePreviewThemeLiftTargets(

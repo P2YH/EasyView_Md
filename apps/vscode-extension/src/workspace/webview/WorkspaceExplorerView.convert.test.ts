@@ -15,10 +15,10 @@ it('offers Markdown export only for PDF and Word files and uses the clicked path
     id: name, rootId: 'root', relativePath: `documents/${name}`, name, kind: 'file', writable: false,
   });
   for (const name of ['report.pdf', 'brief.docx', 'legacy.doc']) {
-    const item = buildMenu.call(owner as never, entry(name)).find((candidate) => candidate.label === 'Export to Markdown (.md)');
+    const item = buildMenu.call(owner as never, entry(name)).find((candidate) => candidate.label === '导出为 Markdown (.md)');
     expect(item).toBeDefined();
     item!.action();
     expect(post).toHaveBeenLastCalledWith({ type: 'convertToMarkdown', relativePath: `documents/${name}` });
   }
-  expect(buildMenu.call(owner as never, entry('notes.md')).some((item) => item.label === 'Export to Markdown (.md)')).toBe(false);
+  expect(buildMenu.call(owner as never, entry('notes.md')).some((item) => item.label === '导出为 Markdown (.md)')).toBe(false);
 });

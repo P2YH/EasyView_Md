@@ -6,6 +6,8 @@ import { TimelineChannel, TimelineService, discoverHostHistoryRoots, contentHash
 import { DEFAULT_LOCAL_HISTORY_SETTINGS, isTimelineMarkdown, type LocalHistorySettings, type TimelineComparison, type TimelineEntry, type TimelineResultMessage } from '@easyview/contracts';
 import { resolveMarkdownDiskUri } from '../application/document/openMarkdownEditor';
 import { MarkdownEditorProvider } from '../adapters/vscode/provider';
+import { getLocale } from '@easyview/contracts/i18n';
+import { tTimeline } from './timeline.i18n';
 export class VscodeTimeline {
   private disposed = false;
   private servicePromise?: Promise<TimelineService>;
@@ -16,7 +18,7 @@ export class VscodeTimeline {
     this.subscriptions.push(vscode.workspace.onDidSaveTextDocument((document) => {
       const disk = resolveMarkdownDiskUri(document.uri);
       if (!isTimelineMarkdown(disk.fsPath) || disk.scheme !== 'file') return;
-      void this.capture(disk.fsPath, document.getText(), '文件已保存');
+      void this.capture(disk.fsPath, document.getText(), tTimeline('label.saved'));
     }));
     this.subscriptions.push(vscode.workspace.onDidRenameFiles((event) => {
       void this.service().then(async (service) => { for (const file of event.files) await migrateRenamedHistory(service.local, file.oldUri.fsPath, file.newUri.fsPath); }).catch((error) => this.report(error));
@@ -41,19 +43,19 @@ export class VscodeTimeline {
     for (const [pattern, excluded] of Object.entries(exclude)) if (excluded && (minimatch(relative, pattern, { matchBase: true, dot: true }) || minimatch(filePath.replace(/\\/g, '/'), pattern, { matchBase: true, dot: true }))) settings.enabled = false;
     return settings;
   }
-  async capture(filePath: string, content?: string, label = '外部文件变化'): Promise<void> {
+  async capture(filePath: string, content?: string, label = tTimeline('label.externalChange')): Promise<void> {
     try { if (this.disposed) return; filePath = await realpath(filePath); const settings = this.settings(filePath); if (!settings.enabled || !settings.maxFileEntries || (!content && (await stat(filePath)).size > settings.maxFileSize * 1024)) return; await (await this.service()).local.capture(filePath, content ?? await readFile(filePath, 'utf8'), label, settings); }
     catch (error) { this.report(error); }
   }
   async channel(root: () => string | undefined, post: (message: TimelineResultMessage) => void): Promise<TimelineChannel> {
     const service = await this.service();
-    if (this.disposed) throw new Error('Timeline 已关闭');
+    if (this.disposed) throw new Error(tTimeline('error.closed'));
     const channel = new TimelineChannel({
       service, post,
       authorize: async (filePath) => {
-        const folder = root(); if (!folder || !filePath) throw new Error('请先选择工作区中的文件');
+        const folder = root(); if (!folder || !filePath) throw new Error(tTimeline('error.selectWorkspaceFile'));
         const resolved = await realpath(path.resolve(folder, filePath)), relative = path.relative(await realpath(folder), resolved);
-        if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative) || !isTimelineMarkdown(resolved)) throw new Error('文件不在工作区或不是 Markdown');
+        if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative) || !isTimelineMarkdown(resolved)) throw new Error(tTimeline('error.notWorkspaceMarkdown'));
         return resolved;
       },
       reveal: (entry) => { const panel = this.panels.get(`${entry.filePath}:${entry.source}:${entry.id}`); if (!panel) return false; panel.reveal(); return true; },
@@ -78,7 +80,7 @@ export class VscodeTimeline {
     const script = panel.webview.asWebviewUri(vscode.Uri.joinPath(dist, 'history-view.js'));
     const workerUrl = panel.webview.asWebviewUri(vscode.Uri.joinPath(dist, 'history-diff-worker.js')).toString();
     const css = panel.webview.asWebviewUri(vscode.Uri.joinPath(dist, 'webview.css'));
-    panel.webview.html = `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src ${panel.webview.cspSource}; worker-src blob:; connect-src ${panel.webview.cspSource}; style-src ${panel.webview.cspSource} 'unsafe-inline';"><link rel="stylesheet" href="${css}"></head><body style="padding:0;height:100vh;overflow:hidden"><main id="history-root"></main><script type="module" src="${script}"></script></body></html>`;
+    panel.webview.html = `<!doctype html><html lang="${getLocale()}"><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src ${panel.webview.cspSource}; worker-src blob:; connect-src ${panel.webview.cspSource}; style-src ${panel.webview.cspSource} 'unsafe-inline';"><link rel="stylesheet" href="${css}"></head><body style="padding:0;height:100vh;overflow:hidden"><main id="history-root"></main><script type="module" src="${script}"></script></body></html>`;
     const listener = panel.webview.onDidReceiveMessage((message) => { if (message.type === 'history.ready') void panel.webview.postMessage({ type: 'history.init', comparison, workerUrl }); });
     const closed = panel.onDidDispose(() => { listener.dispose(); closed.dispose(); this.panels.delete(key); });
   }
@@ -88,19 +90,20 @@ export class VscodeTimeline {
     const documents = this.documents(entry.filePath);
     const baselines = documents.map((document) => ({ document, version: document.version, content: document.getText() }));
     const version = await service.read(entry, signal); signal.throwIfAborted();
-    const confirmed = await vscode.window.showWarningMessage(`将“${path.basename(entry.filePath)}”恢复到所选版本并保存？当前内容会先保留在本地历史中。`, { modal: true }, '恢复');
-    if (confirmed !== '恢复') return;
+    const restoreAction = tTimeline('restore.action');
+    const confirmed = await vscode.window.showWarningMessage(tTimeline('restore.confirm', { name: path.basename(entry.filePath) }), { modal: true }, restoreAction);
+    if (confirmed !== restoreAction) return;
     signal.throwIfAborted();
-    await service.local.preserve(entry.filePath, disk, '恢复前磁盘内容');
-    for (const baseline of baselines) if (baseline.content !== disk) await service.local.preserve(entry.filePath, baseline.content, '恢复前未保存内容');
-    if (contentHash(await readFile(entry.filePath, 'utf8')) !== contentHash(disk) || baselines.some((baseline) => baseline.document.version !== baseline.version)) throw new Error('文件在确认期间发生变化，恢复已停止');
+    await service.local.preserve(entry.filePath, disk, tTimeline('label.beforeRestoreDisk'));
+    for (const baseline of baselines) if (baseline.content !== disk) await service.local.preserve(entry.filePath, baseline.content, tTimeline('label.beforeRestoreUnsaved'));
+    if (contentHash(await readFile(entry.filePath, 'utf8')) !== contentHash(disk) || baselines.some((baseline) => baseline.document.version !== baseline.version)) throw new Error(tTimeline('error.changedDuringConfirm'));
     signal.throwIfAborted();
     const target = documents[0] ?? await vscode.workspace.openTextDocument(vscode.Uri.file(entry.filePath));
     const edit = new vscode.WorkspaceEdit();
     for (const document of documents.length ? documents : [target]) edit.replace(document.uri, new vscode.Range(0, 0, document.lineCount, 0), version);
-    if (!await vscode.workspace.applyEdit(edit) || !await target.save()) throw new Error('恢复保存失败');
+    if (!await vscode.workspace.applyEdit(edit) || !await target.save()) throw new Error(tTimeline('error.restoreSaveFailed'));
     await MarkdownEditorProvider.reloadPanelsForDocument(vscode.Uri.file(entry.filePath), version);
-    try { await service.local.preserve(entry.filePath, version, '文件已恢复'); } catch (error) { throw new Error(`文件已恢复，但无法记录恢复后的历史：${error instanceof Error ? error.message : String(error)}`); }
+    try { await service.local.preserve(entry.filePath, version, tTimeline('label.restored')); } catch (error) { throw new Error(tTimeline('error.restoredWithoutHistory', { message: error instanceof Error ? error.message : String(error) })); }
   }
   releaseChannel(channel: TimelineChannel): void { channel.dispose(); this.channels.delete(channel); }
   report(error: unknown): void { console.warn('[EasyView Timeline]', error); }

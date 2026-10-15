@@ -1,0 +1,36 @@
+import { defineMessages } from '@easyview/contracts/i18n';
+
+export const tExtension = defineMessages({
+  'zh-CN': {
+    'mirror.writeBackFailed': 'EasyView 镜像已保存，但写回原文件失败：{message}',
+    'theme.light': '亮色',
+    'theme.gray': '灰色',
+    'theme.dark': '暗色',
+    'theme.status': 'EasyView 主题：{mode}',
+    'open.failed': 'EasyView 无法打开该 Markdown：{message}',
+    'open.noPanel': 'EasyView 未能打开该 Markdown（自定义编辑器未创建面板）。请查看 “EasyView_Md Open Debug” 输出。',
+    'open.selectMarkdownFirst': '请先选择一个 Markdown 文件。',
+    'openNative.failed': '无法用原生 Markdown 编辑器打开文件：{message}',
+    'stage.openMarkdownFirst': '请先打开一个 Markdown 文件。',
+    'stage.completed': '已暂存：{name}',
+    'stage.failed': '暂存文件失败：{message}',
+    'update.message': 'EasyView_Md 已从 v{previous} 更新到 v{current}。',
+    'update.viewReleaseNotes': '查看更新说明',
+  },
+  en: {
+    'mirror.writeBackFailed': 'The EasyView mirror was saved, but writing back to the original file failed: {message}',
+    'theme.light': 'Light',
+    'theme.gray': 'Gray',
+    'theme.dark': 'Dark',
+    'theme.status': 'EasyView theme: {mode}',
+    'open.failed': 'EasyView could not open this Markdown file: {message}',
+    'open.noPanel': 'EasyView could not open this Markdown file (the custom editor did not create a panel). See the “EasyView_Md Open Debug” output.',
+    'open.selectMarkdownFirst': 'Select a Markdown file first.',
+    'openNative.failed': 'Could not open the file in the native Markdown editor: {message}',
+    'stage.openMarkdownFirst': 'Open a Markdown file first.',
+    'stage.completed': 'Staged: {name}',
+    'stage.failed': 'Failed to stage file: {message}',
+    'update.message': 'EasyView_Md updated from v{previous} to v{current}.',
+    'update.viewReleaseNotes': 'View Release Notes',
+  },
+});

@@ -17,6 +17,8 @@ import {
   writePreviewFileTheme,
 } from '../theme/productThemeBridge';
 import { resolveHtmlPreviewRoot, startHtmlPreviewServer, type HtmlPreviewServer } from './htmlPreviewServer';
+import { getLocale } from '@easyview/contracts/i18n';
+import { tPreview } from './preview.i18n';
 
 const TEXT_READ_LIMIT = 4 * 1024 * 1024;
 const VIEW_TYPE = 'easyviewMd.filePreview';
@@ -115,7 +117,7 @@ export class FilePreviewProvider implements vscode.CustomReadonlyEditorProvider<
     };
 
     if (!route || !isPhase1PreviewRoute(route.route)) {
-      webviewPanel.webview.html = errorHtml('当前文件类型不在 EasyView 一期预览范围内。');
+      webviewPanel.webview.html = errorHtml(tPreview('unsupportedType'));
       return;
     }
 
@@ -126,13 +128,13 @@ export class FilePreviewProvider implements vscode.CustomReadonlyEditorProvider<
       size = stat.size;
       mtimeMs = stat.mtime;
     } catch {
-      webviewPanel.webview.html = errorHtml('无法读取预览文件。');
+      webviewPanel.webview.html = errorHtml(tPreview('readFileFailed'));
       return;
     }
 
     if (size > route.maxSourceBytes) {
       webviewPanel.webview.html = errorHtml(
-        `文件超过 ${(route.maxSourceBytes / (1024 * 1024)).toFixed(0)} MiB 的 ${route.route} 预览上限。`,
+        tPreview('fileTooLarge', { size: (route.maxSourceBytes / (1024 * 1024)).toFixed(0), route: route.route }),
       );
       return;
     }
@@ -205,7 +207,7 @@ export class FilePreviewProvider implements vscode.CustomReadonlyEditorProvider<
             type: 'readTextResult',
             id: message.id,
             ok: false,
-            message: error instanceof Error ? error.message : '文本读取失败',
+            message: error instanceof Error ? error.message : tPreview('readTextFailed'),
           });
         }
         return;
@@ -213,12 +215,12 @@ export class FilePreviewProvider implements vscode.CustomReadonlyEditorProvider<
       if (message.type === 'writeBytes' && typeof message.id === 'string') {
         try {
           if (route.route !== 'spreadsheet' && route.route !== 'word') {
-            throw new Error('当前文件不支持写入保存');
+            throw new Error(tPreview('writeUnsupported'));
           }
           const bytes = decodePreviewBytes(message.bytes, message.encoding);
-          if (!bytes || bytes.byteLength === 0) throw new Error('写入内容无效');
+          if (!bytes || bytes.byteLength === 0) throw new Error(tPreview('writeInvalid'));
           if (bytes.byteLength > route.maxSourceBytes) {
-            throw new Error(`写入内容超过 ${(route.maxSourceBytes / (1024 * 1024)).toFixed(0)} MiB 上限`);
+            throw new Error(tPreview('writeTooLarge', { size: (route.maxSourceBytes / (1024 * 1024)).toFixed(0) }));
           }
           await vscode.workspace.fs.writeFile(document.uri, bytes);
           const stat = await vscode.workspace.fs.stat(document.uri);
@@ -233,7 +235,7 @@ export class FilePreviewProvider implements vscode.CustomReadonlyEditorProvider<
             type: 'writeBytesResult',
             id: message.id,
             ok: false,
-            message: error instanceof Error ? error.message : '表格保存失败',
+            message: error instanceof Error ? error.message : tPreview('saveTableFailed'),
           });
         }
         return;
@@ -299,7 +301,7 @@ export class FilePreviewProvider implements vscode.CustomReadonlyEditorProvider<
     };
 
     return `<!DOCTYPE html>
-<html lang="zh-CN" data-easyview-theme="${productTheme}">
+<html lang="${getLocale()}" data-easyview-theme="${productTheme}">
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="${csp}" />

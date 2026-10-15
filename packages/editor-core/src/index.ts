@@ -90,6 +90,7 @@ import { EditorSyncAdapter } from './sync/editorSyncAdapter';
 import type { EasyViewEditorHostActions } from './hosts/host-actions';
 export type { EasyViewEditorHostActions } from './hosts/host-actions';
 import { handleHostMessageSideEffect } from './hostMessageRouter';
+import { tEditorCore } from './editorCore.i18n';
 import { createEditorDomContext, type EasyViewEditorRoot } from './runtime/editorDomContext';
 
 export interface EasyViewEditorOptions {
@@ -1175,16 +1176,16 @@ function getOutlineContextText(outline: string): string {
   if (!outline) return '';
   const fileName = currentFilePath.split(/[\\/]/).pop()?.trim() || 'Unknown.md';
   const path = [fileName, ...outline.split('》').filter(Boolean)].join('  》');
-  return `\n内容位置：${path}\n`;
+  return `\n${tEditorCore('outline.location', { path })}\n`;
 }
 
 async function copyOutlinePathText(outline: string): Promise<void> {
   const text = getOutlineContextText(outline);
   if (!text) {
-    showToast('No outline path found');
+    showToast(tEditorCore('outline.notFound'));
     return;
   }
-  await copyTextToClipboard(text, 'Copied outline path');
+  await copyTextToClipboard(text, tEditorCore('outline.copied'));
 }
 
 async function copyOutlinePathForSelection(): Promise<void> {
@@ -1198,18 +1199,18 @@ async function copyOutlinePathAtPos(pos: number): Promise<void> {
 async function sendHeadingContextToChat(pos: number): Promise<void> {
   const prompt = getOutlineContextText(computeHeadingBreadcrumbForPos(pos));
   if (!prompt) {
-    showToast('No outline path found');
+    showToast(tEditorCore('outline.notFound'));
     return;
   }
   if (!hostActions.openChatWithPrompt) {
-    showToast('Cursor chat is unavailable');
+    showToast(tEditorCore('chat.unavailable'));
     return;
   }
   try {
     await hostActions.openChatWithPrompt(prompt);
   } catch (error) {
     console.error('[EasyView_Md] Failed to open Cursor chat with heading context', error);
-    showToast('Could not open Cursor chat');
+    showToast(tEditorCore('chat.openFailed'));
   }
 }
 
@@ -1229,10 +1230,10 @@ const headingPathActions = {
 async function copyFullPathForSelection(): Promise<void> {
   const outline = getCurrentOutlinePath();
   if (!outline) {
-    showToast('No outline path found');
+    showToast(tEditorCore('outline.notFound'));
     return;
   }
-  await copyTextToClipboard(`文件：${currentFilePath}\n内容位置：${outline}`, 'Copied file and outline path');
+  await copyTextToClipboard(tEditorCore('outline.fileAndLocation', { file: currentFilePath, outline }), tEditorCore('outline.fileAndOutlineCopied'));
 }
 
 /** Detect if VS Code is using a dark theme */
@@ -1357,6 +1358,8 @@ function initEditor() {
   const extensions = [
     new KeyboardOverridesExtension(),
     new ListsExtension(),
+    // Before SmartText: its Enter must see `---` before the base splitBlock does.
+    new HorizontalRuleExtension(),
     new SmartTextExtension(),
     new MarksExtension(),
     new HeadingExtension({
@@ -1367,7 +1370,6 @@ function initEditor() {
     new BlockquoteExtension(),
     new CodeBlockExtension(),
     new NoticeExtension(),
-    new HorizontalRuleExtension(),
     new TableExtension(host),
     new ImageExtension(imageToolbar),
     new MermaidExtension(isDark, (href) => {
@@ -1754,7 +1756,7 @@ function initEditor() {
       postEdit(content);
     },
     copyText: (text, successMessage) => {
-      void copyTextToClipboard(text, successMessage ?? '已复制');
+      void copyTextToClipboard(text, successMessage ?? tEditorCore('copied'));
     },
     onVisibilityChange: (visible) => {
       fileHeader.syncAiChatState(visible);
@@ -2041,7 +2043,17 @@ function initEditor() {
   );
 
   // Create Table of Contents sidebar
-  const toc = new TableOfContents(view, { position: outlinePosition, dom, ...headingPathActions });
+  const toc = new TableOfContents(view, {
+    position: outlinePosition,
+    dom,
+    ...headingPathActions,
+    ...(uiMode === 'desktop' ? {
+      miniMap: {
+        onPin: () => setOutlineVisibleImpl(true),
+        onUnpin: () => setOutlineVisibleImpl(false),
+      },
+    } : {}),
+  });
   toc.setFilePath(currentFilePath);
   setOutlineVisibleImpl = (visible) => {
     if (visible === toc.visible && visible === isTocVisible) return;
@@ -2441,7 +2453,7 @@ function initEditor() {
     restoreChangeViewTocHandler();
   });
   if (host.capabilities.sourceMode === 'embedded') {
-    fileHeader.getSourceBtn().title = 'Toggle source mode';
+    fileHeader.getSourceBtn().title = tEditorCore('source.toggle');
   }
   fileHeader.setStickyNoteHandler(() => {
     stickyNote.toggle();
@@ -2575,7 +2587,7 @@ function initEditor() {
     if (handleHostMessageSideEffect(message, {
       onCommitMessageGenerated: (generatedMessage, source) => {
         if (generatedMessage.trim()) fileHeader.setCommitMessage(generatedMessage, source);
-        else fileHeader.setCommitError('Could not generate a commit message.');
+        else fileHeader.setCommitError(tEditorCore('commit.generateEmpty'));
       },
       onCommitMessageGenerationFailed: (messageText) => {
         fileHeader.setCommitError(messageText);
@@ -2630,12 +2642,12 @@ function initEditor() {
         // the reply to the popup editor instead of the main document.
         if (cellPopupImageSelected(src, originalSrc, typeof pos === 'number' ? pos : -1)) return;
         editor.insertImage(src, originalSrc, pos);
-        if (typeof pos === 'number' && pos >= 0) showToast('Image replaced');
+        if (typeof pos === 'number' && pos >= 0) showToast(tEditorCore('image.replaced'));
       },
       onImagesDropped: ({ images, pos }) => {
         if (!images?.length) return;
         editor.insertImagesAtPos(images, typeof pos === 'number' ? pos : 0);
-        showToast(images.length === 1 ? 'Image inserted' : `${images.length} images inserted`);
+        showToast(images.length === 1 ? tEditorCore('image.inserted') : tEditorCore('image.insertedMany', { count: images.length }));
       },
     })) {
       return;

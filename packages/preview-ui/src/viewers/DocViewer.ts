@@ -24,6 +24,7 @@ import {
   writeWordCommentsSidebarOpen,
 } from './DocumentRouteChrome';
 import { isEditableWordFile } from '../word/editableFormats';
+import { tPreview } from '../preview.i18n';
 
 export interface DocViewerProps extends ViewerProps {
   host?: PreviewHost;
@@ -42,7 +43,7 @@ export function DocViewer({ descriptor, host }: DocViewerProps): React.ReactElem
   if (isEditableWordFile(descriptor.fileName) && host?.writeBytes) {
     return h(WordEditor, { descriptor, host });
   }
-  return h(UniversalFilePreview, { descriptor, loadingLabel: '正在加载 Word 预览器…' });
+  return h(UniversalFilePreview, { descriptor, loadingLabel: tPreview('word.loadingViewer') });
 }
 
 function WordEditor({ descriptor, host }: { descriptor: ViewerProps['descriptor']; host: PreviewHost }): React.ReactElement {
@@ -130,7 +131,7 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
 }`;
           document.head.appendChild(style);
         }
-        if (!response.ok) throw new Error(`无法读取文档（HTTP ${response.status}）`);
+        if (!response.ok) throw new Error(tPreview('word.readFailed', { status: response.status }));
         const bytes = await response.arrayBuffer();
         if (disposed) return;
         setDocxEditor(() => Editor as unknown as React.ComponentType<Record<string, unknown>>);
@@ -177,10 +178,10 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
   }, [buffer, loading, themeMode]);
 
   const persist = React.useCallback(async (bytes: ArrayBuffer) => {
-    if (!host.writeBytes) throw new Error('当前宿主未提供文档保存能力');
+    if (!host.writeBytes) throw new Error(tPreview('word.saveUnavailable'));
     const result: PreviewWriteResult = await host.writeBytes(descriptor.sessionId, new Uint8Array(bytes));
     setDirty(false);
-    setSaveMessage(`已保存 · ${(result.size / 1024).toFixed(result.size >= 10240 ? 0 : 1)} KB`);
+    setSaveMessage(tPreview('common.savedSize', { size: (result.size / 1024).toFixed(result.size >= 10240 ? 0 : 1) }));
     return result;
   }, [descriptor.sessionId, host]);
 
@@ -190,10 +191,10 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
     setSaveMessage(null);
     try {
       const bytes = await editorRef.current?.save();
-      if (!bytes) throw new Error('文档尚未就绪，无法保存');
+      if (!bytes) throw new Error(tPreview('word.notReadyToSave'));
       await persist(bytes);
     } catch (reason) {
-      setSaveMessage(reason instanceof Error ? reason.message : '保存失败');
+      setSaveMessage(reason instanceof Error ? reason.message : tPreview('common.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -202,7 +203,7 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
   const exportDocx = React.useCallback(async () => {
     try {
       const bytes = await editorRef.current?.save();
-      if (!bytes) throw new Error('文档尚未就绪，无法导出');
+      if (!bytes) throw new Error(tPreview('word.notReadyToExport'));
       const blob = new Blob([bytes], {
         type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       });
@@ -213,7 +214,7 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
       anchor.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 0);
     } catch (reason) {
-      setSaveMessage(reason instanceof Error ? reason.message : '导出失败');
+      setSaveMessage(reason instanceof Error ? reason.message : tPreview('word.exportFailed'));
     }
   }, [descriptor.fileName]);
 
@@ -226,8 +227,8 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
       h('button', {
         type: 'button',
         className: 'preview-chrome-btn preview-chrome-btn--icon',
-        title: '导出为 DOCX 文件',
-        'aria-label': '导出',
+        title: tPreview('word.exportDocx'),
+        'aria-label': tPreview('word.export'),
         disabled: !buffer || saving,
         onClick: (event: React.MouseEvent<HTMLButtonElement>) => {
           event.stopPropagation();
@@ -237,8 +238,8 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
       h('button', {
         type: 'button',
         className: 'preview-chrome-btn preview-chrome-btn--icon',
-        title: '打印',
-        'aria-label': '打印',
+        title: tPreview('word.print'),
+        'aria-label': tPreview('word.print'),
         disabled: !buffer,
         onClick: (event: React.MouseEvent<HTMLButtonElement>) => {
           event.stopPropagation();
@@ -278,7 +279,7 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
     onCycleTheme: cycleTheme,
   },
     loading || !DocxEditor || !buffer
-      ? loadingElement('正在加载 Word 编辑器…')
+      ? loadingElement(tPreview('word.loadingEditor'))
       : h('div', { className: 'preview-word-mount' },
           h(DocxEditor, {
             ref: editorRef,
@@ -310,7 +311,7 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
                 try {
                   await persist(next);
                 } catch (reason) {
-                  setSaveMessage(reason instanceof Error ? reason.message : '保存失败');
+                  setSaveMessage(reason instanceof Error ? reason.message : tPreview('common.saveFailed'));
                 } finally {
                   setSaving(false);
                 }

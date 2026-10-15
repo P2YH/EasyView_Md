@@ -22,6 +22,8 @@ import type {
 import { desktopWorkspaceErrorMessage } from './DesktopWorkspaceCore';
 import { openWithSystemApplicationPicker } from './openWithSystemApplicationPicker';
 import { WorkspaceWatcher } from './WorkspaceWatcher';
+import { recentFolderStore } from './recentFolders';
+import { tWorkspace } from './workspace.i18n';
 import { resolvePreviewRoute } from '../../../contracts';
 import {
   documentSessions,
@@ -31,6 +33,7 @@ import {
   getMainWindow,
   getWorkspaceFileClipboard,
   getWorkspaceWatcher,
+  hostHooks,
   getWindowContext,
   notifyActiveDocument,
   previewFailure,
@@ -83,30 +86,48 @@ export function startWorkspaceWatcher(rootPath: string): void {
   try {
     watcher.start();
   } catch (error) {
-    console.warn('[EasyView_Md] 工作区监听不可用:', error);
+    console.warn('[EasyView_Md] Workspace watcher unavailable:', error);
     stopWorkspaceWatcher();
   }
 }
 
-export async function openWorkspaceFolder(): Promise<OperationResult<DesktopWorkspaceState | null>> {
-  const selected = await dialog.showOpenDialog(getMainWindow()!, {
-    properties: ['openDirectory'],
-    title: '打开文件夹',
-  });
-  if (selected.canceled || !selected.filePaths[0]) return success(null);
+export async function openWorkspaceFolder(folderPath?: string): Promise<OperationResult<DesktopWorkspaceState | null>> {
+  let requestedPath = folderPath;
+  if (!requestedPath) {
+    const selected = await dialog.showOpenDialog(getMainWindow()!, {
+      properties: ['openDirectory'],
+      title: tWorkspace('open.title'),
+    });
+    if (selected.canceled || !selected.filePaths[0]) return success(null);
+    requestedPath = selected.filePaths[0];
+  }
+  let candidateRoot: string;
   try {
-    const candidateRoot = await fs.realpath(selected.filePaths[0]);
+    candidateRoot = await fs.realpath(requestedPath);
     const candidateStat = await fs.stat(candidateRoot);
-    if (!candidateStat.isDirectory()) return failure('INVALID_ARGUMENT', '所选路径不是文件夹');
+    if (!candidateStat.isDirectory()) return failure('INVALID_ARGUMENT', tWorkspace('open.notDirectory'));
+  } catch (error) {
+    if (folderPath && (error as NodeJS.ErrnoException).code === 'ENOENT') {
+      await recentFolderStore().forget(folderPath);
+      hostHooks.createMenu();
+      return failure('NOT_FOUND', tWorkspace('open.folderMissing', { folderPath }));
+    }
+    return failure('INVALID_ARGUMENT', desktopWorkspaceErrorMessage(error));
+  }
+  try {
     if (workspaceRoot() !== candidateRoot) {
       if (!(await confirmCloseAll())) return success(null);
       await closeAllTabResources();
       setWorkspaceFileClipboard(null);
     }
     const rootPath = await workspaceCore.bindRoot(candidateRoot);
-    const next = setWorkspaceState({ rootPath, openTabs: [], activeTabId: null, expandedRelativePaths: [] });
+    const next = setWorkspaceState({ rootPath, openTabs: [], activeTabId: null, expandedRelativePaths: [], explorerVisible: true });
     startWorkspaceWatcher(rootPath);
     syncTabState();
+    if (folderPath && folderPath !== rootPath) await recentFolderStore().forget(folderPath);
+    await recentFolderStore().remember(rootPath);
+    hostHooks.createMenu();
+    sendToWindow('workspace.rootChanged', next);
     return success(next);
   } catch (error) {
     return failure('INVALID_ARGUMENT', desktopWorkspaceErrorMessage(error));
@@ -121,7 +142,7 @@ export async function openWorkspacePreview(relativePath: string): Promise<Operat
   try {
     const filePath = await resolveWorkspaceFilePath(relativePath);
     const stat = await fs.lstat(filePath);
-    if (!stat.isFile() && !stat.isSymbolicLink()) return failure('INVALID_ARGUMENT', '只能预览文件');
+    if (!stat.isFile() && !stat.isSymbolicLink()) return failure('INVALID_ARGUMENT', tWorkspace('preview.filesOnly'));
     const snapshot = await registerPreviewTab(relativePath);
     return success(snapshot);
   } catch (error) {
@@ -142,16 +163,16 @@ export function tabResourcePaths(tab: DesktopTab): { absolutePath: string; relat
 
 export async function executeTabContextCommand(tabId: string, command: DesktopTabContextCommand): Promise<OperationResult<DesktopTabSnapshot>> {
   const tab = tabRegistry.get(tabId);
-  if (!tab) return failure('NOT_FOUND', '标签页不存在');
+  if (!tab) return failure('NOT_FOUND', tWorkspace('tabs.notFound'));
   if (command === 'close') {
     const result = await closeTab(tabId);
-    return result.ok && result.value ? success(result.value) : result.ok ? failure('CANCELLED', '已取消关闭标签') : result;
+    return result.ok && result.value ? success(result.value) : result.ok ? failure('CANCELLED', tWorkspace('tabs.closeCancelled')) : result;
   }
   if (command === 'closeOthers') return closeOtherTabs(tabId);
   if (command === 'closeAll') return closeGroupTabs(tabId);
   if (command === 'copyPath' || command === 'copyRelativePath') {
     const paths = tabResourcePaths(tab);
-    if (!paths) return failure('INVALID_ARGUMENT', '当前标签没有可复制的文件路径');
+    if (!paths) return failure('INVALID_ARGUMENT', tWorkspace('tabs.noCopyablePath'));
     clipboard.writeText(command === 'copyPath' ? paths.absolutePath : paths.relativePath);
     return success(tabSnapshot());
   }
@@ -159,7 +180,7 @@ export async function executeTabContextCommand(tabId: string, command: DesktopTa
     const paths = tabResourcePaths(tab);
     const rootPath = workspaceRoot();
     if (!paths || !rootPath || paths.relativePath.startsWith('..') || path.isAbsolute(paths.relativePath)) {
-      return failure('NOT_FOUND', '当前文件不在 IndexArea 中');
+      return failure('NOT_FOUND', tWorkspace('tabs.notInIndexArea'));
     }
     sendToWindow('workspace.revealInIndexArea', paths.relativePath);
     return success(tabSnapshot());
@@ -167,7 +188,7 @@ export async function executeTabContextCommand(tabId: string, command: DesktopTa
   if (command === 'splitUp' || command === 'splitDown' || command === 'splitLeft' || command === 'splitRight') {
     const direction = command === 'splitUp' ? 'up' : command === 'splitDown' ? 'down' : command === 'splitLeft' ? 'left' : 'right';
     const group = tabRegistry.split(tabId, direction);
-    if (!group) return failure('NOT_FOUND', '无法分屏');
+    if (!group) return failure('NOT_FOUND', tWorkspace('tabs.splitFailed'));
     const created = group.tabs[0];
     if (created?.kind === 'editor') {
       const source = documentSessions.get(tabId);
@@ -177,12 +198,12 @@ export async function executeTabContextCommand(tabId: string, command: DesktopTa
     if (created?.kind === 'editor') notifyActiveDocument('initial');
     return success(tabSnapshot());
   }
-  return failure('DEPENDENCY_MISSING', '多窗口数据模型和 webContents 路由已建立；编辑器运行时仍为单实例，暂不能安全移动活动编辑器到新窗口。');
+  return failure('DEPENDENCY_MISSING', tWorkspace('tabs.moveToNewWindowUnsupported'));
 }
 
 export async function renameWorkspaceEntry(request: WorkspaceRenameRequest): Promise<OperationResult<WorkspaceEntry>> {
   const rootPath = workspaceRoot();
-  if (!rootPath) return failure('INVALID_ARGUMENT', '尚未打开工作区');
+  if (!rootPath) return failure('INVALID_ARGUMENT', tWorkspace('notOpen'));
   try {
     const oldPaths = workspaceCore.resourcePaths(request.relativePath);
     const nextRelativePath = path.posix.join(workspaceCore.parentRelativePath(request.relativePath), request.newName);
@@ -207,19 +228,19 @@ export async function renameWorkspaceEntry(request: WorkspaceRenameRequest): Pro
 
 export async function deleteWorkspaceEntry(request: WorkspaceDeleteRequest, owner = getMainWindow() ?? null): Promise<OperationResult<boolean>> {
   const rootPath = workspaceRoot();
-  if (!rootPath) return failure('INVALID_ARGUMENT', '尚未打开工作区');
+  if (!rootPath) return failure('INVALID_ARGUMENT', tWorkspace('notOpen'));
   try {
     const paths = workspaceCore.resourcePaths(request.relativePath);
     const stat = await fs.lstat(paths.absolutePath);
     const confirmation = await showMessageBoxFor(owner, {
       type: 'warning',
-      buttons: ['移到废纸篓', '取消'],
+      buttons: [tWorkspace('delete.moveToTrash'), tWorkspace('delete.cancel')],
       defaultId: 0,
       cancelId: 1,
-      message: `确定删除“${path.basename(paths.absolutePath)}”吗？`,
-      detail: '该项目将使用系统废纸篓删除。',
+      message: tWorkspace('delete.message', { name: path.basename(paths.absolutePath) }),
+      detail: tWorkspace('delete.detail'),
     });
-    if (confirmation.response !== 0) return failure('CANCELLED', '已取消删除');
+    if (confirmation.response !== 0) return failure('CANCELLED', tWorkspace('delete.cancelled'));
 
     const affectedTabs = tabSnapshot().groups.flatMap((group) => group.tabs).filter((tab) => {
       if (tab.kind === 'editor') {
@@ -230,7 +251,7 @@ export async function deleteWorkspaceEntry(request: WorkspaceDeleteRequest, owne
       const normalized = tab.relativePath.replace(/\\/g, '/');
       return normalized === request.relativePath || (stat.isDirectory() && normalized.startsWith(`${request.relativePath}/`));
     });
-    if (!(await closeTabIds([...new Set(affectedTabs.map((tab) => tab.id))]))) return failure('CANCELLED', '已取消删除');
+    if (!(await closeTabIds([...new Set(affectedTabs.map((tab) => tab.id))]))) return failure('CANCELLED', tWorkspace('delete.cancelled'));
     await workspaceCore.delete({ relativePath: request.relativePath, options: { useTrash: true, recursive: true } });
     sendToWindow('workspace.changed', [workspaceCore.parentRelativePath(request.relativePath)]);
     return success(true);
@@ -241,7 +262,7 @@ export async function deleteWorkspaceEntry(request: WorkspaceDeleteRequest, owne
 
 export function copyWorkspaceEntryToClipboard(relativePath: string): OperationResult<boolean> {
   const rootPath = workspaceRoot();
-  if (!rootPath) return failure('INVALID_ARGUMENT', '尚未打开工作区');
+  if (!rootPath) return failure('INVALID_ARGUMENT', tWorkspace('notOpen'));
   try {
     const paths = workspaceCore.resourcePaths(relativePath);
     setWorkspaceFileClipboard({ relativePath: paths.relativePath });
@@ -254,7 +275,7 @@ export function copyWorkspaceEntryToClipboard(relativePath: string): OperationRe
 
 async function resolvePasteTargetDirectory(targetRelativePath: string): Promise<string> {
   const rootPath = workspaceRoot();
-  if (!rootPath) throw new Error('尚未打开工作区');
+  if (!rootPath) throw new Error(tWorkspace('notOpen'));
   const paths = workspaceCore.resourcePaths(targetRelativePath);
   const stat = await fs.lstat(paths.absolutePath);
   if (stat.isDirectory() && !stat.isSymbolicLink()) return paths.relativePath;
@@ -266,13 +287,13 @@ export async function importExternalWorkspaceEntries(
   owner = getMainWindow() ?? null,
 ): Promise<OperationResult<WorkspaceEntry>> {
   const rootPath = workspaceRoot();
-  if (!rootPath) return failure('INVALID_ARGUMENT', '尚未打开工作区');
+  if (!rootPath) return failure('INVALID_ARGUMENT', tWorkspace('notOpen'));
   const sourcePaths = [
     ...(Array.isArray(request.sourcePaths) ? request.sourcePaths : []),
     ...urisToFilePaths(request.sourceUris),
   ].filter((value) => typeof value === 'string' && value.trim().length > 0);
   const items = Array.isArray(request.items) ? request.items : [];
-  if (sourcePaths.length === 0 && items.length === 0) return failure('INVALID_ARGUMENT', '没有可导入的文件');
+  if (sourcePaths.length === 0 && items.length === 0) return failure('INVALID_ARGUMENT', tWorkspace('import.nothingToImport'));
   try {
     const targetParentRelativePath = normalizeWorkspaceRelativePath(request.targetParentRelativePath ?? '');
     let last: WorkspaceEntry | undefined;
@@ -290,7 +311,7 @@ export async function importExternalWorkspaceEntries(
         })),
       );
     }
-    if (!last) return failure('INVALID_ARGUMENT', '没有可导入的文件');
+    if (!last) return failure('INVALID_ARGUMENT', tWorkspace('import.nothingToImport'));
     sendToWindow('workspace.changed', [targetParentRelativePath]);
     return success(last);
   } catch (error) {
@@ -316,9 +337,9 @@ function urisToFilePaths(uris: unknown): string[] {
 
 export async function pasteWorkspaceClipboard(request: WorkspacePasteRequest, owner = getMainWindow() ?? null): Promise<OperationResult<WorkspaceEntry>> {
   const rootPath = workspaceRoot();
-  if (!rootPath) return failure('INVALID_ARGUMENT', '尚未打开工作区');
+  if (!rootPath) return failure('INVALID_ARGUMENT', tWorkspace('notOpen'));
   const clipboardState = getWorkspaceFileClipboard();
-  if (!clipboardState) return failure('INVALID_ARGUMENT', '剪贴板中没有可粘贴的文件');
+  if (!clipboardState) return failure('INVALID_ARGUMENT', tWorkspace('paste.clipboardEmpty'));
   try {
     const targetParentRelativePath = await resolvePasteTargetDirectory(request.targetRelativePath);
     const entry = await workspaceCore.copy({
@@ -343,7 +364,7 @@ export function showOpenWithPicker(relativePath: string, owner: Electron.Browser
 
   if (markdown) {
     items.push({
-      label: 'EasyView Editor',
+      label: tWorkspace('openWith.editor'),
       click: () => {
         void openWorkspaceEntryTab(relativePath).then((result) => {
           if (!result.ok) void showMessageBoxFor(owner, { type: 'error', message: result.message });
@@ -353,7 +374,7 @@ export function showOpenWithPicker(relativePath: string, owner: Electron.Browser
   }
   if (previewRoute || !markdown) {
     items.push({
-      label: 'Preview',
+      label: tWorkspace('openWith.preview'),
       click: () => {
         void openWorkspacePreview(relativePath).then((result) => {
           if (!result.ok) void showMessageBoxFor(owner, { type: 'error', message: result.message });
@@ -362,7 +383,7 @@ export function showOpenWithPicker(relativePath: string, owner: Electron.Browser
     });
   }
   items.push({
-    label: 'Default Application',
+    label: tWorkspace('openWith.defaultApplication'),
     click: () => {
       void shell.openPath(absolutePath).then((error) => {
         if (error) void showMessageBoxFor(owner, { type: 'error', message: error });
@@ -371,12 +392,12 @@ export function showOpenWithPicker(relativePath: string, owner: Electron.Browser
   });
   items.push({ type: 'separator' });
   items.push({
-    label: 'Choose Application…',
+    label: tWorkspace('openWith.chooseApplication'),
     click: () => {
       void openWithSystemApplicationPicker(absolutePath, owner).catch((error) => {
         void showMessageBoxFor(owner, {
           type: 'error',
-          message: error instanceof Error ? error.message : '无法打开文件',
+          message: error instanceof Error ? error.message : tWorkspace('openWith.openFailed'),
         });
       });
     },
@@ -421,18 +442,18 @@ export function showWorkspaceContextMenu(sender: Electron.WebContents, relativeP
     clipboard.writeText(command === 'copyPath' ? paths.absolutePath : paths.relativePath);
   };
   const template: Electron.MenuItemConstructorOptions[] = [
-    { label: 'Open Preview', enabled: isFile, click: () => run('openPreview') },
-    { label: 'Open With...', enabled: isFile, click: () => run('openWith') },
-    { label: 'Open with Default Application', enabled: isFile, click: () => run('openDefault') },
-    { label: process.platform === 'darwin' ? 'Reveal in Finder' : 'Reveal in File Explorer', click: () => run('reveal') },
+    { label: tWorkspace('menu.openPreview'), enabled: isFile, click: () => run('openPreview') },
+    { label: tWorkspace('menu.openWith'), enabled: isFile, click: () => run('openWith') },
+    { label: tWorkspace('menu.openDefault'), enabled: isFile, click: () => run('openDefault') },
+    { label: tWorkspace(process.platform === 'darwin' ? 'menu.revealInFinder' : 'menu.revealInFileExplorer'), click: () => run('reveal') },
     { type: 'separator' },
-    { label: 'Copy', accelerator: 'CmdOrCtrl+C', click: () => run('copy') },
-    { label: 'Paste', accelerator: 'CmdOrCtrl+V', enabled: canPaste, click: () => run('paste') },
-    { label: 'Copy Path', click: () => run('copyPath') },
-    { label: 'Copy Relative Path', click: () => run('copyRelativePath') },
+    { label: tWorkspace('menu.copy'), accelerator: 'CmdOrCtrl+C', click: () => run('copy') },
+    { label: tWorkspace('menu.paste'), accelerator: 'CmdOrCtrl+V', enabled: canPaste, click: () => run('paste') },
+    { label: tWorkspace('menu.copyPath'), click: () => run('copyPath') },
+    { label: tWorkspace('menu.copyRelativePath'), click: () => run('copyRelativePath') },
     { type: 'separator' },
-    { label: 'Rename', click: () => run('rename') },
-    { label: 'Delete', accelerator: process.platform === 'darwin' ? 'Cmd+Backspace' : 'Delete', click: () => run('delete') },
+    { label: tWorkspace('menu.rename'), click: () => run('rename') },
+    { label: tWorkspace('menu.delete'), accelerator: process.platform === 'darwin' ? 'Cmd+Backspace' : 'Delete', click: () => run('delete') },
   ];
   Menu.buildFromTemplate(template).popup({ window: owner ?? undefined });
 }
@@ -447,22 +468,22 @@ export function showTabContextMenu(sender: Electron.WebContents, tabId: string):
   };
   const splitEnabled = tabSnapshot().splitRenderingAvailable;
   Menu.buildFromTemplate([
-    { label: 'Close', click: () => run('close') },
-    { label: 'Close Others', click: () => run('closeOthers') },
-    { label: 'Close All', click: () => run('closeAll') },
+    { label: tWorkspace('tabMenu.close'), click: () => run('close') },
+    { label: tWorkspace('tabMenu.closeOthers'), click: () => run('closeOthers') },
+    { label: tWorkspace('tabMenu.closeAll'), click: () => run('closeAll') },
     { type: 'separator' },
-    { label: 'Copy Path', click: () => run('copyPath') },
-    { label: 'Copy Relative Path', click: () => run('copyRelativePath') },
+    { label: tWorkspace('menu.copyPath'), click: () => run('copyPath') },
+    { label: tWorkspace('menu.copyRelativePath'), click: () => run('copyRelativePath') },
     { type: 'separator' },
-    { label: 'Reveal in IndexArea', click: () => run('revealInIndexArea') },
+    { label: tWorkspace('tabMenu.revealInIndexArea'), click: () => run('revealInIndexArea') },
     { type: 'separator' },
-    { label: 'Split & Move', submenu: [
-      { label: 'Split Up', enabled: splitEnabled, click: () => run('splitUp') },
-      { label: 'Split Down', enabled: splitEnabled, click: () => run('splitDown') },
-      { label: 'Split Left', enabled: splitEnabled, click: () => run('splitLeft') },
-      { label: 'Split Right', enabled: splitEnabled, click: () => run('splitRight') },
+    { label: tWorkspace('tabMenu.splitAndMove'), submenu: [
+      { label: tWorkspace('tabMenu.splitUp'), enabled: splitEnabled, click: () => run('splitUp') },
+      { label: tWorkspace('tabMenu.splitDown'), enabled: splitEnabled, click: () => run('splitDown') },
+      { label: tWorkspace('tabMenu.splitLeft'), enabled: splitEnabled, click: () => run('splitLeft') },
+      { label: tWorkspace('tabMenu.splitRight'), enabled: splitEnabled, click: () => run('splitRight') },
       { type: 'separator' },
-      { label: 'Move into New Window', enabled: splitEnabled, click: () => run('moveNewWindow') },
+      { label: tWorkspace('tabMenu.moveNewWindow'), enabled: splitEnabled, click: () => run('moveNewWindow') },
     ] },
   ]).popup({ window: rendererWindow(sender) ?? undefined });
 }

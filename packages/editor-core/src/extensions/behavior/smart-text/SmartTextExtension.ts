@@ -89,7 +89,8 @@ export class SmartTextExtension extends Extension {
     return [
       // Typography replacements
       new InputRule(/->$/, '\u2192'),    // Arrow: -> → →
-      new InputRule(/--$/, '\u2013'),    // En-dash: -- → –
+      // En-dash: -- → –, except at block start where `---` must stay a thematic-break marker
+      new InputRule(/(?<=[^\s-][^]*)--$/, '\u2013'),
       new InputRule(/\.\.\.$/, '\u2026'), // Ellipsis: ... → …
     ];
   }

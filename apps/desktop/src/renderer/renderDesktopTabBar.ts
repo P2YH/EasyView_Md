@@ -1,4 +1,5 @@
 import type { DesktopTab } from '../contracts';
+import { tDesktop } from './desktopRenderer.i18n';
 
 export interface DesktopTabBarHandlers {
   onActivate(tabId: string): void;
@@ -45,7 +46,7 @@ export function renderDesktopTabBar(
     if (tab.kind === 'editor' && tab.dirty) {
       const dirty = document.createElement('span');
       dirty.className = 'desktop-tab-dirty';
-      dirty.setAttribute('aria-label', '未保存');
+      dirty.setAttribute('aria-label', tDesktop('tab.unsaved'));
       activate.appendChild(dirty);
     }
 
@@ -53,8 +54,9 @@ export function renderDesktopTabBar(
     close.type = 'button';
     close.className = 'desktop-tab-close';
     close.textContent = '×';
-    close.title = `关闭 ${tab.fileName}`;
-    close.setAttribute('aria-label', `关闭 ${tab.fileName}`);
+    const closeLabel = tDesktop('tab.close', { name: tab.fileName });
+    close.title = closeLabel;
+    close.setAttribute('aria-label', closeLabel);
     close.addEventListener('click', (event) => {
       event.stopPropagation();
       handlers.onClose(tab.id);

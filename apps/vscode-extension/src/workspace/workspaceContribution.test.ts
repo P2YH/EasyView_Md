@@ -41,6 +41,7 @@ describe('workspace explorer contribution', () => {
       'easyviewMd.workspace.newFolder',
       'easyviewMd.workspace.refresh',
       'easyviewMd.workspace.configureSort',
+      'easyviewMd.workspace.search',
       'easyviewMd.workspace.copyResourceUri',
       'easyviewMd.workspace.paste',
       'easyviewMd.workspace.copyPath',
@@ -55,6 +56,7 @@ describe('workspace explorer contribution', () => {
 
     const titleMenus = manifest.contributes.menus?.['view/title'] ?? [];
     expect(titleMenus.map(({ command }) => command)).toEqual([
+      'easyviewMd.workspace.search',
       'easyviewMd.workspace.configureSort',
       'easyviewMd.workspace.newFile',
       'easyviewMd.workspace.newFolder',

@@ -71,7 +71,7 @@ describe("MermaidRenderer large-document lifecycle", () => {
       requestAnimationFrame(() => resolve()),
     );
     expect(renderer.element.querySelector("svg")).toBeNull();
-    expect(renderer.element.textContent).toContain("Mermaid diagram");
+    expect(renderer.element.textContent).toContain("Mermaid 图表");
 
     renderer.element.getBoundingClientRect = () =>
       ({ top: 400, bottom: 520, left: 0, right: 1200 }) as DOMRect;

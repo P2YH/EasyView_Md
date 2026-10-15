@@ -6,6 +6,7 @@ import { isTimelineMarkdown, type TimelineRequestMessage, type TimelineCompariso
 import { desktopHistory } from '../document/desktopHistory';
 import { readDocument, publishSaveOutcome } from '../document/documentWorkflow';
 import { getMainWindow, workspaceRoot, documentSessions, tabRegistry, syncTabState, sendToWindow, sendEditorMessage, editorDocumentMessage, windowSessions } from '../host/desktopRuntime';
+import { tTimeline } from './desktopTimeline.i18n';
 const channels = new Map<number, Promise<TimelineChannel>>();
 const comparisons = new Map<string, TimelineComparison>();
 export function getHistoryComparison(tabId: string): TimelineComparison | undefined { const tab = tabRegistry.get(tabId); return tab?.kind === 'history' ? comparisons.get(tab.comparisonKey) : undefined; }
@@ -22,10 +23,10 @@ export async function handleDesktopTimeline(sender: Electron.WebContents, messag
     channel = desktopHistory().then((service) => new TimelineChannel({
       service,
       authorize: async (filePath) => {
-        const root = workspaceRoot(); if (!root || !filePath || !isTimelineMarkdown(filePath)) throw new Error('选择工作区中的 Markdown 文件');
+        const root = workspaceRoot(); if (!root || !filePath || !isTimelineMarkdown(filePath)) throw new Error(tTimeline('authorize.selectMarkdown'));
         const resolved = await realpath(path.resolve(root, filePath)); const canonicalRoot = await realpath(root);
         const relative = path.relative(canonicalRoot, resolved);
-        if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) throw new Error('文件不在工作区');
+        if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) throw new Error(tTimeline('authorize.outsideWorkspace'));
         return resolved;
       },
       reveal: (entry) => { const tab = tabRegistry.snapshot().groups.flatMap((group) => group.tabs).find((tab) => tab.kind === 'history' && tab.comparisonKey.endsWith(`:${entry.filePath}:${entry.source}:${entry.id}`)); if (!tab) return false; tabRegistry.activate(tab.id); syncTabState(); return true; },
@@ -39,14 +40,14 @@ export async function handleDesktopTimeline(sender: Electron.WebContents, messag
       restore: async (entry, signal) => {
         let session = documentSessions.findByFilePath(entry.filePath)[0];
         if (!session) { const result = await readDocument(entry.filePath); if (!result.ok) throw new Error(result.message); session = documentSessions.findByFilePath(entry.filePath)[0]; }
-        if (!session) throw new Error('文档会话不存在');
+        if (!session) throw new Error(tTimeline('restore.sessionNotFound'));
         const expectedContent = session.content, expectedDisk = await readHistoryText(entry.filePath, signal);
         const content = await service.read(entry, signal); signal.throwIfAborted();
-        const confirm = await dialog.showMessageBox(getMainWindow()!, { type: 'question', buttons: ['取消', '恢复'], defaultId: 0, cancelId: 0, message: `将“${path.basename(entry.filePath)}”恢复到所选版本并保存？`, detail: '当前磁盘内容及未保存内容会先保留在本地历史中。' });
+        const confirm = await dialog.showMessageBox(getMainWindow()!, { type: 'question', buttons: [tTimeline('restore.cancel'), tTimeline('restore.confirm')], defaultId: 0, cancelId: 0, message: tTimeline('restore.message', { fileName: path.basename(entry.filePath) }), detail: tTimeline('restore.detail') });
         if (confirm.response !== 1) return;
         signal.throwIfAborted();
         const outcome = await documentSessions.restoreVersion(session.tabId, content, expectedContent, expectedDisk, service.local);
-        if (outcome.kind === 'error') throw new Error(outcome.error.ok ? '恢复失败' : outcome.error.message);
+        if (outcome.kind === 'error') throw new Error(outcome.error.ok ? tTimeline('restore.failed') : outcome.error.message);
         await publishSaveOutcome(session.tabId, outcome);
         sendEditorMessage(editorDocumentMessage(session, 'reload'));
         sendToWindow('timeline.message', { type: 'timeline.changed' });

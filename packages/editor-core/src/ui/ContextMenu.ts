@@ -7,6 +7,7 @@ import type { EditorView } from 'prosemirror-view';
 import type { MarkdownParser } from 'prosemirror-markdown';
 import { handlePastePlainText, handlePasteFromClipboard } from '../editor/EditorEventHandlers';
 import { createEditorDomContext, type EditorDomContext, type EasyViewEditorRoot } from '../runtime/editorDomContext';
+import { tContextMenu } from './contextMenu.i18n';
 
 interface ContextMenuOptions {
   view: EditorView;
@@ -46,7 +47,7 @@ export function initContextMenu(
 
     const items: { label: string; shortcut?: string; action: () => void }[] = [
       {
-        label: 'Cut',
+        label: tContextMenu('cut'),
         shortcut: 'Ctrl+X',
         action: () => {
           dom.document.execCommand('cut');
@@ -54,7 +55,7 @@ export function initContextMenu(
         },
       },
       {
-        label: 'Copy',
+        label: tContextMenu('copy'),
         shortcut: 'Ctrl+C',
         action: () => {
           dom.document.execCommand('copy');
@@ -62,7 +63,7 @@ export function initContextMenu(
         },
       },
       {
-        label: 'Paste',
+        label: tContextMenu('paste'),
         shortcut: 'Ctrl+V',
         action: () => {
           handlePasteFromClipboard(view, pasteParser);
@@ -70,7 +71,7 @@ export function initContextMenu(
         },
       },
       {
-        label: 'Paste as Text',
+        label: tContextMenu('pasteAsText'),
         shortcut: 'Ctrl+Shift+V',
         action: () => {
           handlePastePlainText(view);

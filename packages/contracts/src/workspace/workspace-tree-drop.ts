@@ -19,6 +19,114 @@ export function resolveWorkspaceTreeDropMode(
   return ratio < 0.3 ? 'before' : 'into';
 }
 
+/** Row geometry shared by the Desktop and Webview list trees (`padding-inline-start: 8 + depth * 16`). */
+export const WORKSPACE_TREE_ROW_BASE_INDENT = 8;
+export const WORKSPACE_TREE_ROW_INDENT = 16;
+
+/** Where the pointer sits inside a row: the gap above it, the folder itself, or the gap below it. */
+export type WorkspaceTreeRowDropZone = 'above' | 'into' | 'below';
+
+export function resolveWorkspaceTreeRowDropZone(
+  kind: WorkspaceEntryKind,
+  clientY: number,
+  rowTop: number,
+  rowHeight: number,
+): WorkspaceTreeRowDropZone {
+  const ratio = rowHeight <= 0 ? 0.5 : (clientY - rowTop) / rowHeight;
+  if (kind !== 'directory') return ratio < 0.5 ? 'above' : 'below';
+  if (ratio < 0.25) return 'above';
+  return ratio > 0.75 ? 'below' : 'into';
+}
+
+/** Tree depth the pointer points at, from its X offset to the row's left edge. */
+export function workspaceTreeDepthFromPointer(offsetX: number): number {
+  // Switch depth at the middle of each level's chevron.
+  return Math.floor((offsetX - WORKSPACE_TREE_ROW_BASE_INDENT - WORKSPACE_TREE_ROW_INDENT / 2) / WORKSPACE_TREE_ROW_INDENT);
+}
+
+/** X offset (from the row's left edge) where a drop line at `depth` starts: under that level's icon. */
+export function workspaceTreeDropLineOffset(depth: number): number {
+  return WORKSPACE_TREE_ROW_BASE_INDENT + (depth + 1) * WORKSPACE_TREE_ROW_INDENT;
+}
+
+/** A sibling slot in `parentRelativePath`; `afterName` set means "right after that sibling". */
+export interface WorkspaceTreeGapPlacement {
+  depth: number;
+  parentRelativePath: string;
+  beforeName?: string;
+  afterName?: string;
+}
+
+export type WorkspaceTreeDropTarget =
+  | { kind: 'into'; relativePath: string }
+  | {
+      kind: 'gap';
+      placement: WorkspaceTreeGapPlacement;
+      /** Row whose edge hosts the indicator line. */
+      lineRowIndex: number;
+      lineEdge: 'top' | 'bottom';
+    };
+
+function depthOf(relativePath: string): number {
+  return relativePath.split('/').length - 1;
+}
+
+/**
+ * Resolve the slot between two visible rows. Below the last child of a nested
+ * folder the gap is shared by several levels (from `next`'s depth up to
+ * `previous`'s depth); `preferredDepth` (from the pointer X) picks one.
+ */
+export function resolveWorkspaceTreeGapPlacement(
+  previous: string | null,
+  next: string | null,
+  preferredDepth: number,
+): WorkspaceTreeGapPlacement {
+  const minDepth = next ? depthOf(next) : 0;
+  const maxDepth = previous ? Math.max(minDepth, depthOf(previous)) : minDepth;
+  const depth = Math.max(minDepth, Math.min(maxDepth, preferredDepth));
+  if (next && depth === depthOf(next)) {
+    return { depth, parentRelativePath: parentOfWorkspaceViewRelativePath(next), beforeName: next.split('/').at(-1)! };
+  }
+  if (!previous) return { depth: 0, parentRelativePath: '' };
+  const segments = previous.split('/');
+  return { depth, parentRelativePath: segments.slice(0, depth).join('/'), afterName: segments[depth] };
+}
+
+/** Resolve an internal/external drop over `rows[index]`; `null` when the drop is not allowed. */
+export function resolveWorkspaceTreeDropTarget(input: {
+  rows: ReadonlyArray<{ relativePath: string; kind: WorkspaceEntryKind }>;
+  index: number;
+  zone: WorkspaceTreeRowDropZone;
+  pointerDepth: number;
+  draggedRelativePath?: string | null;
+}): WorkspaceTreeDropTarget | null {
+  const { rows, index, zone, draggedRelativePath } = input;
+  const row = rows[index];
+  if (!row) return null;
+  const insideDragged = (path: string) => Boolean(draggedRelativePath)
+    && (path === draggedRelativePath || path.startsWith(`${draggedRelativePath}/`));
+  if (zone === 'into') {
+    if (row.kind !== 'directory' || insideDragged(row.relativePath)) return null;
+    return { kind: 'into', relativePath: row.relativePath };
+  }
+  const previous = zone === 'above' ? rows[index - 1]?.relativePath ?? null : row.relativePath;
+  const next = zone === 'above' ? row.relativePath : rows[index + 1]?.relativePath ?? null;
+  const placement = resolveWorkspaceTreeGapPlacement(previous, next, input.pointerDepth);
+  if (placement.parentRelativePath && insideDragged(placement.parentRelativePath)) return null;
+  return { kind: 'gap', placement, lineRowIndex: index, lineEdge: zone === 'above' ? 'top' : 'bottom' };
+}
+
+/** Name to pass as `beforeName` when reordering `siblingNames` into `placement`. */
+export function workspaceTreeGapBeforeName(
+  placement: WorkspaceTreeGapPlacement,
+  siblingNames: readonly string[],
+): string | undefined {
+  if (placement.beforeName !== undefined) return placement.beforeName;
+  if (placement.afterName === undefined) return undefined;
+  const index = siblingNames.indexOf(placement.afterName);
+  return index >= 0 ? siblingNames[index + 1] : undefined;
+}
+
 /** Parent directory that should receive an external drop (OS Finder / Explorer files). */
 export function workspaceTreeDropParentRelativePath(
   target: { kind: string; relativePath: string } | null,

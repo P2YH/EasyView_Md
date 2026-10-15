@@ -60,9 +60,9 @@ test('VS Code development extension opens Timeline versions in a read-only Chang
       return [css.fontSize,css.borderRadius,css.padding,css.boxShadow,item.fontSize,item.padding,item.minHeight];
     });
     await sidebar!.getByRole('menuitem',{name:'Restore This Version'}).click();
-    await page.getByRole('button',{name:'恢复',exact:true}).click();
+    await page.getByRole('button',{name:'Restore',exact:true}).click();
     await expect.poll(()=>readFile(join(workspace,'notes.md'),'utf8')).toBe('# Original\n');
-    await expect(sidebar!.locator('.easyview-timeline-entry',{hasText:'恢复前磁盘内容'})).toBeVisible();
+    await expect(sidebar!.locator('.easyview-timeline-entry',{hasText:'Disk content before restore'})).toBeVisible();
     await sidebar!.locator('.workspace-entry-name',{hasText:'notes.md'}).click({button:'right'});
     const treeMenuStyle = await sidebar!.locator('.workspace-file-context-menu').evaluate(menu => {
       const css=getComputedStyle(menu), item=getComputedStyle(menu.querySelector('button')!);

@@ -21,6 +21,7 @@ import {
   closeFindAndReplace,
   findAndReplaceKey,
 } from './FindReplacePlugin';
+import { tFindReplace } from './findReplace.i18n';
 
 export interface FindPanelSourceEditor {
   search(query: string, caseSensitive: boolean, regexEnabled: boolean): { results: Array<{ from: number; to: number }>; currentIndex: number };
@@ -191,7 +192,7 @@ export class FindAndReplacePanel {
     this.panel = this.ownerDocument.createElement('div');
     this.panel.className = 'find-replace-panel';
     this.panel.setAttribute('role', 'dialog');
-    this.panel.setAttribute('aria-label', 'Find and replace');
+    this.panel.setAttribute('aria-label', tFindReplace('panel.label'));
 
     const content = this.ownerDocument.createElement('div');
     content.className = 'find-replace-content';
@@ -219,7 +220,7 @@ export class FindAndReplacePanel {
     this.searchInput = this.ownerDocument.createElement('input');
     this.searchInput.type = 'text';
     this.searchInput.className = 'find-replace-input';
-    this.searchInput.placeholder = 'Find';
+    this.searchInput.placeholder = tFindReplace('find.placeholder');
     this.searchInput.addEventListener('input', () => this.handleSearch());
     this.searchInput.addEventListener('keydown', (e) => this.handleSearchKeyDown(e));
     inputGroup.appendChild(this.searchInput);
@@ -232,7 +233,7 @@ export class FindAndReplacePanel {
     this.caseSensitiveBtn.type = 'button';
     this.caseSensitiveBtn.className = 'find-replace-option-btn';
     this.caseSensitiveBtn.textContent = 'Aa';
-    this.caseSensitiveBtn.title = 'Case Sensitive (Alt+C)';
+    this.caseSensitiveBtn.title = tFindReplace('find.caseSensitive');
     this.caseSensitiveBtn.onclick = () => this.toggleCaseSensitive();
     options.appendChild(this.caseSensitiveBtn);
 
@@ -240,7 +241,7 @@ export class FindAndReplacePanel {
     this.regexBtn.type = 'button';
     this.regexBtn.className = 'find-replace-option-btn';
     this.regexBtn.textContent = '.*';
-    this.regexBtn.title = 'Use Regular Expression (Alt+R)';
+    this.regexBtn.title = tFindReplace('find.regex');
     this.regexBtn.onclick = () => this.toggleRegex();
     options.appendChild(this.regexBtn);
 
@@ -253,7 +254,7 @@ export class FindAndReplacePanel {
     prevBtn.type = 'button';
     prevBtn.className = 'find-replace-nav-btn';
     prevBtn.textContent = '↑';
-    prevBtn.title = 'Previous Match (Shift+Enter)';
+    prevBtn.title = tFindReplace('find.previous');
     prevBtn.onclick = () => this.handlePrev();
     nav.appendChild(prevBtn);
 
@@ -261,13 +262,13 @@ export class FindAndReplacePanel {
     nextBtn.type = 'button';
     nextBtn.className = 'find-replace-nav-btn';
     nextBtn.textContent = '↓';
-    nextBtn.title = 'Next Match (Enter)';
+    nextBtn.title = tFindReplace('find.next');
     nextBtn.onclick = () => this.handleNext();
     nav.appendChild(nextBtn);
 
     this.counter = this.ownerDocument.createElement('span');
     this.counter.className = 'find-replace-counter';
-    this.counter.textContent = 'No results';
+    this.counter.textContent = tFindReplace('find.noResults');
     nav.appendChild(this.counter);
     row.appendChild(nav);
 
@@ -275,7 +276,7 @@ export class FindAndReplacePanel {
     this.toggleBtn.type = 'button';
     this.toggleBtn.className = 'find-replace-toggle-btn';
     this.toggleBtn.textContent = '▼';
-    this.toggleBtn.title = 'Toggle Replace';
+    this.toggleBtn.title = tFindReplace('panel.toggleReplace');
     this.toggleBtn.onclick = () => this.toggleReplace();
     row.appendChild(this.toggleBtn);
 
@@ -283,7 +284,7 @@ export class FindAndReplacePanel {
     closeBtn.type = 'button';
     closeBtn.className = 'find-replace-close-btn';
     closeBtn.textContent = '×';
-    closeBtn.title = 'Close (Escape)';
+    closeBtn.title = tFindReplace('panel.close');
     closeBtn.onclick = () => this.close();
     row.appendChild(closeBtn);
 
@@ -300,7 +301,7 @@ export class FindAndReplacePanel {
     this.replaceInput = this.ownerDocument.createElement('input');
     this.replaceInput.type = 'text';
     this.replaceInput.className = 'find-replace-input';
-    this.replaceInput.placeholder = 'Replace';
+    this.replaceInput.placeholder = tFindReplace('replace.placeholder');
     this.replaceInput.addEventListener('keydown', (e) => this.handleReplaceKeyDown(e));
     inputGroup.appendChild(this.replaceInput);
     row.appendChild(inputGroup);
@@ -311,16 +312,16 @@ export class FindAndReplacePanel {
     const replaceBtn = this.ownerDocument.createElement('button');
     replaceBtn.type = 'button';
     replaceBtn.className = 'find-replace-action-btn';
-    replaceBtn.textContent = 'Replace';
-    replaceBtn.title = 'Replace (Enter)';
+    replaceBtn.textContent = tFindReplace('replace.button');
+    replaceBtn.title = tFindReplace('replace.title');
     replaceBtn.onclick = () => this.handleReplace();
     actions.appendChild(replaceBtn);
 
     const replaceAllBtn = this.ownerDocument.createElement('button');
     replaceAllBtn.type = 'button';
     replaceAllBtn.className = 'find-replace-action-btn';
-    replaceAllBtn.textContent = 'Replace All';
-    replaceAllBtn.title = 'Replace All (Ctrl+Enter)';
+    replaceAllBtn.textContent = tFindReplace('replace.allButton');
+    replaceAllBtn.title = tFindReplace('replace.allTitle');
     replaceAllBtn.onclick = () => this.handleReplaceAll();
     actions.appendChild(replaceAllBtn);
 
@@ -462,7 +463,7 @@ export class FindAndReplacePanel {
     if (totalResults > 0) {
       this.counter.textContent = `${currentIndex + 1} / ${totalResults}`;
     } else {
-      this.counter.textContent = 'No results';
+      this.counter.textContent = tFindReplace('find.noResults');
     }
   }
 

@@ -21,6 +21,7 @@ import { type PdfPalette } from './PdfPalette';
 import { highlightCode } from './PdfCodeHighlighting';
 import { splitEmoji, splitCodeSegmentsForEmoji, wrapWithEmojiFont, lightenHex, getEmojiColor, getPdfSymbolFont } from './PdfEmojiUtils';
 import { lookupMermaidMapValue, looksLikeMermaid } from './mermaidSource';
+import { tExport } from '../export.i18n';
 
 type Content = any;
 
@@ -713,7 +714,7 @@ function convertDrawio(node: ProsemirrorNode, ctx: ConvertContext): Content {
         text: [
           { text: '📊 ', font: 'NotoEmoji', fontSize: 12 },
           { text: title, bold: true, color: ctx.palette.textMedium },
-          { text: '\n(Draw.io diagram \u2014 not renderable in PDF)', fontSize: 9, color: ctx.palette.textFaint, italics: true },
+          { text: `\n${tExport('placeholder.drawioPdf')}`, fontSize: 9, color: ctx.palette.textFaint, italics: true },
         ],
       }]],
     },
@@ -1078,7 +1079,7 @@ function convertImage(node: ProsemirrorNode, ctx: ConvertContext): Content {
 
   // Fallback: show placeholder text
   return {
-    text: alt ? `[Image: ${alt}]` : '[Image]',
+    text: alt ? tExport('placeholder.imageNamed', { name: alt }) : tExport('placeholder.image'),
     color: ctx.palette.textFaint,
     italics: true,
     margin: [0, 4, 0, 4] as [number, number, number, number],
@@ -1088,7 +1089,7 @@ function convertImage(node: ProsemirrorNode, ctx: ConvertContext): Content {
 function convertVideo(node: ProsemirrorNode, ctx: ConvertContext): Content {
   const alt = node.attrs.alt || node.attrs.title || '';
   return {
-    text: alt ? `[Video: ${alt}]` : '[Video]',
+    text: alt ? tExport('placeholder.videoNamed', { name: alt }) : tExport('placeholder.video'),
     color: ctx.palette.textFaint,
     italics: true,
     margin: [0, 4, 0, 4] as [number, number, number, number],
@@ -1098,7 +1099,7 @@ function convertVideo(node: ProsemirrorNode, ctx: ConvertContext): Content {
 function convertAudio(node: ProsemirrorNode, ctx: ConvertContext): Content {
   const alt = node.attrs.alt || node.attrs.title || '';
   return {
-    text: alt ? `[Audio: ${alt}]` : '[Audio]',
+    text: alt ? tExport('placeholder.audioNamed', { name: alt }) : tExport('placeholder.audio'),
     color: ctx.palette.textFaint,
     italics: true,
     margin: [0, 4, 0, 4] as [number, number, number, number],
@@ -1232,7 +1233,7 @@ async function convertDescriptionList(node: ProsemirrorNode, ctx: ConvertContext
 function convertToc(ctx: ConvertContext): Content {
   return {
     toc: {
-      title: { text: 'Table of Contents', bold: true, fontSize: 14, margin: [0, 0, 0, 8] as any },
+      title: { text: tExport('toc.title'), bold: true, fontSize: 14, margin: [0, 0, 0, 8] as any },
       textStyle: { color: ctx.palette.link },
       numberStyle: { color: ctx.palette.textMuted },
     },
@@ -1473,7 +1474,7 @@ function convertInlineNode(node: ProsemirrorNode, ctx: ConvertContext): any {
         };
       }
       return {
-        text: node.attrs.alt ? `[${node.attrs.alt}]` : '[Image]',
+        text: node.attrs.alt ? `[${node.attrs.alt}]` : tExport('placeholder.image'),
         color: ctx.palette.textFaint,
         italics: true,
       };
@@ -1489,7 +1490,7 @@ function convertInlineNode(node: ProsemirrorNode, ctx: ConvertContext): any {
     case 'video': {
       const vAlt = node.attrs.alt || node.attrs.title || '';
       return {
-        text: vAlt ? `[Video: ${vAlt}]` : '[Video]',
+        text: vAlt ? tExport('placeholder.videoNamed', { name: vAlt }) : tExport('placeholder.video'),
         color: ctx.palette.textFaint,
         italics: true,
       };
@@ -1498,7 +1499,7 @@ function convertInlineNode(node: ProsemirrorNode, ctx: ConvertContext): any {
     case 'audio': {
       const aAlt = node.attrs.alt || node.attrs.title || '';
       return {
-        text: aAlt ? `[Audio: ${aAlt}]` : '[Audio]',
+        text: aAlt ? tExport('placeholder.audioNamed', { name: aAlt }) : tExport('placeholder.audio'),
         color: ctx.palette.textFaint,
         italics: true,
       };

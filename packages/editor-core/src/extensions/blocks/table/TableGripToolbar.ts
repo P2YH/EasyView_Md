@@ -13,6 +13,7 @@ import { rememberFirstRowStickyDefault } from './TablePreferences';
 import { exportTableToXlsx } from '../../export/xlsx/TableXlsxExport';
 import { TableToolbarPositionController } from './controllers/TableToolbarPositionController';
 import { ColumnWidthController } from './controllers/ColumnWidthController';
+import { tTable } from './table.i18n';
 
 export class TableGripToolbar {
   private el: HTMLDivElement;
@@ -152,7 +153,7 @@ export class TableGripToolbar {
         } catch {}
       }
       toolbar.appendChild(this.createToggleButton(
-        'Toggle header row',
+        tTable('row.toggleHeader'),
         this.headerIcon(),
         isHeader,
         () => { this.toggleHeaderRow(); }
@@ -165,7 +166,7 @@ export class TableGripToolbar {
         } catch {}
       }
       toolbar.appendChild(this.createToggleButton(
-        'Keep first row visible',
+        tTable('row.keepFirstVisible'),
         this.stickyRowIcon(),
         isSticky,
         () => { this.toggleFirstRowSticky(); }
@@ -174,11 +175,11 @@ export class TableGripToolbar {
     }
 
     // Add row buttons
-    toolbar.appendChild(this.createButton('Add row above', this.addAboveIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('row.addAbove'), this.addAboveIcon(), () => {
       this.addRowBefore(this.currentIndex);
     }));
 
-    toolbar.appendChild(this.createButton('Add row below', this.addBelowIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('row.addBelow'), this.addBelowIcon(), () => {
       this.addRowBefore(this.currentIndex + 1);
     }));
 
@@ -186,12 +187,12 @@ export class TableGripToolbar {
     toolbar.appendChild(this.createSeparator());
 
     // Set width for every column (same control as column toolbar, but applies to all)
-    toolbar.appendChild(this.createButton('Narrow all columns', this.narrowColumnIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('row.narrowAllColumns'), this.narrowColumnIcon(), () => {
       this.adjustAllColumnWidths(-32);
     }));
 
     toolbar.appendChild(this.createSizeInput({
-      label: 'All column widths',
+      label: tTable('row.allColumnWidths'),
       value: this.getRepresentativeColumnWidth(),
       min: 48,
       max: 960,
@@ -199,7 +200,7 @@ export class TableGripToolbar {
       onCommit: (width) => this.setAllColumnWidths(width),
     }));
 
-    toolbar.appendChild(this.createButton('Widen all columns', this.widenColumnIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('row.widenAllColumns'), this.widenColumnIcon(), () => {
       this.adjustAllColumnWidths(32);
     }));
 
@@ -207,15 +208,15 @@ export class TableGripToolbar {
     toolbar.appendChild(this.createSeparator());
 
     // Horizontal alignment buttons
-    toolbar.appendChild(this.createButton('Align left', this.alignLeftIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('align.left'), this.alignLeftIcon(), () => {
       this.setRowAlignment(this.currentIndex, 'left');
     }));
 
-    toolbar.appendChild(this.createButton('Align center', this.alignCenterIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('align.center'), this.alignCenterIcon(), () => {
       this.setRowAlignment(this.currentIndex, 'center');
     }));
 
-    toolbar.appendChild(this.createButton('Align right', this.alignRightIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('align.right'), this.alignRightIcon(), () => {
       this.setRowAlignment(this.currentIndex, 'right');
     }));
 
@@ -223,15 +224,15 @@ export class TableGripToolbar {
     toolbar.appendChild(this.createSeparator());
 
     // Vertical alignment buttons
-    toolbar.appendChild(this.createButton('Align top', this.alignTopIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('align.top'), this.alignTopIcon(), () => {
       this.setRowVerticalAlignment(this.currentIndex, 'top');
     }));
 
-    toolbar.appendChild(this.createButton('Align middle', this.alignMiddleIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('align.middle'), this.alignMiddleIcon(), () => {
       this.setRowVerticalAlignment(this.currentIndex, 'middle');
     }));
 
-    toolbar.appendChild(this.createButton('Align bottom', this.alignBottomIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('align.bottom'), this.alignBottomIcon(), () => {
       this.setRowVerticalAlignment(this.currentIndex, 'bottom');
     }));
 
@@ -239,11 +240,11 @@ export class TableGripToolbar {
     toolbar.appendChild(this.createSeparator());
 
     // Move buttons
-    toolbar.appendChild(this.createButton('Move up', this.moveUpIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('row.moveUp'), this.moveUpIcon(), () => {
       this.moveRow(this.currentIndex, -1);
     }));
 
-    toolbar.appendChild(this.createButton('Move down', this.moveDownIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('row.moveDown'), this.moveDownIcon(), () => {
       this.moveRow(this.currentIndex, 1);
     }));
 
@@ -251,7 +252,7 @@ export class TableGripToolbar {
     toolbar.appendChild(this.createSeparator());
 
     // Delete button
-    toolbar.appendChild(this.createButton('Delete row', this.deleteIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('row.delete'), this.deleteIcon(), () => {
       this.deleteRow(this.currentIndex);
     }));
 
@@ -266,19 +267,19 @@ export class TableGripToolbar {
     toolbar.setAttribute('aria-orientation', 'horizontal');
 
     // Add column buttons
-    toolbar.appendChild(this.createButton('Add column before', this.addLeftIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('column.addBefore'), this.addLeftIcon(), () => {
       this.addColumnBefore(this.currentIndex);
     }));
 
-    toolbar.appendChild(this.createButton('Add column after', this.addRightIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('column.addAfter'), this.addRightIcon(), () => {
       this.addColumnBefore(this.currentIndex + 1);
     }));
 
-    toolbar.appendChild(this.createButton('Narrow column', this.narrowColumnIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('column.narrow'), this.narrowColumnIcon(), () => {
       this.adjustColumnWidth(this.currentIndex, -32);
     }));
 
-    toolbar.appendChild(this.createButton('Widen column', this.widenColumnIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('column.widen'), this.widenColumnIcon(), () => {
       this.adjustColumnWidth(this.currentIndex, 32);
     }));
 
@@ -287,12 +288,12 @@ export class TableGripToolbar {
 
     // Row-height controls. Column widths already live in the row toolbar as
     // an all-columns setting, so do not duplicate width controls here.
-    toolbar.appendChild(this.createButton('Decrease all row heights', this.decreaseRowHeightIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('column.decreaseAllRowHeights'), this.decreaseRowHeightIcon(), () => {
       this.adjustAllRowHeights(-12);
     }));
 
     toolbar.appendChild(this.createSizeInput({
-      label: 'All row heights',
+      label: tTable('column.allRowHeights'),
       value: this.getRepresentativeRowHeight(),
       min: 36,
       max: 1200,
@@ -300,7 +301,7 @@ export class TableGripToolbar {
       onCommit: (height) => this.setAllRowHeights(height),
     }));
 
-    toolbar.appendChild(this.createButton('Increase all row heights', this.increaseRowHeightIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('column.increaseAllRowHeights'), this.increaseRowHeightIcon(), () => {
       this.adjustAllRowHeights(12);
     }));
 
@@ -308,15 +309,15 @@ export class TableGripToolbar {
     toolbar.appendChild(this.createSeparator());
 
     // Alignment buttons
-    toolbar.appendChild(this.createButton('Align left', this.alignLeftIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('align.left'), this.alignLeftIcon(), () => {
       this.setColumnAlignment(this.currentIndex, 'left');
     }));
 
-    toolbar.appendChild(this.createButton('Align center', this.alignCenterIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('align.center'), this.alignCenterIcon(), () => {
       this.setColumnAlignment(this.currentIndex, 'center');
     }));
 
-    toolbar.appendChild(this.createButton('Align right', this.alignRightIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('align.right'), this.alignRightIcon(), () => {
       this.setColumnAlignment(this.currentIndex, 'right');
     }));
 
@@ -324,15 +325,15 @@ export class TableGripToolbar {
     toolbar.appendChild(this.createSeparator());
 
     // Vertical alignment buttons
-    toolbar.appendChild(this.createButton('Align top', this.alignTopIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('align.top'), this.alignTopIcon(), () => {
       this.setColumnVerticalAlignment(this.currentIndex, 'top');
     }));
 
-    toolbar.appendChild(this.createButton('Align middle', this.alignMiddleIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('align.middle'), this.alignMiddleIcon(), () => {
       this.setColumnVerticalAlignment(this.currentIndex, 'middle');
     }));
 
-    toolbar.appendChild(this.createButton('Align bottom', this.alignBottomIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('align.bottom'), this.alignBottomIcon(), () => {
       this.setColumnVerticalAlignment(this.currentIndex, 'bottom');
     }));
 
@@ -340,11 +341,11 @@ export class TableGripToolbar {
     toolbar.appendChild(this.createSeparator());
 
     // Sort buttons (only for columns)
-    toolbar.appendChild(this.createButton('Sort ascending', this.sortAscIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('column.sortAscending'), this.sortAscIcon(), () => {
       this.sortColumn(this.currentIndex, 'asc');
     }));
 
-    toolbar.appendChild(this.createButton('Sort descending', this.sortDescIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('column.sortDescending'), this.sortDescIcon(), () => {
       this.sortColumn(this.currentIndex, 'desc');
     }));
 
@@ -352,11 +353,11 @@ export class TableGripToolbar {
     toolbar.appendChild(this.createSeparator());
 
     // Move buttons
-    toolbar.appendChild(this.createButton('Move left', this.moveLeftIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('column.moveLeft'), this.moveLeftIcon(), () => {
       this.moveColumn(this.currentIndex, -1);
     }));
 
-    toolbar.appendChild(this.createButton('Move right', this.moveRightIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('column.moveRight'), this.moveRightIcon(), () => {
       this.moveColumn(this.currentIndex, 1);
     }));
 
@@ -364,7 +365,7 @@ export class TableGripToolbar {
     toolbar.appendChild(this.createSeparator());
 
     // Delete button
-    toolbar.appendChild(this.createButton('Delete column', this.deleteIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('column.delete'), this.deleteIcon(), () => {
       this.deleteColumn(this.currentIndex);
     }));
 
@@ -388,7 +389,7 @@ export class TableGripToolbar {
       }
     } catch {}
     toolbar.appendChild(this.createToggleButton(
-      'Merge duplicate cells',
+      tTable('table.mergeDuplicates'),
       this.mergeDuplicateCellsIcon(),
       duplicateMergesActive,
       () => { this.toggleDuplicateCellMerges(); },
@@ -398,20 +399,20 @@ export class TableGripToolbar {
 
     // Copy table through the editor clipboard pipeline, retaining both the
     // rich table payload and EasyView's Markdown/plain-text representation.
-    toolbar.appendChild(this.createButton('Copy table', this.copyIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('table.copy'), this.copyIcon(), () => {
       this.copyTable();
     }));
 
     toolbar.appendChild(this.createSeparator());
 
-    toolbar.appendChild(this.createButton('Delete table', this.deleteIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('table.delete'), this.deleteIcon(), () => {
       this.deleteTable();
     }));
 
     toolbar.appendChild(this.createSeparator());
 
     // Export Excel button
-    toolbar.appendChild(this.createButton('Export Excel', this.exportCSVIcon(), () => {
+    toolbar.appendChild(this.createButton(tTable('table.exportExcel'), this.exportCSVIcon(), () => {
       this.exportTableExcel();
     }));
 
@@ -472,7 +473,7 @@ export class TableGripToolbar {
     input.max = String(max);
     input.step = '1';
     input.value = String(value);
-    input.title = `${label} (${min}-${max}${unit})`;
+    input.title = tTable('sizeInput.title', { label, min, max, unit });
     input.setAttribute('aria-label', label);
 
     const unitEl = document.createElement('span');

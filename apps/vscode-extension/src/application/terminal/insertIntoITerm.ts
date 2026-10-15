@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { getITermSnapshot, pasteIntoITermSession, type ITermSession } from './iTermBridge';
+import { tTerminal } from './terminal.i18n';
 
 const rememberedSessionKey = 'easyview.iterm2.outlineTarget';
 
@@ -18,10 +19,10 @@ function sameWindows(previous: number[], current: number[]): boolean {
 export async function insertIntoITerm(text: string, state: vscode.Memento): Promise<void> {
   try {
     if (process.platform !== 'darwin' || vscode.env.remoteName) {
-      throw new Error('iTerm2 insertion requires a local macOS extension session.');
+      throw new Error(tTerminal('iterm.localMacOnly'));
     }
     const { sessions, windowIds, activeWindowId } = await getITermSnapshot();
-    if (!sessions.length) throw new Error('Open an iTerm2 session with Claude Code first.');
+    if (!sessions.length) throw new Error(tTerminal('iterm.noSession'));
     const remembered = state.get<RememberedSession>(rememberedSessionKey);
     let target: ITermSession | undefined;
     if (remembered && activeWindowId === remembered.activeWindowId
@@ -31,9 +32,9 @@ export async function insertIntoITerm(text: string, state: vscode.Memento): Prom
     if (!target) {
       const picked = await vscode.window.showQuickPick(sessions.map((session) => ({
         label: session.name || 'iTerm2',
-        description: `Window ${session.window} · Tab ${session.tab} · Pane ${session.pane}`,
+        description: tTerminal('iterm.sessionDescription', { window: session.window, tab: session.tab, pane: session.pane }),
         session,
-      })), { title: 'Insert outline path into iTerm2', placeHolder: 'Select the session with Claude Code waiting for input' });
+      })), { title: tTerminal('iterm.pickTitle'), placeHolder: tTerminal('iterm.pickPlaceholder') });
       target = picked?.session;
     }
     if (!target) return;
@@ -44,6 +45,6 @@ export async function insertIntoITerm(text: string, state: vscode.Memento): Prom
       windowIds,
     } satisfies RememberedSession);
   } catch (error) {
-    await vscode.window.showErrorMessage(`Could not insert into iTerm2: ${error instanceof Error ? error.message : String(error)}`);
+    await vscode.window.showErrorMessage(tTerminal('iterm.insertFailed', { message: error instanceof Error ? error.message : String(error) }));
   }
 }

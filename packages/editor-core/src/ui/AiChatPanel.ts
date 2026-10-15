@@ -12,6 +12,8 @@ import type {
 } from '@easyview/contracts';
 import { applyAiTextPatches, DEFAULT_AI_CHAT_SETTINGS } from '@easyview/contracts';
 import { decorateRenderedMarkdown, renderAssistantMarkdown } from './aiChatMarkdown';
+import { tAiChat } from './aiChat.i18n';
+import { escapeHtml } from './escapeHtml';
 
 const PANEL_WIDTH_STORAGE_KEY = 'easyview-ai-chat-width';
 const MODEL_STORAGE_KEY = 'easyview-ai-chat-model';
@@ -573,21 +575,22 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
 
   const root = document.createElement('div');
   root.className = 'ai-chat-panel hidden';
+  const tHtml = (key: Parameters<typeof tAiChat>[0]): string => escapeHtml(tAiChat(key));
   root.innerHTML = `
-    <div class="ai-chat-resizer" title="拖拽调整宽度"></div>
+    <div class="ai-chat-resizer" title="${tHtml('resize')}"></div>
     <div class="ai-chat-header">
-      <span class="ai-chat-title">AI 对话</span>
+      <span class="ai-chat-title">${tHtml('title')}</span>
       <div class="ai-chat-mode-switch">
-        <button class="ai-chat-mode-btn" data-mode="chat" type="button" title="仅对话，不修改文件">Chat</button>
-        <button class="ai-chat-mode-btn" data-mode="agent" type="button" title="AI 可直接修改当前文件">Agent</button>
+        <button class="ai-chat-mode-btn" data-mode="chat" type="button" title="${tHtml('mode.chatTitle')}">Chat</button>
+        <button class="ai-chat-mode-btn" data-mode="agent" type="button" title="${tHtml('mode.agentTitle')}">Agent</button>
       </div>
-      <button class="ai-chat-icon-btn" data-action="settings" type="button" title="模型设置">
+      <button class="ai-chat-icon-btn" data-action="settings" type="button" title="${tHtml('settings')}">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
-      <button class="ai-chat-icon-btn" data-action="clear" type="button" title="清空会话">
+      <button class="ai-chat-icon-btn" data-action="clear" type="button" title="${tHtml('clear')}">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
       </button>
-      <button class="ai-chat-icon-btn" data-action="close" type="button" title="关闭">
+      <button class="ai-chat-icon-btn" data-action="close" type="button" title="${tHtml('close')}">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
       </button>
     </div>
@@ -595,12 +598,12 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
     <div class="ai-chat-composer">
       <div class="ai-chat-pending-attachments"></div>
       <div class="ai-chat-url-row">
-        <input class="ai-chat-url-input" type="text" placeholder="输入图片 URL，回车添加" />
-        <button class="ai-chat-icon-btn" data-action="url-confirm" type="button" title="添加">
+        <input class="ai-chat-url-input" type="text" placeholder="${tHtml('url.placeholder')}" />
+        <button class="ai-chat-icon-btn" data-action="url-confirm" type="button" title="${tHtml('url.confirm')}">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
         </button>
       </div>
-      <textarea class="ai-chat-input" placeholder="输入消息，Enter 发送，Shift+Enter 换行"></textarea>
+      <textarea class="ai-chat-input" placeholder="${tHtml('input.placeholder')}"></textarea>
       <div class="ai-chat-composer-bar">
         <div class="ai-chat-model-switcher">
           <button class="ai-chat-model-btn" type="button">
@@ -610,24 +613,24 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
           <div class="ai-chat-model-menu">
             <div class="ai-chat-model-options"></div>
             <div class="ai-chat-model-menu-separator"></div>
-            <button class="ai-chat-model-option" data-action="open-settings" type="button">设置…</button>
+            <button class="ai-chat-model-option" data-action="open-settings" type="button">${tHtml('model.settings')}</button>
           </div>
         </div>
-        <button class="ai-chat-attach-btn" data-action="attach" type="button" title="上传本地图片">
+        <button class="ai-chat-attach-btn" data-action="attach" type="button" title="${tHtml('attach.local')}">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
         </button>
-        <button class="ai-chat-attach-btn" data-action="url" type="button" title="通过 URL 添加图片">
+        <button class="ai-chat-attach-btn" data-action="url" type="button" title="${tHtml('attach.url')}">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
         </button>
-        <button class="ai-chat-send-btn" data-action="send" type="button" title="发送">
+        <button class="ai-chat-send-btn" data-action="send" type="button" title="${tHtml('send')}">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
       </div>
     </div>
     <div class="ai-chat-settings-view">
       <div class="ai-chat-settings-header">
-        <span class="ai-chat-settings-title">AI 模型设置</span>
-        <button class="ai-chat-icon-btn" data-action="settings-back" type="button" title="返回">
+        <span class="ai-chat-settings-title">${tHtml('settings.title')}</span>
+        <button class="ai-chat-icon-btn" data-action="settings-back" type="button" title="${tHtml('settings.back')}">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
         </button>
       </div>
@@ -637,14 +640,14 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
       </div>
       <div class="ai-chat-field">
         <label>Brave Search API Key <span class="ai-chat-web-search-key-status"></span></label>
-        <input class="ai-chat-settings-web-search-key" type="password" placeholder="用于 web_search 工具" autocomplete="off" />
+        <input class="ai-chat-settings-web-search-key" type="password" placeholder="${tHtml('settings.webSearchKeyPlaceholder')}" autocomplete="off" />
       </div>
       <div class="ai-chat-field">
-        <label>Base URL（OpenAI 兼容接口）</label>
+        <label>${tHtml('settings.baseUrl')}</label>
         <input class="ai-chat-settings-baseurl" type="text" placeholder="https://api.deepseek.com" />
       </div>
       <div class="ai-chat-field">
-        <label>模型列表（每行一个，第一个为默认）</label>
+        <label>${tHtml('settings.models')}</label>
         <textarea class="ai-chat-settings-models" rows="3" placeholder="deepseek-chat&#10;deepseek-reasoner"></textarea>
       </div>
       <div class="ai-chat-field-row">
@@ -662,18 +665,18 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         <input class="ai-chat-settings-maxtokens" type="number" min="1" step="1" />
       </div>
       <div class="ai-chat-field">
-        <label>系统提示词（可选）</label>
-        <textarea class="ai-chat-settings-sysprompt" rows="3" placeholder="例如：你是一位严谨的技术文档编辑…"></textarea>
+        <label>${tHtml('settings.systemPrompt')}</label>
+        <textarea class="ai-chat-settings-sysprompt" rows="3" placeholder="${tHtml('settings.systemPromptPlaceholder')}"></textarea>
       </div>
       <div class="ai-chat-checkbox-row">
         <input class="ai-chat-settings-stream" type="checkbox" id="ai-chat-settings-stream" />
-        <label for="ai-chat-settings-stream">流式输出</label>
+        <label for="ai-chat-settings-stream">${tHtml('settings.stream')}</label>
       </div>
       <div class="ai-chat-settings-actions">
-        <button class="ai-chat-settings-save" type="button">保存</button>
+        <button class="ai-chat-settings-save" type="button">${tHtml('settings.save')}</button>
       </div>
       <div class="ai-chat-settings-status"></div>
-      <div class="ai-chat-settings-hint">模型 API Key 与 Brave Search API Key 均加密存储于系统钥匙串。Brave Key 已保存时，Agent 模式可调用 web_search。</div>
+      <div class="ai-chat-settings-hint">${tHtml('settings.hint')}</div>
     </div>
   `;
 
@@ -855,11 +858,11 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
 
   const badgeText = (badge: MessageBadge): string => {
     switch (badge) {
-      case 'applied': return '已应用到文件 ✓（Ctrl+Z 可撤销）';
-      case 'no-change': return '文档无变化';
-      case 'no-doc': return '回复中未包含可应用的文档';
-      case 'stopped': return '已停止';
-      case 'error': return '生成失败';
+      case 'applied': return tAiChat('badge.applied');
+      case 'no-change': return tAiChat('badge.noChange');
+      case 'no-doc': return tAiChat('badge.noDoc');
+      case 'stopped': return tAiChat('badge.stopped');
+      case 'error': return tAiChat('badge.error');
     }
   };
 
@@ -869,8 +872,8 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
       const empty = document.createElement('div');
       empty.className = 'ai-chat-empty';
       empty.textContent = mode === 'agent'
-        ? 'Agent 模式：AI 可直接修改当前文件。\n在输入框描述要做的修改，AI 完成后自动应用（可撤销）。'
-        : '与 AI 对话。\n点击左下角切换模型，右上角齿轮配置 API。';
+        ? tAiChat('empty.agent')
+        : tAiChat('empty.chat');
       empty.style.whiteSpace = 'pre-wrap';
       messagesEl.appendChild(empty);
       return;
@@ -900,8 +903,8 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         bubble.classList.add('streaming-text');
         bubble.textContent = message.content.length > 0 ? message.content : '…';
       } else {
-        bubble.innerHTML = renderAssistantMarkdown(message.content || '（无内容）');
-        decorateRenderedMarkdown(bubble, (code) => deps.copyText(code, '代码已复制'));
+        bubble.innerHTML = renderAssistantMarkdown(message.content || tAiChat('message.empty'));
+        decorateRenderedMarkdown(bubble, (code) => deps.copyText(code, tAiChat('code.copiedToast')));
       }
       item.appendChild(bubble);
 
@@ -917,7 +920,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         const details = document.createElement('details');
         details.className = 'ai-chat-reasoning';
         const summary = document.createElement('summary');
-        summary.textContent = '思考过程';
+        summary.textContent = tAiChat('reasoning');
         details.appendChild(summary);
         const body = document.createElement('div');
         body.style.whiteSpace = 'pre-wrap';
@@ -967,7 +970,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
 
   const updateModelButton = (): void => {
     modelNameEl.textContent = selectedModel || '--';
-    modelBtn.title = selectedModel ? `当前模型: ${selectedModel}` : '选择模型';
+    modelBtn.title = selectedModel ? tAiChat('model.current', { model: selectedModel }) : tAiChat('model.select');
     for (const option of modelOptionsEl.querySelectorAll('.ai-chat-model-option')) {
       option.classList.toggle('selected', option.textContent === selectedModel);
     }
@@ -1023,9 +1026,9 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
     settingsEls.stream.checked = settings.stream;
     settingsEls.key.value = '';
     settingsEls.webSearchKey.value = '';
-    keyStatusEl.textContent = hasApiKey ? '（已保存）' : '（未设置）';
+    keyStatusEl.textContent = hasApiKey ? tAiChat('settings.keySaved') : tAiChat('settings.keyUnset');
     keyStatusEl.classList.toggle('saved', hasApiKey);
-    webSearchKeyStatusEl.textContent = hasWebSearchApiKey ? '（已保存）' : '（未设置）';
+    webSearchKeyStatusEl.textContent = hasWebSearchApiKey ? tAiChat('settings.keySaved') : tAiChat('settings.keyUnset');
     webSearchKeyStatusEl.classList.toggle('saved', hasWebSearchApiKey);
   };
 
@@ -1061,19 +1064,19 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
     const maxTokens = Number(settingsEls.maxTokens.value);
 
     if (models.length === 0) {
-      setSettingsStatus('模型列表不能为空', false);
+      setSettingsStatus(tAiChat('settings.modelsRequired'), false);
       return;
     }
     if (!Number.isFinite(temperature) || temperature < 0 || temperature > 2) {
-      setSettingsStatus('Temperature 需在 0–2 之间', false);
+      setSettingsStatus(tAiChat('settings.temperatureRange'), false);
       return;
     }
     if (!Number.isFinite(topP) || topP < 0 || topP > 1) {
-      setSettingsStatus('Top P 需在 0–1 之间', false);
+      setSettingsStatus(tAiChat('settings.topPRange'), false);
       return;
     }
     if (!Number.isFinite(maxTokens) || maxTokens < 1) {
-      setSettingsStatus('Max Tokens 需为正整数', false);
+      setSettingsStatus(tAiChat('settings.maxTokensInvalid'), false);
       return;
     }
 
@@ -1100,7 +1103,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
     if (webSearchApiKey.length > 0) {
       deps.postMessage({ type: 'aiChat.saveWebSearchApiKey', requestId: `${requestId}-web-search-key`, apiKey: webSearchApiKey });
     }
-    setSettingsStatus('保存中…', true);
+    setSettingsStatus(tAiChat('settings.saving'), true);
   });
 
   // ------------------------------------------------------------ composer
@@ -1119,7 +1122,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
       remove.type = 'button';
       remove.className = 'ai-chat-pending-remove';
       remove.textContent = '×';
-      remove.title = '移除';
+      remove.title = tAiChat('attachment.remove');
       remove.addEventListener('click', () => {
         pendingAttachments.splice(index, 1);
         updatePendingAttachments();
@@ -1146,11 +1149,11 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
   const updateSendButton = (): void => {
     if (activeRequestId) {
       sendBtn.classList.add('stop');
-      sendBtn.title = '停止生成';
+      sendBtn.title = tAiChat('stop');
       sendBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
     } else {
       sendBtn.classList.remove('stop');
-      sendBtn.title = '发送';
+      sendBtn.title = tAiChat('send');
       sendBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
     }
   };
@@ -1174,7 +1177,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
     if (text.length === 0 && pendingAttachments.length === 0) return;
     if (!hasApiKey) {
       openSettings();
-      setSettingsStatus('请先填写 API Key', false);
+      setSettingsStatus(tAiChat('settings.apiKeyRequired'), false);
       return;
     }
 
@@ -1310,8 +1313,8 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
       if (buttonMode === 'agent') {
         button.disabled = !documentContextAvailable;
         button.title = documentContextAvailable
-          ? 'AI 可直接修改当前文件'
-          : '仅 Markdown 标签支持 Agent 模式';
+          ? tAiChat('mode.agentTitle')
+          : tAiChat('mode.agentUnavailable');
       }
     }
   };
@@ -1404,8 +1407,8 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         if (message.requestId !== activeRequestId) return true;
         const target = messages.find((item) => item.id === streamingMessageId);
         if (!target) return true;
-        const action = message.phase === 'call' ? '调用' : '完成';
-        target.toolActivities = [...(target.toolActivities ?? []), `${action}工具：${message.toolName}`];
+        const activity = tAiChat(message.phase === 'call' ? 'tool.call' : 'tool.done', { tool: message.toolName });
+        target.toolActivities = [...(target.toolActivities ?? []), activity];
         renderMessages();
         return true;
       }
@@ -1425,7 +1428,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
           target.reasoning = message.reasoning;
         }
         if (message.finishReason === 'length' && target) {
-          target.error = '注意：回复因长度限制被截断。';
+          target.error = tAiChat('truncated');
         }
         if (target && target.content) {
           history.push({ role: 'assistant', content: target.content });
@@ -1472,7 +1475,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         const kind = settingsRequests.get(message.requestId);
         settingsRequests.delete(message.requestId);
         if (kind === 'save') {
-          setSettingsStatus(message.ok ? (message.message ?? '已保存') : (message.message ?? '保存失败'), message.ok);
+          setSettingsStatus(message.ok ? (message.message ?? tAiChat('settings.saved')) : (message.message ?? tAiChat('settings.saveFailed')), message.ok);
         }
         requestSettings();
         return true;

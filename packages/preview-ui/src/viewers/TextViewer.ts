@@ -1,6 +1,7 @@
 import * as React from 'react';
 import type { PreviewTextResult } from '@easyview/contracts';
 import { h, Loading, ViewerError, type ViewerProps } from './shared';
+import { tPreview } from '../preview.i18n';
 
 export interface TextViewerProps extends ViewerProps {
   readText(sessionId: string): Promise<PreviewTextResult>;
@@ -21,7 +22,7 @@ export function TextViewer({ descriptor, readText }: TextViewerProps): React.Rea
   if (error) return h(ViewerError, { error });
   if (content === null) return h(Loading, {});
   return h('section', { className: 'preview-text-viewer' },
-    truncated ? h('p', { className: 'preview-notice' }, '内容过大，仅显示可安全读取的前段内容。') : null,
+    truncated ? h('p', { className: 'preview-notice' }, tPreview('text.truncated')) : null,
     h('pre', null, content),
   );
 }

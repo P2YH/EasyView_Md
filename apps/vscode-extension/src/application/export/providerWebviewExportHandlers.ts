@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { buildXlsxBuffer } from '@easyview/node-runtime';
 import { downloadFile } from './providerExportHandler';
 import { showExportCompletionNotification } from './exportCompletionNotification';
+import { tExport } from './export.i18n';
 import type { EditorToHostMessage } from '@easyview/contracts/protocol';
 
 type ExportMessage = Extract<EditorToHostMessage, { type: 'exportXlsx' | 'exportHtml' }>;
@@ -26,7 +27,7 @@ export async function handleWebviewExportMessage(
     const defaultName = message.fileName || `table-${Date.now()}.xlsx`;
     const saveUri = await vscode.window.showSaveDialog({
       defaultUri: vscode.Uri.file(path.join(docDir, defaultName)),
-      filters: { 'Excel Workbook': ['xlsx'] },
+      filters: { [tExport('excel.filterName')]: ['xlsx'] },
     });
     if (!saveUri) return true;
 
@@ -34,16 +35,15 @@ export async function handleWebviewExportMessage(
       const buffer = await buildXlsxBuffer(payload);
       await vscode.workspace.fs.writeFile(saveUri, buffer);
       showExportCompletionNotification(
-        `Excel exported to ${path.basename(saveUri.fsPath)}`,
+        tExport('excel.exported', { name: path.basename(saveUri.fsPath) }),
         saveUri.fsPath,
-        'Open File',
       );
     } catch (error: unknown) {
       const messageText = error instanceof Error ? error.message : String(error);
       if (messageText.includes('EBUSY') || messageText.includes('resource busy')) {
-        vscode.window.showErrorMessage('Cannot save Excel: the file is open in another program. Close it and try again.');
+        vscode.window.showErrorMessage(tExport('excel.busy'));
       } else {
-        vscode.window.showErrorMessage(`Excel export failed: ${messageText}`);
+        vscode.window.showErrorMessage(tExport('excel.failed', { message: messageText }));
       }
     }
     return true;
@@ -63,9 +63,9 @@ export async function handleWebviewExportMessage(
     if (exportImages.length === 0) {
       await vscode.workspace.fs.writeFile(saveUri, Buffer.from(html, 'utf-8'));
       showExportCompletionNotification(
-        `Exported to ${path.basename(saveUri.fsPath)}`,
+        tExport('html.exported', { path: path.basename(saveUri.fsPath) }),
         saveUri.fsPath,
-        'Open in Browser',
+        tExport('openInBrowser'),
       );
       return true;
     }
@@ -100,18 +100,20 @@ export async function handleWebviewExportMessage(
       }
     }
 
-    const failMessage = failCount > 0 ? ` (${failCount} image(s) failed)` : '';
+    const exportedPath = `${folderName}/${htmlFilename}`;
     showExportCompletionNotification(
-      `Exported to ${folderName}/${htmlFilename}${failMessage}`,
+      failCount > 0
+        ? tExport('html.exportedWithFailures', { path: exportedPath, count: failCount })
+        : tExport('html.exported', { path: exportedPath }),
       htmlPath,
-      'Open in Browser',
+      tExport('openInBrowser'),
     );
   } catch (error: unknown) {
     const messageText = error instanceof Error ? error.message : String(error);
     if (messageText.includes('EBUSY') || messageText.includes('resource busy')) {
-      vscode.window.showErrorMessage('Cannot save HTML: the file is open in another program. Close it and try again.');
+      vscode.window.showErrorMessage(tExport('html.busy'));
     } else {
-      vscode.window.showErrorMessage(`HTML export failed: ${messageText}`);
+      vscode.window.showErrorMessage(tExport('html.failed', { message: messageText }));
     }
   }
   return true;

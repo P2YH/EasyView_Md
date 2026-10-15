@@ -1,4 +1,5 @@
 import type { HostToEditorMessage } from '@easyview/contracts/protocol';
+import { tEditorCore } from './editorCore.i18n';
 
 export interface HostMessageSideEffectHandlers {
   onCommitMessageGenerated(message: string, source: string): void;
@@ -32,34 +33,34 @@ export function handleHostMessageSideEffect(
 ): boolean {
   switch (message.type) {
     case 'commitMessageGenerated':
-      handlers.onCommitMessageGenerated(message.message, message.source || 'Generated');
+      handlers.onCommitMessageGenerated(message.message, message.source || tEditorCore('commit.generated'));
       return true;
     case 'commitMessageGenerationFailed':
-      handlers.onCommitMessageGenerationFailed(message.message || 'Failed to generate commit message.');
+      handlers.onCommitMessageGenerationFailed(message.message || tEditorCore('commit.generateFailed'));
       return true;
     case 'stageFileCompleted':
-      handlers.onStageFileCompleted(message.message || 'Staged current file');
+      handlers.onStageFileCompleted(message.message || tEditorCore('git.staged'));
       return true;
     case 'stageFileFailed':
-      handlers.onStageFileFailed(message.message || 'Failed to stage current file.');
+      handlers.onStageFileFailed(message.message || tEditorCore('git.stageFailed'));
       return true;
     case 'commitFileCompleted':
-      handlers.onCommitFileCompleted(message.message || 'Committed current file');
+      handlers.onCommitFileCompleted(message.message || tEditorCore('git.committed'));
       return true;
     case 'commitFileFailed':
-      handlers.onCommitFileFailed(message.message || 'Failed to commit current file.');
+      handlers.onCommitFileFailed(message.message || tEditorCore('git.commitFailed'));
       return true;
     case 'syncFileCompleted':
-      handlers.onSyncFileCompleted(message.message || 'Synced current file');
+      handlers.onSyncFileCompleted(message.message || tEditorCore('git.synced'));
       return true;
     case 'syncFileFailed':
-      handlers.onSyncFileFailed(message.message || 'Failed to sync current file.');
+      handlers.onSyncFileFailed(message.message || tEditorCore('git.syncFailed'));
       return true;
     case 'clipboardCopyCompleted':
-      handlers.onClipboardCopyCompleted(message.message || 'Copied');
+      handlers.onClipboardCopyCompleted(message.message || tEditorCore('copied'));
       return true;
     case 'clipboardCopyFailed':
-      handlers.onClipboardCopyFailed(message.message || 'Copy failed');
+      handlers.onClipboardCopyFailed(message.message || tEditorCore('copyFailed'));
       return true;
     case 'focus':
       handlers.onFocus();

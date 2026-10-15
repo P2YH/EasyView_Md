@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetLocale, setLocale } from '@easyview/contracts/i18n';
 
 const vscodeMocks = vi.hoisted(() => ({
   showInformationMessage: vi.fn(),
@@ -27,6 +28,9 @@ function createContext(initialVersion?: string) {
 }
 
 describe('notifyExtensionUpdated', () => {
+  beforeEach(() => setLocale('en'));
+  afterEach(() => resetLocale());
+
   it('records the first installed version without a notification', async () => {
     const context = createContext();
 

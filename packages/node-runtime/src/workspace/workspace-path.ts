@@ -1,23 +1,24 @@
 import type { WorkspaceEntry } from '@easyview/contracts';
 import { WorkspaceOperationError } from '@easyview/contracts';
+import { tWorkspaceError } from './workspace.i18n';
 
 const WINDOWS_ABSOLUTE_PATH = /^[a-zA-Z]:\//;
 
 export function normalizeWorkspaceRelativePath(value: string): string {
   if (typeof value !== 'string' || value.includes('\0')) {
-    throw new WorkspaceOperationError('INVALID_PATH', 'Workspace path is invalid');
+    throw new WorkspaceOperationError('INVALID_PATH', tWorkspaceError('invalidPath'));
   }
 
   const slashPath = value.replace(/\\/g, '/');
   if (slashPath.startsWith('/') || slashPath.startsWith('//') || WINDOWS_ABSOLUTE_PATH.test(slashPath)) {
-    throw new WorkspaceOperationError('INVALID_PATH', 'Workspace path must be relative');
+    throw new WorkspaceOperationError('INVALID_PATH', tWorkspaceError('mustBeRelative'));
   }
 
   const normalized: string[] = [];
   for (const segment of slashPath.split('/')) {
     if (!segment || segment === '.') continue;
     if (segment === '..') {
-      throw new WorkspaceOperationError('ROOT_ESCAPE', 'Workspace path cannot escape the root');
+      throw new WorkspaceOperationError('ROOT_ESCAPE', tWorkspaceError('escapeRoot'));
     }
     normalized.push(segment);
   }
@@ -35,7 +36,7 @@ export function validateWorkspaceEntryName(name: string): void {
   ) {
     throw new WorkspaceOperationError(
       'INVALID_NAME',
-      'Workspace entry name must be non-empty and cannot contain path separators',
+      tWorkspaceError('invalidName'),
     );
   }
 }

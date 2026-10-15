@@ -389,15 +389,15 @@ describe('workspace tree order', () => {
     expect(formatWorkspaceEntryTimestamps({
       createdAt: Date.UTC(2026, 8, 22, 2, 0, 0),
       updatedAt: Date.UTC(2026, 8, 22, 3, 0, 0),
-    }, { showCreatedAt: true, showUpdatedAt: true })).toMatch(/^Created \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} · Updated \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    }, { showCreatedAt: true, showUpdatedAt: true })).toMatch(/^创建于 \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} · 更新于 \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
     expect(formatWorkspaceEntryTimestamps({
       createdAt: Date.UTC(2026, 8, 22, 2, 0, 0),
       updatedAt: Date.UTC(2026, 8, 22, 3, 0, 0),
-    }, { showCreatedAt: true, showUpdatedAt: false })).toMatch(/^Created \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    }, { showCreatedAt: true, showUpdatedAt: false })).toMatch(/^创建于 \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
     expect(formatWorkspaceEntryTimestamps({
       createdAt: Date.UTC(2026, 8, 22, 2, 0, 0),
       updatedAt: Date.UTC(2026, 8, 22, 3, 0, 0),
-    }, { showCreatedAt: false, showUpdatedAt: true })).toMatch(/^Updated \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    }, { showCreatedAt: false, showUpdatedAt: true })).toMatch(/^更新于 \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
 
     const both = describeWorkspaceEntryTimestamps({
       createdAt: Date.UTC(2026, 8, 22, 2, 0, 0),
@@ -405,14 +405,14 @@ describe('workspace tree order', () => {
     }, { showCreatedAt: true, showUpdatedAt: true });
     expect(both?.parts.map((part) => part.kind)).toEqual(['created', 'updated']);
     expect(both?.parts.every((part) => /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(part.value))).toBe(true);
-    expect(both?.title).toMatch(/^Created .+\nUpdated .+$/);
+    expect(both?.title).toMatch(/^创建于 .+\n更新于 .+$/);
 
     const hoverOnly = describeWorkspaceEntryTimestamps({
       createdAt: Date.UTC(2026, 8, 22, 2, 0, 0),
       updatedAt: Date.UTC(2026, 8, 22, 3, 0, 0),
     });
     expect(hoverOnly?.parts).toEqual([]);
-    expect(hoverOnly?.title).toMatch(/^Created .+\nUpdated .+$/);
+    expect(hoverOnly?.title).toMatch(/^创建于 .+\n更新于 .+$/);
   });
 
   it('applies order state through WorkspaceTreeModel', async () => {

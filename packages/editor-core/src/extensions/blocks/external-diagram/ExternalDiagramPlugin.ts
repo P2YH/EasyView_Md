@@ -10,6 +10,7 @@ import { Plugin, PluginKey, TextSelection } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { getExternalDiagramType, isCode } from '../../../editor/lib/CodeDetection';
 import { findBlockNodes, type NodeWithPos, findParentNode } from '../../../editor/lib/NodeFinder';
+import { tBlocks } from '../blocks.i18n';
 
 export const pluginKey = new PluginKey('externalDiagram');
 
@@ -108,7 +109,7 @@ class ExternalDiagramRenderer {
     const zoomIn = document.createElement('button');
     zoomIn.className = 'mermaid-zoom-btn';
     zoomIn.textContent = '+';
-    zoomIn.title = 'Zoom in';
+    zoomIn.title = tBlocks('zoom.in');
     zoomIn.addEventListener('click', (event) => {
       event.stopPropagation();
       this.scale = Math.min(this.scale * 1.25, 5);
@@ -118,7 +119,7 @@ class ExternalDiagramRenderer {
     const zoomOut = document.createElement('button');
     zoomOut.className = 'mermaid-zoom-btn';
     zoomOut.textContent = '-';
-    zoomOut.title = 'Zoom out';
+    zoomOut.title = tBlocks('zoom.out');
     zoomOut.addEventListener('click', (event) => {
       event.stopPropagation();
       this.scale = Math.max(this.scale / 1.25, 0.2);
@@ -128,7 +129,7 @@ class ExternalDiagramRenderer {
     const zoomReset = document.createElement('button');
     zoomReset.className = 'mermaid-zoom-btn';
     zoomReset.textContent = '1:1';
-    zoomReset.title = 'Reset zoom';
+    zoomReset.title = tBlocks('zoom.reset');
     zoomReset.addEventListener('click', (event) => {
       event.stopPropagation();
       this.resetZoomPan();
@@ -191,7 +192,7 @@ class ExternalDiagramRenderer {
     if (!diagramType || !source) {
       this.element.classList.add('empty');
       this.element.classList.remove('parse-error');
-      this.element.textContent = 'Empty diagram';
+      this.element.textContent = tBlocks('externalDiagram.empty');
       return;
     }
 
@@ -211,14 +212,14 @@ class ExternalDiagramRenderer {
 
     const image = document.createElement('img');
     image.src = url;
-    image.alt = `${diagramType} diagram`;
+    image.alt = tBlocks('externalDiagram.diagram', { type: diagramType });
     image.decoding = 'async';
     image.loading = 'lazy';
     image.draggable = false;
     image.className = 'external-diagram-image';
     image.addEventListener('error', () => {
       this.element.classList.add('parse-error');
-      this.element.textContent = `Failed to render ${diagramType} diagram`;
+      this.element.textContent = tBlocks('externalDiagram.failed', { type: diagramType });
     }, { once: true });
 
     this.element.appendChild(image);
@@ -268,7 +269,7 @@ class ExternalDiagramRenderer {
       if (token !== this.renderToken) return;
       this.destroyBpmnViewer();
       this.element.classList.add('parse-error');
-      this.element.textContent = `Failed to render BPMN diagram: ${formatErrorMessage(error)}`;
+      this.element.textContent = tBlocks('externalDiagram.bpmnFailed', { error: formatErrorMessage(error) });
     }
   }
 }

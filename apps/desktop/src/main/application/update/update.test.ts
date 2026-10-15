@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { compareVersions, isUpdateDisabled, normalizeUpdateSettings, parseGitHubRelease, parseSha256Sums, selectInstallerAsset, shouldPrompt, trimNotes } from './updateCore';
+import { compareVersions, isUpdateDisabled, normalizeUpdateSettings, parseGitHubRelease, parseReleaseFromTagUrl, parseSha256Sums, selectInstallerAsset, shouldPrompt, trimNotes } from './updateCore';
 import { cleanupUpdateDirectory, findVerifiedDownload } from './updateStorage';
 
 const assets = ['EasyView_Md-mac-arm64.dmg', 'EasyView_Md-mac-arm64.zip', 'EasyView_Md-win-x64-setup.exe', 'EasyView_Md-win-x64.zip', 'EasyView_Md-win-x64-store.appx', 'SHA256SUMS']
@@ -27,6 +27,18 @@ describe('parseGitHubRelease', () => {
     expect(parseGitHubRelease({ ...base, prerelease: true })).toBeUndefined();
     expect(parseGitHubRelease({ ...base, tag_name: 'v2.0.6-rc.1' })).toBeUndefined();
     expect(parseGitHubRelease(null)).toBeUndefined();
+  });
+});
+
+describe('parseReleaseFromTagUrl', () => {
+  it('builds release info from the latest-release redirect', () => {
+    const release = parseReleaseFromTagUrl('https://github.com/tiantianmanmanzou/EasyView_Md/releases/tag/v2.0.8');
+    expect(release).toMatchObject({ version: '2.0.8', tag: 'v2.0.8', notes: '' });
+    expect(release?.assets.find((a) => a.name === 'SHA256SUMS')?.url)
+      .toBe('https://github.com/tiantianmanmanzou/EasyView_Md/releases/download/v2.0.8/SHA256SUMS');
+    expect(selectInstallerAsset(release!.assets, { platform: 'darwin', arch: 'arm64', windowsInstalled: false })?.name).toBe('EasyView_Md-mac-arm64.dmg');
+    expect(parseReleaseFromTagUrl('https://github.com/tiantianmanmanzou/EasyView_Md/releases')).toBeUndefined();
+    expect(parseReleaseFromTagUrl('https://github.com/x/y/releases/tag/v2.0.8-rc.1')).toBeUndefined();
   });
 });
 

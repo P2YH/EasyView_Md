@@ -3,6 +3,7 @@ import type { EditorCore } from '../editor/EditorCore';
 import { stripSettingsComment } from '@easyview/markdown-core/editor-settings';
 import type { EditorHostSubscription, EditorHostTransport } from '@easyview/contracts';
 import type { createFileHeader } from '../ui/FileHeader';
+import { tControllers } from './controllers.i18n';
 
 type FileHeader = ReturnType<typeof createFileHeader>;
 type SourceEditor = { getContent: () => string };
@@ -166,7 +167,7 @@ export class ExportController {
       this.deps.host.postMessage({ type: 'exportHtml', html: result.html, images: result.images });
     } catch (error) {
       console.error('[EasyView_Md] Export failed:', error);
-      this.deps.host.postMessage({ type: 'showInfo', text: `Export failed: ${error}` });
+      this.deps.host.postMessage({ type: 'showInfo', text: tControllers('export.htmlFailed', { error: String(error) }) });
     }
   }
 
@@ -181,7 +182,7 @@ export class ExportController {
       this.deps.host.postMessage({ type: 'exportPdfBase64', data: base64 });
     } catch (error) {
       console.error('[EasyView_Md] PDF export failed:', error);
-      this.deps.host.postMessage({ type: 'showInfo', text: `PDF export failed: ${error}` });
+      this.deps.host.postMessage({ type: 'showInfo', text: tControllers('export.pdfFailed', { error: String(error) }) });
     }
   }
 
@@ -221,7 +222,7 @@ export class ExportController {
       this.deps.host.postMessage({ type: 'exportDocx', title: this.title(), markdown, mermaidImages, asciiImages });
     } catch (error) {
       console.error('[EasyView_Md] DOCX export failed:', error);
-      this.deps.host.postMessage({ type: 'showInfo', text: `DOCX export failed: ${error}` });
+      this.deps.host.postMessage({ type: 'showInfo', text: tControllers('export.docxFailed', { error: String(error) }) });
     }
   }
 

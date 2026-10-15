@@ -1,5 +1,7 @@
 import { Terminal, type FontWeight } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { escapeHtml } from './escapeHtml';
+import { tTerminal } from './terminal.i18n';
 
 export interface TerminalAppearance {
   fontFamily?: string;
@@ -203,20 +205,20 @@ export function createTerminalModal(options: {
   root.innerHTML = `
     <div class="easyview-terminal-header">
       <div class="easyview-terminal-titlebox">
-        <div class="easyview-terminal-title">Terminal</div>
+        <div class="easyview-terminal-title">${escapeHtml(tTerminal('title'))}</div>
       </div>
       <div class="easyview-terminal-actions">
-        <button class="easyview-terminal-btn" data-action="font-decrease" type="button" title="Decrease font size">
+        <button class="easyview-terminal-btn" data-action="font-decrease" type="button" title="${escapeHtml(tTerminal('font.decrease'))}">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </button>
         <span class="easyview-terminal-font-size-label" data-role="font-size-label">--</span>
-        <button class="easyview-terminal-btn" data-action="font-increase" type="button" title="Increase font size">
+        <button class="easyview-terminal-btn" data-action="font-increase" type="button" title="${escapeHtml(tTerminal('font.increase'))}">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </button>
-        <button class="easyview-terminal-btn" data-action="pin" type="button" title="Pin terminal window">
+        <button class="easyview-terminal-btn" data-action="pin" type="button" title="${escapeHtml(tTerminal('pin'))}">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M7 7V3h10v4"/><path d="M5 7h14l-3 6H8z"/></svg>
         </button>
-        <button class="easyview-terminal-btn" data-action="close" type="button" title="Close terminal window">
+        <button class="easyview-terminal-btn" data-action="close" type="button" title="${escapeHtml(tTerminal('close'))}">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
         </button>
       </div>
@@ -658,7 +660,7 @@ export function createTerminalModal(options: {
     pinned = !pinned;
     root.classList.toggle('pinned', pinned);
     pinBtn.classList.toggle('active', pinned);
-    pinBtn.title = pinned ? 'Unpin terminal window' : 'Pin terminal window';
+    pinBtn.title = pinned ? tTerminal('unpin') : tTerminal('pin');
   });
 
   closeBtn.addEventListener('click', close);

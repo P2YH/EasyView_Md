@@ -130,8 +130,7 @@ it('uses the Git block changes already shown on the editor rail', () => {
   HTMLElement.prototype.scrollIntoView = function () { scrolled.push(this); };
   try {
     extension.showCurrentJumpToast(view);
-    const toast = document.querySelector<HTMLElement>('.ai-changes-toast.visible')!;
-    expect(toast.querySelector('.ai-changes-toast-summary')?.textContent).toBe('No changes');
+    expect(document.querySelector('.ai-changes-toast.visible')).toBeNull();
 
     const markdown = 'First\n\nSecond\n\nThird';
     view.dispatch(view.state.tr.setMeta(GIT_CHANGE_META, {
@@ -142,15 +141,16 @@ it('uses the Git block changes already shown on the editor rail', () => {
         { startLine: 5, endLine: 5, kind: 'modified' },
       ],
     }));
+    const toast = document.querySelector<HTMLElement>('.ai-changes-toast.visible')!;
+    expect(toast).not.toBeNull();
     expect(toast.querySelector<HTMLElement>('.ai-changes-toast-summary')?.hidden).toBe(true);
     expect(toast.querySelector('.ai-changes-toast-count')?.textContent).toBe('1/2');
-    expect(toast.querySelector('.ai-changes-toast-count')?.getAttribute('aria-label')).toBe('Git change 1 of 2');
+    expect(toast.querySelector('.ai-changes-toast-count')?.getAttribute('aria-label')).toBe('Git 变更 1 / 2');
     toast.querySelector<HTMLButtonElement>('.ai-changes-toast-next')!.click();
     expect(scrolled.at(-1)).toBe(view.nodeDOM(paragraphs[0].nodeSize + paragraphs[1].nodeSize));
 
     view.dispatch(view.state.tr.setMeta(GIT_CHANGE_META, { revision: 2, markdown, lineRanges: [] }));
-    expect(toast.querySelector('.ai-changes-toast-summary')?.textContent).toBe('No changes');
-    expect(toast.classList.contains('visible')).toBe(true);
+    expect(toast.classList.contains('visible')).toBe(false);
   } finally {
     view.destroy();
     mount.remove();

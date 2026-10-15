@@ -16,6 +16,7 @@ import { pluginKey as mermaidPluginKey } from '../mermaid/MermaidPlugin';
 import { pluginKey as plantumlPluginKey } from '../plantuml/PlantUmlPlugin';
 import { pluginKey as externalDiagramPluginKey } from '../external-diagram/ExternalDiagramPlugin';
 import { openLanguageDropdown } from './CodeBlockLanguageDropdown';
+import { tBlocks } from '../blocks.i18n';
 
 type DiagramKind = 'mermaid' | 'plantuml' | 'externalDiagram';
 
@@ -40,7 +41,7 @@ function getDiagramToggleIcon(isEditing: boolean): string {
 }
 
 function syncDiagramToggleButton(button: HTMLButtonElement, isEditing: boolean): void {
-  button.setAttribute('aria-label', isEditing ? 'Preview' : 'Edit');
+  button.setAttribute('aria-label', isEditing ? tBlocks('action.preview') : tBlocks('action.edit'));
   button.innerHTML = getDiagramToggleIcon(isEditing);
 }
 
@@ -161,7 +162,7 @@ export function createToolbarDecoration(
   // Copy button
   const copyButton = document.createElement('button');
   copyButton.className = 'code-block-toolbar-button';
-  copyButton.setAttribute('aria-label', 'Copy');
+  copyButton.setAttribute('aria-label', tBlocks('action.copy'));
   copyButton.innerHTML = `
     <svg fill="currentColor" width="18px" height="18px" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
       <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"></path>
@@ -194,7 +195,7 @@ export function createToolbarDecoration(
   // Delete button
   const deleteButton = document.createElement('button');
   deleteButton.className = 'code-block-toolbar-button code-block-delete-button';
-  deleteButton.setAttribute('aria-label', 'Delete block');
+  deleteButton.setAttribute('aria-label', tBlocks('action.deleteBlock'));
   deleteButton.innerHTML = `
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -223,7 +224,7 @@ export function createToolbarDecoration(
   // Language button
   const language = node.attrs.language || '';
   const langInfo = codeLanguages[language as keyof typeof codeLanguages];
-  const label = langInfo?.label || 'Plain text';
+  const label = langInfo?.label || tBlocks('codeBlock.plainText');
 
   const languageButton = document.createElement('button');
   languageButton.className = 'code-block-toolbar-button code-block-language-button';
@@ -442,7 +443,7 @@ function createMermaidToolbarElement(
   // Copy button
   const copyButton = document.createElement('button');
   copyButton.className = 'code-block-toolbar-button';
-  copyButton.setAttribute('aria-label', 'Copy');
+  copyButton.setAttribute('aria-label', tBlocks('action.copy'));
   copyButton.innerHTML = `
     <svg fill="currentColor" width="18px" height="18px" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
       <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"></path>
@@ -475,7 +476,7 @@ function createMermaidToolbarElement(
   // Delete button
   const deleteButton = document.createElement('button');
   deleteButton.className = 'code-block-toolbar-button code-block-delete-button';
-  deleteButton.setAttribute('aria-label', 'Delete block');
+  deleteButton.setAttribute('aria-label', tBlocks('action.deleteBlock'));
   deleteButton.innerHTML = `
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>

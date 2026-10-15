@@ -29,6 +29,8 @@ import {
   toDiskFileUri,
   toEasyViewMarkdownUri,
 } from '../application/document/markdownUri';
+import { normalizeLocale, setLocale } from '@easyview/contracts/i18n';
+import { tExtension } from './extension.i18n';
 
 function resolveCurrentMarkdownUri(): vscode.Uri | undefined {
   const activeDoc = vscode.window.activeTextEditor?.document;
@@ -80,13 +82,14 @@ function registerMirrorSavePropagation(): vscode.Disposable {
         message: error instanceof Error ? error.message : String(error),
       });
       void vscode.window.showErrorMessage(
-        `EasyView 镜像已保存，但写回原文件失败：${error instanceof Error ? error.message : String(error)}`,
+        tExtension('mirror.writeBackFailed', { message: error instanceof Error ? error.message : String(error) }),
       );
     }
   });
 }
 
 export function activate(context: vscode.ExtensionContext) {
+  setLocale(normalizeLocale(vscode.env.language) ?? 'en');
   void migrateDefaultEditorLayoutState(context);
   const installedVersion = getInstalledExtensionVersion();
   if (installedVersion) {
@@ -128,8 +131,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('easyviewMd.cycleProductTheme', async () => {
       const mode = await cycleProductTheme(context);
-      const labels = { light: '亮色', gray: '灰色', dark: '暗色' } as const;
-      void vscode.window.setStatusBarMessage(`EasyView 主题：${labels[mode]}`, 2000);
+      void vscode.window.setStatusBarMessage(tExtension('theme.status', { mode: tExtension(`theme.${mode}`) }), 2000);
     }),
   );
 
@@ -200,7 +202,7 @@ export function activate(context: vscode.ExtensionContext) {
             path: diskUri.fsPath,
             message,
           });
-          void vscode.window.showErrorMessage(`EasyView 无法打开该 Markdown：${message}`);
+          void vscode.window.showErrorMessage(tExtension('open.failed', { message }));
           return;
         }
 
@@ -215,9 +217,7 @@ export function activate(context: vscode.ExtensionContext) {
             path: diskUri.fsPath,
             openUri: openUri.toString(true),
           });
-          void vscode.window.showErrorMessage(
-            'EasyView 未能打开该 Markdown（自定义编辑器未创建面板）。请查看 “EasyView_Md Open Debug” 输出。',
-          );
+          void vscode.window.showErrorMessage(tExtension('open.noPanel'));
           return;
         }
 
@@ -248,7 +248,7 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      vscode.window.showInformationMessage('Select a Markdown file first.');
+      vscode.window.showInformationMessage(tExtension('open.selectMarkdownFirst'));
       logOpenWithDebug('openEditor.noMarkdownTarget');
       return undefined;
     }),
@@ -286,12 +286,12 @@ export function activate(context: vscode.ExtensionContext) {
             path: diskUri.fsPath,
             message,
           });
-          void vscode.window.showErrorMessage(`无法用原生 Markdown 编辑器打开文件：${message}`);
+          void vscode.window.showErrorMessage(tExtension('openNative.failed', { message }));
           return undefined;
         }
       }
 
-      vscode.window.showInformationMessage('Select a Markdown file first.');
+      vscode.window.showInformationMessage(tExtension('open.selectMarkdownFirst'));
       return undefined;
     }),
   );
@@ -303,9 +303,9 @@ export function activate(context: vscode.ExtensionContext) {
       if (!diskUri || diskUri.scheme !== 'file') {
         if (!MarkdownEditorProvider.notifyActivePanel({
           type: 'stageFileFailed',
-          message: 'Open a Markdown file first.',
+          message: tExtension('stage.openMarkdownFirst'),
         })) {
-          vscode.window.showInformationMessage('Open a Markdown file first.');
+          vscode.window.showInformationMessage(tExtension('stage.openMarkdownFirst'));
         }
         return;
       }
@@ -313,7 +313,7 @@ export function activate(context: vscode.ExtensionContext) {
       const cwd = workspaceFolder?.uri.fsPath ?? path.dirname(diskUri.fsPath);
       try {
         await stageGitFile(cwd, diskUri.fsPath);
-        const successText = `Staged: ${path.basename(diskUri.fsPath)}`;
+        const successText = tExtension('stage.completed', { name: path.basename(diskUri.fsPath) });
         if (!MarkdownEditorProvider.notifyActivePanel({
           type: 'stageFileCompleted',
           message: successText,
@@ -322,7 +322,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
       } catch (error) {
         const messageText = error instanceof Error ? error.message : String(error);
-        const failText = `Failed to stage file: ${messageText}`;
+        const failText = tExtension('stage.failed', { message: messageText });
         if (!MarkdownEditorProvider.notifyActivePanel({
           type: 'stageFileFailed',
           message: failText,

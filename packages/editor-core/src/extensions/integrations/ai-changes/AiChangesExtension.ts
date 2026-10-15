@@ -17,6 +17,7 @@ import type { Node as ProsemirrorNode, Schema } from 'prosemirror-model';
 import { Extension } from '../../../editor/EditorExtension';
 import { extractBlockLineMap } from '../../../editor/lib/MarkdownParser';
 import type { GitRefreshStatus } from '@easyview/contracts';
+import { tAiChanges } from './aiChanges.i18n';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -303,6 +304,8 @@ export function computeGitBlockChanges(
 
 let indicatorEl: HTMLElement | null = null;
 let toastEl: HTMLElement | null = null;
+/** The navigator stays requested while there is nothing to navigate, so it reappears when changes arrive. */
+let toastRequested = false;
 let fadeTimeoutId: ReturnType<typeof setTimeout> | null = null;
 let debounceTimeoutId: ReturnType<typeof setTimeout> | null = null;
 let scrollMarkerOverlay: HTMLElement | null = null;
@@ -476,7 +479,7 @@ function getToastEl(): HTMLElement {
     toastEl = document.createElement('div');
     toastEl.className = 'ai-changes-toast';
     toastEl.setAttribute('role', 'group');
-    toastEl.setAttribute('aria-label', 'Change navigator');
+    toastEl.setAttribute('aria-label', tAiChanges('toast.label'));
     document.body.appendChild(toastEl);
     let drag: { pointerId: number; x: number; y: number; left: number; top: number } | null = null;
     toastEl.addEventListener('pointerdown', (event) => {
@@ -509,6 +512,7 @@ function getToastEl(): HTMLElement {
 }
 
 function hideSummaryToast(): void {
+  toastRequested = false;
   toastEl?.classList.remove('visible');
 }
 
@@ -520,30 +524,42 @@ function revealInPreview(pos: number, _startLine: number | undefined, view: Edit
 }
 
 function showSummaryToast(changes: BlockChange[], view: EditorView, revealChange: RevealChange, source: 'git' | 'external' = 'external', gitStatus: GitRefreshStatus = 'ready') {
+  toastRequested = true;
+  if (gitStatus === 'ready' && changes.length === 0) {
+    toastEl?.classList.remove('visible');
+    return;
+  }
   const navigableChanges = [...changes].sort((a, b) => a.pos - b.pos);
   let currentIndex = 0;
   const el = getToastEl();
   el.innerHTML =
     '<span class="ai-changes-toast-drag" aria-hidden="true"><svg viewBox="0 0 12 20" fill="currentColor"><circle cx="3" cy="4" r="1.2"/><circle cx="9" cy="4" r="1.2"/><circle cx="3" cy="10" r="1.2"/><circle cx="9" cy="10" r="1.2"/><circle cx="3" cy="16" r="1.2"/><circle cx="9" cy="16" r="1.2"/></svg></span>' +
-    '<span class="ai-changes-toast-summary">No changes</span>' +
+    '<span class="ai-changes-toast-summary"></span>' +
     '<span class="ai-changes-toast-count" role="status" aria-live="polite"></span>' +
     '<span class="ai-changes-toast-controls">' +
-    '<button type="button" class="ai-changes-toast-prev" aria-label="Previous change" title="Previous change"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5-5 5 5"/></svg></button>' +
-    '<button type="button" class="ai-changes-toast-next" aria-label="Next change" title="Next change"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 5 5 5-5"/></svg></button>' +
+    '<button type="button" class="ai-changes-toast-prev"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5-5 5 5"/></svg></button>' +
+    '<button type="button" class="ai-changes-toast-next"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 5 5 5-5"/></svg></button>' +
     '</span>' +
-    '<button type="button" class="ai-changes-toast-close" aria-label="Close change navigator" title="Close"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5 5 15"/></svg></button>';
+    '<button type="button" class="ai-changes-toast-close"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5 5 15"/></svg></button>';
 
   const summary = el.querySelector<HTMLElement>('.ai-changes-toast-summary')!;
-  summary.textContent = gitStatus === 'loading' ? 'Loading Git changes…'
-    : gitStatus === 'error' ? 'Git read failed' : 'No changes';
+  summary.textContent = gitStatus === 'loading' ? tAiChanges('toast.loadingGit') : tAiChanges('toast.gitFailed');
   const count = el.querySelector<HTMLElement>('.ai-changes-toast-count')!;
   const previous = el.querySelector<HTMLButtonElement>('.ai-changes-toast-prev')!;
   const next = el.querySelector<HTMLButtonElement>('.ai-changes-toast-next')!;
+  const close = el.querySelector<HTMLButtonElement>('.ai-changes-toast-close')!;
+  previous.title = tAiChanges('toast.previous');
+  previous.setAttribute('aria-label', previous.title);
+  next.title = tAiChanges('toast.next');
+  next.setAttribute('aria-label', next.title);
+  close.title = tAiChanges('toast.close');
+  close.setAttribute('aria-label', tAiChanges('toast.closeLabel'));
   const refresh = () => {
     summary.hidden = navigableChanges.length > 0;
     count.hidden = navigableChanges.length === 0;
     count.textContent = `${navigableChanges.length ? currentIndex + 1 : 0}/${navigableChanges.length}`;
-    count.setAttribute('aria-label', `${source === 'git' ? 'Git' : 'External'} change ${currentIndex + 1} of ${navigableChanges.length}`);
+    const position = { current: currentIndex + 1, total: navigableChanges.length };
+    count.setAttribute('aria-label', source === 'git' ? tAiChanges('toast.gitPosition', position) : tAiChanges('toast.externalPosition', position));
     previous.disabled = currentIndex === 0;
     next.disabled = currentIndex >= navigableChanges.length - 1;
   };
@@ -556,7 +572,7 @@ function showSummaryToast(changes: BlockChange[], view: EditorView, revealChange
   };
   previous.addEventListener('click', () => navigate(currentIndex - 1));
   next.addEventListener('click', () => navigate(currentIndex + 1));
-  el.querySelector('.ai-changes-toast-close')!.addEventListener('click', hideSummaryToast);
+  close.addEventListener('click', hideSummaryToast);
   refresh();
 
   el.offsetHeight;
@@ -686,7 +702,7 @@ function createAiChangesPlugin(shouldShowJumpToast: () => boolean, revealChange:
           hideIndicator();
 
           if (changes.length === 0) {
-            if (activeView && shouldShowJumpToast() && toastEl?.classList.contains('visible')) {
+            if (activeView && shouldShowJumpToast() && toastRequested) {
               showAvailableChanges(prev.gitChanges, [], activeView, revealChange, getGitRefreshStatus());
             } else {
               hideSummaryToast();
@@ -838,7 +854,7 @@ function createAiChangesPlugin(shouldShowJumpToast: () => boolean, revealChange:
             renderScrollMarkers(state.gitChanges, view);
           }
           if (state && state.gitChanges !== previous?.gitChanges
-            && toastEl?.classList.contains('visible') && shouldShowJumpToast()) {
+            && toastRequested && shouldShowJumpToast()) {
             showAvailableChanges(state.gitChanges, state.changes, view, revealChange, getGitRefreshStatus());
           }
         },
@@ -855,6 +871,7 @@ function createAiChangesPlugin(shouldShowJumpToast: () => boolean, revealChange:
             toastEl.remove();
             toastEl = null;
           }
+          toastRequested = false;
           clearScrollMarkers();
         },
       };
@@ -886,7 +903,7 @@ export class AiChangesExtension extends Extension {
   }
 
   refreshVisibleJumpToast(view: EditorView | null): void {
-    if (toastEl?.classList.contains('visible')) this.showCurrentJumpToast(view);
+    if (toastRequested) this.showCurrentJumpToast(view);
   }
 
   get name() {

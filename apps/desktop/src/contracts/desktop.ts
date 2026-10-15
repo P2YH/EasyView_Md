@@ -130,7 +130,27 @@ export interface EditorBootstrapData extends DocumentSnapshotPayload {
   fileName: string;
 }
 
+export type DesktopAppearanceMode = 'light' | 'gray' | 'dark';
+export type DesktopAccent = 'default' | 'blue' | 'orangeRed' | 'green' | 'purple' | 'cherryRed';
+/** Renderer process argument carrying the UI locale chosen by the main process. */
+export const DESKTOP_LOCALE_ARGUMENT_PREFIX = '--easyview-locale=';
+export const DESKTOP_APPEARANCE_MODES: readonly DesktopAppearanceMode[] = ['light', 'gray', 'dark'];
+export const DESKTOP_ACCENTS: readonly DesktopAccent[] = ['default', 'blue', 'orangeRed', 'green', 'purple', 'cherryRed'];
+/** Background depth presets offered by the menu, in percent. */
+export const DESKTOP_THEME_DEPTH_STEPS = [0, 25, 50, 75, 100] as const;
+export type DesktopThemeDepthStep = (typeof DESKTOP_THEME_DEPTH_STEPS)[number];
+
+export type DesktopAppearanceCommand =
+  | `setThemeMode:${DesktopAppearanceMode}`
+  | `setThemeDepth:${DesktopThemeDepthStep}`
+  | `setAccent:${DesktopAccent}`;
+
+export function isDesktopAppearanceCommand(command: string): command is DesktopAppearanceCommand {
+  return /^(setThemeMode|setThemeDepth|setAccent):/.test(command);
+}
+
 export type DesktopMenuCommand =
+  | DesktopAppearanceCommand
   | 'toggleExplorer'
   | 'rename'
   | 'toggleTheme'
@@ -164,13 +184,22 @@ export interface DesktopMenuState {
   fullWidth: boolean;
   tableWrap: boolean;
   hasActiveDocument: boolean;
+  themeMode: DesktopAppearanceMode;
+  /** 0–100; the menu checks the nearest depth preset. */
+  themeDepth: number;
+  accent: DesktopAccent;
 }
 
 export interface WorkspaceApi {
   openFolder(): Promise<import('@easyview/contracts').OperationResult<DesktopWorkspaceState | null>>;
+  openRecentFolder(folderPath: string): Promise<import('@easyview/contracts').OperationResult<DesktopWorkspaceState | null>>;
+  getRecentFolders(): Promise<import('@easyview/contracts').OperationResult<import('./workspace').RecentFolder[]>>;
+  removeRecentFolder(folderPath: string): Promise<import('@easyview/contracts').OperationResult<boolean>>;
+  onRootChanged(listener: (state: DesktopWorkspaceState) => void): { unsubscribe(): void };
   getState(): Promise<import('@easyview/contracts').OperationResult<DesktopWorkspaceState>>;
   setState(state: DesktopWorkspaceState): Promise<import('@easyview/contracts').OperationResult<DesktopWorkspaceState>>;
   readDirectory(relativePath: string): Promise<import('@easyview/contracts').OperationResult<WorkspaceEntry[]>>;
+  search(query: string): Promise<import('@easyview/contracts').OperationResult<import('@easyview/contracts').WorkspaceSearchResult>>;
   getSortMode(): Promise<import('@easyview/contracts').OperationResult<import('./workspace').WorkspaceTreeSortMode>>;
   setSortMode(sortMode: import('./workspace').WorkspaceTreeSortMode): Promise<import('@easyview/contracts').OperationResult<import('./workspace').WorkspaceTreeSortMode>>;
   getShowCreatedAt(): Promise<import('@easyview/contracts').OperationResult<boolean>>;

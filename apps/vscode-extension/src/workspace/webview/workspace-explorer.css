@@ -201,18 +201,23 @@ body {
   opacity: 0.55;
 }
 
+/* Fixed bright blue: theme focus colors can be gray and vanish under the drag ghost. */
+.workspace-explorer {
+  --easyview-drop-color: #2f80ff;
+}
+
 .workspace-entry.is-drop-target {
-  outline: 1px solid var(--vscode-focusBorder);
+  outline: 1px solid var(--easyview-drop-color);
 }
 
 .workspace-entry.is-drop-into {
-  background: color-mix(in srgb, var(--vscode-focusBorder) 22%, transparent);
-  outline: 1px solid var(--vscode-focusBorder);
-  outline-offset: -1px;
+  background: color-mix(in srgb, var(--easyview-drop-color) 28%, transparent);
+  outline: 2px solid var(--easyview-drop-color);
+  outline-offset: -2px;
 }
 
 .workspace-tree.is-drop-root {
-  background: var(--vscode-list-dropBackground, color-mix(in srgb, var(--vscode-focusBorder) 12%, transparent));
+  background: color-mix(in srgb, var(--easyview-drop-color) 12%, transparent);
 }
 
 .workspace-drop-hint {
@@ -232,11 +237,13 @@ body {
 .workspace-drop-indicator {
   position: absolute;
   z-index: 20;
-  height: 2px;
-  border-radius: 1px;
+  height: 3px;
+  border-radius: 2px;
   pointer-events: none;
-  background: var(--vscode-focusBorder);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--vscode-focusBorder) 35%, transparent);
+  background: var(--easyview-drop-color);
+  box-shadow:
+    0 0 0 1px var(--vscode-sideBar-background, var(--vscode-editorWidget-background)),
+    0 0 6px color-mix(in srgb, var(--easyview-drop-color) 60%, transparent);
   opacity: 0;
 }
 
@@ -249,10 +256,12 @@ body {
   content: '';
   position: absolute;
   top: 50%;
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
+  box-sizing: border-box;
+  border: 2px solid var(--vscode-sideBar-background, var(--vscode-editorWidget-background));
   border-radius: 50%;
-  background: var(--vscode-focusBorder);
+  background: var(--easyview-drop-color);
   transform: translateY(-50%);
 }
 
@@ -620,8 +629,8 @@ body {
 .workspace-icon-tile.selected { background: var(--easyview-list-selection-background); color: var(--vscode-list-activeSelectionForeground, #fff); }
 .workspace-icon-tile:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -2px; }
 .workspace-icon-tile.is-dragging { opacity: .45; }
-.workspace-icon-tile.is-drop-before { box-shadow: inset 3px 0 var(--vscode-focusBorder, #007fd4); }
-.workspace-icon-tile.is-drop-after { box-shadow: inset -3px 0 var(--vscode-focusBorder, #007fd4); }
+.workspace-icon-tile.is-drop-before { box-shadow: inset 3px 0 var(--easyview-drop-color); }
+.workspace-icon-tile.is-drop-after { box-shadow: inset -3px 0 var(--easyview-drop-color); }
 .workspace-icon-large { display: inline-flex; align-items: center; justify-content: center; width: 54px; height: 48px; flex: none; }
 .workspace-icon-large svg { display: block; width: 46px; height: 46px; }
 .workspace-icon-large.is-folder { position: relative; }

@@ -3,6 +3,7 @@ import http from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
 import type { HttpPreviewRequest, HttpPreviewResponse } from '../../../contracts';
+import { tPreviewService } from './preview.i18n';
 
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const MAX_REQUEST_BODY_BYTES = 1024 * 1024;
@@ -33,22 +34,22 @@ interface NormalizedRequest {
 }
 
 function normalizeRequest(request: HttpPreviewRequest): NormalizedRequest {
-  if (!request || typeof request.url !== 'string') throw new HttpPreviewError('invalid', 'HTTP 地址无效');
+  if (!request || typeof request.url !== 'string') throw new HttpPreviewError('invalid', tPreviewService('http.invalidUrl'));
   let url: URL;
   try {
     url = new URL(request.url);
   } catch {
-    throw new HttpPreviewError('invalid', 'HTTP 地址无效');
+    throw new HttpPreviewError('invalid', tPreviewService('http.invalidUrl'));
   }
   assertPublicHttpUrl(url);
   const method = request.method ?? 'GET';
-  if (!ALLOWED_METHODS.has(method)) throw new HttpPreviewError('invalid', 'HTTP 方法无效');
-  if ((method === 'GET' || method === 'HEAD') && request.body) throw new HttpPreviewError('invalid', `${method} 请求不允许请求体`);
+  if (!ALLOWED_METHODS.has(method)) throw new HttpPreviewError('invalid', tPreviewService('http.invalidMethod'));
+  if ((method === 'GET' || method === 'HEAD') && request.body) throw new HttpPreviewError('invalid', tPreviewService('http.bodyNotAllowed', { method }));
   if (request.body !== undefined && (typeof request.body !== 'string' || Buffer.byteLength(request.body, 'utf8') > MAX_REQUEST_BODY_BYTES)) {
-    throw new HttpPreviewError('invalid', 'HTTP 请求体超过 1 MiB 上限');
+    throw new HttpPreviewError('invalid', tPreviewService('http.bodyTooLarge'));
   }
   const timeoutMs = request.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_TIMEOUT_MS) throw new HttpPreviewError('invalid', 'HTTP 超时参数无效');
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_TIMEOUT_MS) throw new HttpPreviewError('invalid', tPreviewService('http.invalidTimeout'));
   return { url, method, headers: normalizeHeaders(request.headers), body: request.body, timeoutMs };
 }
 
@@ -56,7 +57,7 @@ async function requestFollowingRedirects(request: NormalizedRequest, redirectCou
   await assertPublicHostname(request.url.hostname);
   const response = await makeRequest(request);
   if (isRedirect(response.statusCode) && response.headers.location) {
-    if (redirectCount >= MAX_REDIRECTS) throw new HttpPreviewError('network', 'HTTP 重定向次数超过上限');
+    if (redirectCount >= MAX_REDIRECTS) throw new HttpPreviewError('network', tPreviewService('http.tooManyRedirects'));
     const nextUrl = new URL(response.headers.location, request.url);
     assertPublicHttpUrl(nextUrl);
     return requestFollowingRedirects({ ...request, url: nextUrl, method: response.statusCode === 303 ? 'GET' : request.method, body: response.statusCode === 303 ? undefined : request.body }, redirectCount + 1);
@@ -87,7 +88,7 @@ function makeRequest(request: NormalizedRequest): Promise<http.IncomingMessage> 
       lookup: safeLookup,
       rejectUnauthorized: true,
     }, resolve);
-    rawRequest.once('timeout', () => rawRequest.destroy(new HttpPreviewError('network', 'HTTP 请求超时')));
+    rawRequest.once('timeout', () => rawRequest.destroy(new HttpPreviewError('network', tPreviewService('http.timeout'))));
     rawRequest.once('error', (error) => reject(error instanceof HttpPreviewError ? error : new HttpPreviewError('network', error.message)));
     if (request.body !== undefined) rawRequest.write(request.body, 'utf8');
     rawRequest.end();
@@ -97,10 +98,10 @@ function makeRequest(request: NormalizedRequest): Promise<http.IncomingMessage> 
 function safeLookup(hostname: string, _options: unknown, callback: (error: NodeJS.ErrnoException | null, address: string, family: number) => void): void {
   void lookup(hostname, { all: true, verbatim: true }).then((results) => {
     const allowed = results.find((result) => !isPrivateAddress(result.address));
-    if (!allowed) throw new HttpPreviewError('permission', '禁止请求本机、内网或保留地址');
+    if (!allowed) throw new HttpPreviewError('permission', tPreviewService('http.privateAddress'));
     callback(null, allowed.address, allowed.family);
   }).catch((error) => {
-    callback(error instanceof Error ? Object.assign(error, { code: 'EHOSTUNREACH' }) : new Error('域名解析失败') as NodeJS.ErrnoException, '', 0);
+    callback(error instanceof Error ? Object.assign(error, { code: 'EHOSTUNREACH' }) : new Error(tPreviewService('http.dnsFailed')) as NodeJS.ErrnoException, '', 0);
   });
 }
 
@@ -134,15 +135,15 @@ function readResponseBody(response: http.IncomingMessage): Promise<{ bytes: Uint
 
 function normalizeHeaders(headers: HttpPreviewRequest['headers']): Record<string, string> {
   if (headers === undefined) return {};
-  if (!headers || typeof headers !== 'object' || Array.isArray(headers)) throw new HttpPreviewError('invalid', 'HTTP 请求头无效');
+  if (!headers || typeof headers !== 'object' || Array.isArray(headers)) throw new HttpPreviewError('invalid', tPreviewService('http.invalidHeaders'));
   const result: Record<string, string> = {};
   const entries = Object.entries(headers);
-  if (entries.length > 32) throw new HttpPreviewError('invalid', 'HTTP 请求头数量超过上限');
+  if (entries.length > 32) throw new HttpPreviewError('invalid', tPreviewService('http.tooManyHeaders'));
   for (const [name, value] of entries) {
     if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name) || typeof value !== 'string' || /[\r\n]/.test(value) || Buffer.byteLength(value, 'utf8') > 8192) {
-      throw new HttpPreviewError('invalid', 'HTTP 请求头无效');
+      throw new HttpPreviewError('invalid', tPreviewService('http.invalidHeaders'));
     }
-    if (FORBIDDEN_HEADERS.has(name.toLowerCase())) throw new HttpPreviewError('permission', `不允许设置 ${name} 请求头`);
+    if (FORBIDDEN_HEADERS.has(name.toLowerCase())) throw new HttpPreviewError('permission', tPreviewService('http.forbiddenHeader', { name }));
     result[name] = value;
   }
   return result;
@@ -150,22 +151,22 @@ function normalizeHeaders(headers: HttpPreviewRequest['headers']): Record<string
 
 function assertPublicHttpUrl(url: URL): void {
   const hostname = url.hostname.replace(/^\[|\]$/g, '');
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new HttpPreviewError('permission', '仅允许 HTTP 或 HTTPS 地址');
-  if (url.username || url.password) throw new HttpPreviewError('permission', 'URL 中不允许包含账号信息');
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new HttpPreviewError('permission', tPreviewService('http.protocolNotAllowed'));
+  if (url.username || url.password) throw new HttpPreviewError('permission', tPreviewService('http.credentialsNotAllowed'));
   if (hostname.toLowerCase() === 'localhost' || net.isIP(hostname) !== 0 && isPrivateAddress(hostname)) {
-    throw new HttpPreviewError('permission', '禁止请求本机、内网或保留地址');
+    throw new HttpPreviewError('permission', tPreviewService('http.privateAddress'));
   }
 }
 
 async function assertPublicHostname(hostname: string): Promise<void> {
   hostname = hostname.replace(/^\[|\]$/g, '');
   if (net.isIP(hostname) !== 0) {
-    if (isPrivateAddress(hostname)) throw new HttpPreviewError('permission', '禁止请求本机、内网或保留地址');
+    if (isPrivateAddress(hostname)) throw new HttpPreviewError('permission', tPreviewService('http.privateAddress'));
     return;
   }
   const results = await lookup(hostname, { all: true, verbatim: true });
   if (!results.length || results.some((result) => isPrivateAddress(result.address))) {
-    throw new HttpPreviewError('permission', '禁止请求解析到本机、内网或保留地址的域名');
+    throw new HttpPreviewError('permission', tPreviewService('http.privateHostname'));
   }
 }
 

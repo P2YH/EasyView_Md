@@ -3,6 +3,7 @@ import type { PreviewDescriptor } from '@easyview/contracts';
 import { PreviewAssetsProvider } from './assets';
 import type { PreviewAssetConfig, PreviewExtraViewers, PreviewHost, PreviewViewerRenderer } from './types';
 import { loadingElement } from './viewers/shared';
+import { tPreview } from './preview.i18n';
 
 export interface PreviewShellProps {
   host: PreviewHost;
@@ -19,12 +20,12 @@ export function PreviewShell({ host, assets, extraViewers }: PreviewShellProps):
     { assets },
     React.createElement(
       'section',
-      { className: 'preview-shell', 'aria-label': '文件预览' },
+      { className: 'preview-shell', 'aria-label': tPreview('shell.ariaLabel') },
       React.createElement(
         'div',
         { className: 'preview-content' },
         state.status === 'loading'
-          ? loadingElement('正在创建安全预览会话…')
+          ? loadingElement(tPreview('shell.creatingSession'))
           : null,
         state.error
           ? React.createElement('div', { className: 'preview-viewer-message preview-viewer-error', role: 'alert' }, state.error)
@@ -54,7 +55,7 @@ function RouteViewer({
     void loadViewer(descriptor.route, extraViewers).then((loaded) => {
       if (active) setRenderer(() => loaded);
     }).catch((reason) => {
-      if (active) setError(reason instanceof Error ? reason.message : '预览器加载失败');
+      if (active) setError(reason instanceof Error ? reason.message : tPreview('shell.viewerLoadFailed'));
     });
     return () => { active = false; };
   }, [descriptor.route, extraViewers]);
@@ -63,7 +64,7 @@ function RouteViewer({
     return React.createElement('div', { className: 'preview-viewer-message preview-viewer-error' }, error);
   }
   if (!renderer) {
-    return loadingElement('正在加载预览器…');
+    return loadingElement(tPreview('shell.loadingViewer'));
   }
   return renderer(descriptor, host);
 }
@@ -78,7 +79,7 @@ function loadViewer(
   switch (route) {
     case 'text':
       return import('./viewers/TextViewer').then(({ TextViewer }) => (descriptor, host) => {
-        if (!host.readText) throw new Error('当前宿主未提供文本读取能力');
+        if (!host.readText) throw new Error(tPreview('shell.readTextUnavailable'));
         return React.createElement(TextViewer, { descriptor, readText: host.readText.bind(host) });
       });
     case 'image':
@@ -86,7 +87,7 @@ function loadViewer(
         React.createElement(ImageViewer, { descriptor }));
     case 'svg':
       return import('./viewers/SvgViewer').then(({ SvgViewer }) => (descriptor, host) => {
-        if (!host.readText) throw new Error('当前宿主未提供文本读取能力');
+        if (!host.readText) throw new Error(tPreview('shell.readTextUnavailable'));
         return React.createElement(SvgViewer, { descriptor, readText: host.readText.bind(host) });
       });
     case 'html':
@@ -114,6 +115,6 @@ function loadViewer(
       return import('./viewers/ArchiveViewer').then(({ ArchiveViewer }) => (descriptor, host) =>
         React.createElement(ArchiveViewer, { descriptor, host }));
     default:
-      return Promise.reject(new Error('当前格式没有可用的预览器。'));
+      return Promise.reject(new Error(tPreview('shell.noViewer')));
   }
 }

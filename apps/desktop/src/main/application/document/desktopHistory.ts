@@ -5,6 +5,7 @@ import path from 'node:path';
 import { readFile, stat, realpath } from 'node:fs/promises';
 import { TimelineService, discoverHostHistoryRoots, writeFileAtomically } from '@easyview/node-runtime';
 import { DEFAULT_LOCAL_HISTORY_SETTINGS, type LocalHistorySettings } from '@easyview/contracts';
+import { tDocument } from './document.i18n';
 let servicePromise: Promise<TimelineService> | undefined;
 let settings: LocalHistorySettings = { ...DEFAULT_LOCAL_HISTORY_SETTINGS };
 export function desktopHistory(): Promise<TimelineService> {
@@ -15,7 +16,7 @@ export function desktopHistory(): Promise<TimelineService> {
 }
 export function validateHistorySettings(value: unknown): LocalHistorySettings {
   const input = value as LocalHistorySettings;
-  if (!input || typeof input.enabled !== 'boolean' || !Number.isFinite(input.maxFileSize) || input.maxFileSize < 1 || !Number.isInteger(input.maxFileEntries) || input.maxFileEntries < 0 || !Number.isFinite(input.mergeWindow) || input.mergeWindow < 1) throw new Error('本地历史设置无效');
+  if (!input || typeof input.enabled !== 'boolean' || !Number.isFinite(input.maxFileSize) || input.maxFileSize < 1 || !Number.isInteger(input.maxFileEntries) || input.maxFileEntries < 0 || !Number.isFinite(input.mergeWindow) || input.mergeWindow < 1) throw new Error(tDocument('history.invalidSettings'));
   return { enabled: input.enabled, maxFileSize: input.maxFileSize, maxFileEntries: input.maxFileEntries, mergeWindow: input.mergeWindow };
 }
 export async function getHistorySettings(): Promise<LocalHistorySettings> { await desktopHistory(); return { ...settings }; }
@@ -26,5 +27,5 @@ export async function captureDesktopHistory(filePath: string, content: string, l
 export function disposeDesktopHistory(): void { void servicePromise?.then((service) => service.dispose()); }
 
 export async function captureDesktopHistoryPath(filePath: string): Promise<void> {
-  await captureQueue.run(async () => { const service = await desktopHistory(); filePath = await realpath(filePath); if (!settings.enabled || !settings.maxFileEntries) return; const info = await stat(filePath); if (!info.isFile() || info.size > settings.maxFileSize * 1024) return; await service.local.capture(filePath, await readFile(filePath, 'utf8'), '外部文件变化', settings); });
+  await captureQueue.run(async () => { const service = await desktopHistory(); filePath = await realpath(filePath); if (!settings.enabled || !settings.maxFileEntries) return; const info = await stat(filePath); if (!info.isFile() || info.size > settings.maxFileSize * 1024) return; await service.local.capture(filePath, await readFile(filePath, 'utf8'), tDocument('history.externalChange'), settings); });
 }

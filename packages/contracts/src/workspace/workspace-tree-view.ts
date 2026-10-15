@@ -1,15 +1,14 @@
 import type { WorkspaceTreeSortMode } from './workspace';
 import type { WorkspaceTreeMenuIconId } from './workspace-tree-menu-icons';
+import { tWorkspaceTree } from './workspace.i18n';
 
 /**
- * Display labels for {@link WorkspaceTreeSortMode}, shared by the Desktop DOM tree and the
+ * Display label for {@link WorkspaceTreeSortMode}, shared by the Desktop DOM tree and the
  * VS Code/Cursor Extension sidebar webview tree so both sort menus read identically.
  */
-export const WORKSPACE_TREE_SORT_MODE_LABELS: Record<WorkspaceTreeSortMode, string> = {
-  created: 'Sort by Created Time',
-  name: 'Sort by Name',
-  custom: 'Custom',
-};
+export function workspaceTreeSortModeLabel(mode: WorkspaceTreeSortMode): string {
+  return tWorkspaceTree(`sort.${mode}`);
+}
 
 export const WORKSPACE_TREE_SORT_MODE_ICONS: Record<WorkspaceTreeSortMode, WorkspaceTreeMenuIconId> = {
   created: 'sortCreated',

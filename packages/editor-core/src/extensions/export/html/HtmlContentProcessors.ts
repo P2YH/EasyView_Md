@@ -7,6 +7,7 @@
 import katex from 'katex';
 import * as plantumlEncoder from 'plantuml-encoder';
 import { deflate } from 'pako';
+import { tExport } from '../export.i18n';
 
 export interface TocEntry {
   id: string;
@@ -75,7 +76,7 @@ export function processPlantUmlBlocks(container: HTMLElement): boolean {
 
     const image = document.createElement('img');
     image.className = 'plantuml-export-image';
-    image.alt = 'PlantUML diagram';
+    image.alt = tExport('placeholder.plantumlAlt');
     image.src = `https://www.plantuml.com/plantuml/svg/${encodePlantUmlSource(normalized)}`;
 
     wrapper.appendChild(image);
@@ -264,7 +265,7 @@ export function renderTocBlocks(container: HTMLElement, toc: TocEntry[]): void {
     // Header
     const header = document.createElement('div');
     header.className = 'toc-block-header';
-    header.textContent = 'Table of Contents';
+    header.textContent = tExport('toc.title');
     block.appendChild(header);
 
     // List of heading links
@@ -274,7 +275,7 @@ export function renderTocBlocks(container: HTMLElement, toc: TocEntry[]): void {
     if (toc.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'toc-block-empty';
-      empty.textContent = 'No headings found';
+      empty.textContent = tExport('toc.noHeadings');
       list.appendChild(empty);
     } else {
       // Normalize levels (min becomes 1), same as editor

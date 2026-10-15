@@ -4,12 +4,13 @@ const gitQueue = new HistoryTaskQueue(1);
 import { execFile } from 'node:child_process';
 import path from 'node:path';
 import type { TimelineEntry } from '@easyview/contracts';
+import { tTimeline } from './timeline.i18n';
 /** No shell; AbortSignal terminates Git, and output is bounded. */
 export function historyGit(root: string, args: string[], signal?: AbortSignal): Promise<string> {
   signal?.throwIfAborted();
   return gitQueue.run(() => new Promise<string>((resolve, reject) => {
     execFile('git', ['-C', root, ...args], { signal, windowsHide: true, maxBuffer: 32 * 1024 * 1024 }, (error, stdout, stderr) => {
-      if (error) reject(new Error(signal?.aborted ? '查询已取消' : stderr.trim() || error.message));
+      if (error) reject(new Error(signal?.aborted ? tTimeline('error.cancelled') : stderr.trim() || error.message));
       else resolve(stdout);
     });
   }), signal);
@@ -23,14 +24,14 @@ export async function listGitHistory(filePath: string, limit: number, signal?: A
     throw error;
   }
   const relative = cursor?.path ?? path.relative(root, await realpath(filePath)).split(path.sep).join('/');
-  if (path.isAbsolute(relative) || relative.split('/').includes('..') || (cursor && !/^[a-f0-9]{40,64}$/.test(cursor.revision))) throw new Error('Git 分页参数无效');
+  if (path.isAbsolute(relative) || relative.split('/').includes('..') || (cursor && !/^[a-f0-9]{40,64}$/.test(cursor.revision))) throw new Error(tTimeline('error.invalidGitPaging'));
   let output: string;
   try { output = await historyGit(root, ['log', '--follow', `--max-count=${limit + 1}`, '--format=%x1e%H%x00%ct%x00%an%x00%s%x00', '--name-status', '-z', ...(cursor ? [cursor.revision] : []), '--', relative], signal); } catch (error) { signal?.throwIfAborted(); if (String(error).includes('does not have any commits yet')) return []; throw error; }
   const entries: TimelineEntry[] = [];
   let versionPath = relative;
   for (const chunk of output.split('\x1e').slice(1)) {
     const [revision, timestamp, author, label, ...changes] = chunk.split('\0');
-    if (!/^[a-f0-9]{40,64}$/.test(revision)) throw new Error('Git 历史格式无效');
+    if (!/^[a-f0-9]{40,64}$/.test(revision)) throw new Error(tTimeline('error.invalidGitHistory'));
     const entry: TimelineEntry = { id: revision, source: 'git', filePath, timestamp: Number(timestamp) * 1000, author, label, revision, versionPath };
     const tokens = changes.map((part) => part.replace(/^\n/, ''));
     for (let i = 0; i < tokens.length; i++) {
@@ -49,7 +50,7 @@ export async function readGitVersion(entry: TimelineEntry, previous: boolean, si
   if (previous && !entry.previousRevision) return '';
   const revision = previous ? entry.previousRevision : entry.revision;
   const versionPath = previous ? entry.previousPath : entry.versionPath;
-  if (!revision || !/^[a-f0-9]{40,64}$/.test(revision) || !versionPath || path.isAbsolute(versionPath) || versionPath.split('/').includes('..')) throw new Error('Git 版本参数无效');
+  if (!revision || !/^[a-f0-9]{40,64}$/.test(revision) || !versionPath || path.isAbsolute(versionPath) || versionPath.split('/').includes('..')) throw new Error(tTimeline('error.invalidGitVersion'));
   const root = (await historyGit(path.dirname(entry.filePath), ['rev-parse', '--show-toplevel'], signal)).trim();
   return historyGit(root, ['show', `${revision}:${versionPath}`], signal);
 }

@@ -9,6 +9,7 @@ import { tool, type ToolSet } from 'ai';
 import { z } from 'zod';
 import { applyAiTextPatches, type AiTextPatch } from '@easyview/contracts';
 import { writeFileAtomically } from '../filesystem/file-write';
+import { tAi } from './ai.i18n';
 
 const execFileAsync = promisify(execFile);
 const MAX_FILE_BYTES = 1_000_000;
@@ -39,9 +40,9 @@ type WorkspaceFileEntry = { path: string; type: 'file' | 'directory'; size?: num
 
 function ensureRelativePath(value: string, field = 'path'): string {
   const normalized = value.trim().replaceAll('\\', '/').replace(/^\.\//, '');
-  if (!normalized || normalized === '.') throw new Error(`${field} 不能为空`);
+  if (!normalized || normalized === '.') throw new Error(tAi('tools.fieldEmpty', { field }));
   if (path.posix.isAbsolute(normalized) || normalized.split('/').includes('..')) {
-    throw new Error(`${field} 必须是工作区内的相对路径`);
+    throw new Error(tAi('tools.fieldNotRelative', { field }));
   }
   return normalized;
 }
@@ -49,7 +50,7 @@ function ensureRelativePath(value: string, field = 'path'): string {
 function ensureWithinRoot(rootPath: string, candidatePath: string): void {
   const root = path.resolve(rootPath);
   const candidate = path.resolve(candidatePath);
-  if (candidate !== root && !candidate.startsWith(`${root}${path.sep}`)) throw new Error('路径不能超出当前工作区');
+  if (candidate !== root && !candidate.startsWith(`${root}${path.sep}`)) throw new Error(tAi('tools.pathOutsideWorkspace'));
 }
 
 function contentHash(content: string): string {
@@ -62,7 +63,7 @@ function numberedLines(content: string, startLine: number, endLine: number): str
 
 async function workspaceRoot(rootPath: string): Promise<string> {
   const stat = await fs.stat(rootPath);
-  if (!stat.isDirectory()) throw new Error('当前工作区根目录不可用');
+  if (!stat.isDirectory()) throw new Error(tAi('tools.workspaceRootUnavailable'));
   return fs.realpath(rootPath);
 }
 
@@ -70,7 +71,7 @@ async function resolveExistingPath(rootPath: string, relativePath: string): Prom
   const candidate = path.resolve(rootPath, ensureRelativePath(relativePath));
   ensureWithinRoot(rootPath, candidate);
   const stat = await fs.lstat(candidate);
-  if (stat.isSymbolicLink()) throw new Error('不支持访问符号链接');
+  if (stat.isSymbolicLink()) throw new Error(tAi('tools.symlinkUnsupported'));
   const realPath = await fs.realpath(candidate);
   ensureWithinRoot(rootPath, realPath);
   return realPath;
@@ -81,7 +82,7 @@ async function resolveCreationPath(rootPath: string, relativePath: string): Prom
   ensureWithinRoot(rootPath, candidate);
   const parentPath = path.dirname(candidate);
   const parentStat = await fs.lstat(parentPath);
-  if (!parentStat.isDirectory() || parentStat.isSymbolicLink()) throw new Error('目标父目录不可用');
+  if (!parentStat.isDirectory() || parentStat.isSymbolicLink()) throw new Error(tAi('tools.parentUnavailable'));
   const realParent = await fs.realpath(parentPath);
   ensureWithinRoot(rootPath, realParent);
   const targetPath = path.join(realParent, path.basename(candidate));
@@ -90,7 +91,7 @@ async function resolveCreationPath(rootPath: string, relativePath: string): Prom
 }
 
 function assertContentSize(content: string): void {
-  if (Buffer.byteLength(content, 'utf8') > MAX_FILE_BYTES) throw new Error(`单次文件内容不能超过 ${MAX_FILE_BYTES} 字节`);
+  if (Buffer.byteLength(content, 'utf8') > MAX_FILE_BYTES) throw new Error(tAi('tools.contentTooLarge', { max: MAX_FILE_BYTES }));
 }
 
 async function gitBaseline(rootPath: string, relativePath: string): Promise<{ repository: boolean; status: string; diff: string }> {
@@ -120,27 +121,27 @@ function fileTools(rootPath: string, activeDocument?: ActiveAgentDocument): Tool
     if (!requestedPath && activeDocument && activeRelativePath && !activeRelativePath.startsWith('..')) {
       return { path: activeRelativePath, content: activeDocument.content, active: true };
     }
-    if (!requestedPath) throw new Error('未打开当前文档时必须提供 path');
+    if (!requestedPath) throw new Error(tAi('tools.pathRequired'));
     const normalized = ensureRelativePath(requestedPath);
     const filePath = await resolveExistingPath(rootPath, normalized);
     const stat = await fs.lstat(filePath);
-    if (!stat.isFile()) throw new Error('只能检查普通文件');
-    if (stat.size > MAX_FILE_BYTES) throw new Error(`文件大小为 ${stat.size} 字节，超过读取上限 ${MAX_FILE_BYTES} 字节`);
+    if (!stat.isFile()) throw new Error(tAi('tools.notRegularFile'));
+    if (stat.size > MAX_FILE_BYTES) throw new Error(tAi('tools.fileTooLarge', { size: stat.size, max: MAX_FILE_BYTES }));
     const content = await fs.readFile(filePath, 'utf8');
-    if (content.includes('\0')) throw new Error('不支持检查二进制文件');
+    if (content.includes('\0')) throw new Error(tAi('tools.binaryUnsupported'));
     return { path: normalized, content, diskPath: filePath, active: activePath === path.resolve(filePath) };
   };
 
   return {
     list_files: tool({
-      description: '列出当前工作区某个目录的直接子项。路径必须是相对工作区根目录的目录路径。',
-      inputSchema: z.object({ path: z.string().optional().describe('相对工作区根目录的目录路径；不传表示工作区根目录') }),
+      description: tAi('tools.listFiles.description'),
+      inputSchema: z.object({ path: z.string().optional().describe(tAi('tools.listFiles.path')) }),
       execute: async ({ path: relativePath = '.' }): Promise<{ path: string; entries: WorkspaceFileEntry[] }> => {
         const directoryPath = relativePath === '.' ? rootPath : await resolveExistingPath(rootPath, relativePath);
         const stat = await fs.lstat(directoryPath);
-        if (!stat.isDirectory()) throw new Error('path 必须指向目录');
+        if (!stat.isDirectory()) throw new Error(tAi('tools.listFiles.notDirectory'));
         const entries = await fs.readdir(directoryPath, { withFileTypes: true });
-        if (entries.length > MAX_LIST_ENTRIES) throw new Error(`目录包含 ${entries.length} 项，超过 ${MAX_LIST_ENTRIES} 项；请指定更具体的目录`);
+        if (entries.length > MAX_LIST_ENTRIES) throw new Error(tAi('tools.listFiles.tooManyEntries', { count: entries.length, max: MAX_LIST_ENTRIES }));
         const result = await Promise.all(entries.filter((entry) => !entry.isSymbolicLink()).map(async (entry): Promise<WorkspaceFileEntry> => {
           const entryPath = path.join(directoryPath, entry.name);
           const relative = path.relative(rootPath, entryPath).split(path.sep).join('/');
@@ -153,17 +154,17 @@ function fileTools(rootPath: string, activeDocument?: ActiveAgentDocument): Tool
     }),
 
     inspect_file: tool({
-      description: '建立既有文本文件的编辑基线。修改前必须调用：返回当前内容、行号范围、Git 工作区状态与该文件未提交 diff。',
+      description: tAi('tools.inspectFile.description'),
       inputSchema: z.object({
-        path: z.string().optional().describe('相对工作区根目录的文件路径；省略时检查当前打开的文档'),
-        startLine: z.number().int().min(1).optional().describe('需要查看的起始行，默认第 1 行'),
-        endLine: z.number().int().min(1).optional().describe('需要查看的结束行，默认文件末行'),
+        path: z.string().optional().describe(tAi('tools.inspectFile.path')),
+        startLine: z.number().int().min(1).optional().describe(tAi('tools.inspectFile.startLine')),
+        endLine: z.number().int().min(1).optional().describe(tAi('tools.inspectFile.endLine')),
       }),
       execute: async ({ path: requestedPath, startLine = 1, endLine }): Promise<{ baselineId: string; path: string; totalLines: number; selectedLines: string; git: { repository: boolean; status: string; diff: string } }> => {
         const inspected = await inspectPath(requestedPath);
         const totalLines = inspected.content.split('\n').length;
         const finalEndLine = Math.min(endLine ?? totalLines, totalLines);
-        if (startLine > finalEndLine) throw new Error('起始行不能大于结束行');
+        if (startLine > finalEndLine) throw new Error(tAi('tools.inspectFile.invalidRange'));
         const baselineId = `${inspected.path}:${contentHash(inspected.content)}`;
         baselines.set(baselineId, { id: baselineId, path: inspected.path, content: inspected.content });
         return {
@@ -177,8 +178,8 @@ function fileTools(rootPath: string, activeDocument?: ActiveAgentDocument): Tool
     }),
 
     read_file: tool({
-      description: '读取工作区文本文件。编辑已有文件前应改用 inspect_file 建立含 Git 状态的编辑基线。',
-      inputSchema: z.object({ path: z.string().describe('相对工作区根目录的文件路径') }),
+      description: tAi('tools.readFile.description'),
+      inputSchema: z.object({ path: z.string().describe(tAi('tools.readFile.path')) }),
       execute: async ({ path: requestedPath }): Promise<{ path: string; content: string }> => {
         const inspected = await inspectPath(requestedPath);
         return { path: inspected.path, content: inspected.content };
@@ -186,26 +187,26 @@ function fileTools(rootPath: string, activeDocument?: ActiveAgentDocument): Tool
     }),
 
     apply_patch: tool({
-      description: '在 inspect_file 建立的编辑基线上，对已有文本文件应用小范围精确补丁。每个 patch 是一个完整且独立的语义改动。',
+      description: tAi('tools.applyPatch.description'),
       inputSchema: z.object({
-        baselineId: z.string().min(1).describe('inspect_file 返回的 baselineId'),
+        baselineId: z.string().min(1).describe(tAi('tools.applyPatch.baselineId')),
         patches: z.array(z.object({
-          description: z.string().min(1).describe('本 patch 的完整语义说明'),
-          expectedText: z.string().min(1).describe('当前文件中唯一且精确的锚点文本'),
-          replacement: z.string().describe('替换后的文本；空字符串表示删除'),
+          description: z.string().min(1).describe(tAi('tools.applyPatch.patchDescription')),
+          expectedText: z.string().min(1).describe(tAi('tools.applyPatch.expectedText')),
+          replacement: z.string().describe(tAi('tools.applyPatch.replacement')),
         })).min(1),
       }),
       execute: async ({ baselineId, patches }): Promise<{ path: string; changed: number }> => {
         const baseline = baselines.get(baselineId);
-        if (!baseline) throw new Error('编辑基线不存在；请先调用 inspect_file');
+        if (!baseline) throw new Error(tAi('tools.applyPatch.baselineMissing'));
         const inspected = await inspectPath(baseline.path);
-        if (inspected.content !== baseline.content) throw new Error('文件自建立基线后已变化；请重新调用 inspect_file');
+        if (inspected.content !== baseline.content) throw new Error(tAi('tools.applyPatch.baselineStale'));
         const nextContent = applyAiTextPatches(baseline.content, patches);
         if (inspected.active) {
-          if (!activeDocument) throw new Error('当前文档编辑上下文不可用');
+          if (!activeDocument) throw new Error(tAi('tools.applyPatch.activeDocumentUnavailable'));
           await activeDocument.applyPatches(patches);
         } else {
-          if (!inspected.diskPath) throw new Error('目标文件路径不可用');
+          if (!inspected.diskPath) throw new Error(tAi('tools.applyPatch.targetPathUnavailable'));
           await writeFileAtomically(inspected.diskPath, nextContent);
         }
         return { path: baseline.path, changed: patches.length };
@@ -213,8 +214,8 @@ function fileTools(rootPath: string, activeDocument?: ActiveAgentDocument): Tool
     }),
 
     create_file: tool({
-      description: '在当前工作区内创建一个新的文本文件。目标父目录必须已存在，且目标文件不能存在。',
-      inputSchema: z.object({ path: z.string().describe('相对工作区根目录的新文件路径'), content: z.string().describe('新文件的完整初始内容') }),
+      description: tAi('tools.createFile.description'),
+      inputSchema: z.object({ path: z.string().describe(tAi('tools.createFile.path')), content: z.string().describe(tAi('tools.createFile.content')) }),
       execute: async ({ path: relativePath, content }): Promise<{ path: string; bytes: number }> => {
         assertContentSize(content);
         const filePath = await resolveCreationPath(rootPath, relativePath);
@@ -228,14 +229,14 @@ function fileTools(rootPath: string, activeDocument?: ActiveAgentDocument): Tool
 function webSearchTool(apiKey: string, fetchImpl?: typeof fetch): ToolSet {
   return {
     web_search: tool({
-      description: '使用 Brave Search 搜索公开网页，并返回标题、URL 与摘要。',
-      inputSchema: z.object({ query: z.string().trim().min(1).max(400).describe('搜索关键词'), count: z.number().int().min(1).max(10).optional().describe('结果数量，默认 5') }),
+      description: tAi('tools.webSearch.description'),
+      inputSchema: z.object({ query: z.string().trim().min(1).max(400).describe(tAi('tools.webSearch.query')), count: z.number().int().min(1).max(10).optional().describe(tAi('tools.webSearch.count')) }),
       execute: async ({ query, count = 5 }): Promise<{ query: string; results: Array<{ title: string; url: string; snippet: string; publishedAt?: string }> }> => {
         const requestUrl = new URL(BRAVE_WEB_SEARCH_URL);
         requestUrl.searchParams.set('q', query);
         requestUrl.searchParams.set('count', String(count));
         const response = await (fetchImpl ?? fetch)(requestUrl, { headers: { Accept: 'application/json', 'X-Subscription-Token': apiKey } });
-        if (!response.ok) throw new Error(`Web Search 请求失败 (HTTP ${response.status}): ${(await response.text()).slice(0, 300)}`);
+        if (!response.ok) throw new Error(tAi('tools.webSearch.failed', { status: response.status, detail: (await response.text()).slice(0, 300) }));
         const payload = await response.json() as { web?: { results?: Array<{ title?: unknown; url?: unknown; description?: unknown; age?: unknown }> } };
         const results = (payload.web?.results ?? []).filter((item): item is { title: string; url: string; description?: string; age?: string } => typeof item.title === 'string' && typeof item.url === 'string').map((item) => ({
           title: item.title,

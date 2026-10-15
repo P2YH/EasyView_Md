@@ -3,6 +3,7 @@ export * from './ai/text-patch';
 export * from './capabilities/editor-host-capabilities';
 export * from './editor-host/transport';
 export * from './export/xlsx-export';
+export * from './i18n/i18n';
 export * from './messages/editor-messages';
 export * from './preview/preview';
 export * from './results/operation-result';

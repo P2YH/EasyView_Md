@@ -17,6 +17,7 @@ import {
   type SlashMenuItem,
 } from '../../../editor/EditorExtension';
 import { getHeadingAnchors, type HeadingAnchor } from '../heading/AnchorPlugin';
+import { tBlocks } from '../blocks.i18n';
 
 // ─── TocExtension ─────────────────────────────────────────────────────────────
 
@@ -34,7 +35,7 @@ export class TocExtension extends Extension {
         draggable: true,
         parseDOM: [{ tag: 'div.toc-block' }],
         toDOM() {
-          return ['div', { class: 'toc-block', contenteditable: 'false' }, 'Table of Contents'];
+          return ['div', { class: 'toc-block', contenteditable: 'false' }, tBlocks('toc.title')];
         },
       },
     };
@@ -63,7 +64,7 @@ export class TocExtension extends Extension {
   get slashMenuItems(): SlashMenuItem[] {
     return [
       {
-        label: 'Table of Contents',
+        label: tBlocks('toc.title'),
         keywords: ['toc', 'contents', 'outline', 'navigation'],
         icon: '📑',
         action: (view) => {
@@ -114,13 +115,13 @@ function createTocNodeView(
   header.className = 'toc-block-header';
 
   const headerText = document.createElement('span');
-  headerText.textContent = 'Table of Contents';
+  headerText.textContent = tBlocks('toc.title');
   header.appendChild(headerText);
 
   // Delete button (visible on hover)
   const deleteBtn = document.createElement('button');
   deleteBtn.className = 'toc-delete-btn';
-  deleteBtn.setAttribute('aria-label', 'Delete block');
+  deleteBtn.setAttribute('aria-label', tBlocks('action.deleteBlock'));
   deleteBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
   deleteBtn.addEventListener('mousedown', (e) => {
     e.preventDefault();
@@ -178,7 +179,7 @@ function createTocNodeView(
     item.dataset.anchorId = anchor.id;
     item.style.paddingLeft = `${(anchor.level - minLevel) * 16 + 8}px`;
     link.dataset.anchorId = anchor.id;
-    link.textContent = anchor.text || '(empty heading)';
+    link.textContent = anchor.text || tBlocks('toc.emptyHeading');
     link.href = `#${anchor.id}`;
   }
 
@@ -190,7 +191,7 @@ function createTocNodeView(
       if (!emptyState) {
         emptyState = document.createElement('div');
         emptyState.className = 'toc-block-empty';
-        emptyState.textContent = 'No headings found';
+        emptyState.textContent = tBlocks('toc.noHeadings');
       }
       list.appendChild(emptyState);
       return;

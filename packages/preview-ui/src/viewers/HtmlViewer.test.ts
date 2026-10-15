@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { resetLocale, setLocale } from '@easyview/contracts/i18n';
 import {
   htmlDocumentWithBase,
   htmlPreviewBaseHref,
@@ -8,6 +9,8 @@ import {
 } from './HtmlViewer';
 
 describe('html preview document', () => {
+  afterEach(() => resetLocale());
+
   it('turns a page URL into a directory base href', () => {
     expect(htmlPreviewBaseHref('easyview-preview://content/11111111-1111-4111-8111-111111111111/page.html'))
       .toBe('easyview-preview://content/11111111-1111-4111-8111-111111111111/');
@@ -27,6 +30,14 @@ describe('html preview document', () => {
     expect(html).toContain('HTMLIFrameElement');
     expect(html).toContain('<h1>Hi</h1>');
     expect(html).not.toContain('!important');
+  });
+
+  it('localizes nested frame failure text inside the bootstrap', () => {
+    expect(htmlDocumentWithBase('<p>x</p>', 'easyview-preview://content/id/')).toContain('"无法加载页面："');
+    setLocale('en');
+    const html = htmlDocumentWithBase('<p>x</p>', 'easyview-preview://content/id/');
+    expect(html).toContain('"Unable to load page: "');
+    expect(html).toContain('"timeout"');
   });
 
   it('rewrites relative iframe and script urls against the page directory', () => {

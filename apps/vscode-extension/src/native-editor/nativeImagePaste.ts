@@ -1,5 +1,6 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { tNative } from './nativeEditor.i18n';
 import {
   detectImageMime,
   documentAssetsDirectoryName,
@@ -95,7 +96,7 @@ function transformPastedText(document: vscode.TextDocument, raw: string, mode: '
     text: result.replacement,
     files,
     directory,
-    title: files.length === 1 ? 'Paste Image as File' : 'Paste Images as File References',
+    title: tNative(files.length === 1 ? 'paste.imageAsFile' : 'paste.imagesAsFileReferences'),
   };
 }
 
@@ -139,7 +140,7 @@ export function registerNativeMarkdownImagePaste(): vscode.Disposable {
 
         const edit = new vscode.DocumentPasteEdit(
           `![](${toMarkdownRelativePath(document.uri.fsPath, file.fsPath)})`,
-          'Paste Image as File',
+          tNative('paste.imageAsFile'),
           MARKDOWN_IMAGE_PASTE_KIND,
         );
 

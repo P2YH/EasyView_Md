@@ -1,0 +1,38 @@
+import { defineMessages } from '@easyview/contracts';
+
+export const tUpdate = defineMessages({
+  'zh-CN': {
+    'storeManaged': '此版本由应用商店更新',
+    'downloading': '正在下载 v{version}…',
+    'upToDate': '已是最新版本',
+    'checkFailed': '检查更新失败',
+    'prompt.title': 'EasyView 更新',
+    'prompt.message': '发现新版本 v{version}（当前 v{current}）',
+    'prompt.download': '下载并安装',
+    'prompt.website': '打开官网',
+    'prompt.later': '稍后提醒',
+    'prompt.skip': '跳过此版本',
+    'installer.opened': 'v{version} 安装包已打开',
+    'installer.macDetail': '请退出 EasyView，将新版本拖入「应用程序」覆盖安装。',
+    'installer.detail': '请按安装程序提示完成安装，安装时会关闭 EasyView。',
+    'download.failed': '更新下载失败',
+    'download.close': '关闭',
+  },
+  en: {
+    'storeManaged': 'Updates for this version are managed by the app store.',
+    'downloading': 'Downloading v{version}…',
+    'upToDate': 'You are up to date',
+    'checkFailed': 'Update check failed',
+    'prompt.title': 'EasyView Update',
+    'prompt.message': 'New version v{version} is available (current v{current})',
+    'prompt.download': 'Download and Install',
+    'prompt.website': 'Open Website',
+    'prompt.later': 'Remind Me Later',
+    'prompt.skip': 'Skip This Version',
+    'installer.opened': 'v{version} installer opened',
+    'installer.macDetail': 'Quit EasyView and drag the new app into Applications to replace the old one.',
+    'installer.detail': 'Follow the installer prompts to finish; EasyView will be closed during setup.',
+    'download.failed': 'Update download failed',
+    'download.close': 'Close',
+  },
+});

@@ -1,0 +1,36 @@
+import { defineMessages } from '@easyview/contracts/i18n';
+
+export const tFindReplace = defineMessages({
+  'zh-CN': {
+    'panel.label': '查找和替换',
+    'find.placeholder': '查找',
+    'find.caseSensitive': '区分大小写（Alt+C）',
+    'find.regex': '使用正则表达式（Alt+R）',
+    'find.previous': '上一个匹配（Shift+Enter）',
+    'find.next': '下一个匹配（Enter）',
+    'find.noResults': '无结果',
+    'panel.toggleReplace': '切换替换',
+    'panel.close': '关闭（Escape）',
+    'replace.placeholder': '替换',
+    'replace.button': '替换',
+    'replace.title': '替换（Enter）',
+    'replace.allButton': '全部替换',
+    'replace.allTitle': '全部替换（Ctrl+Enter）',
+  },
+  en: {
+    'panel.label': 'Find and replace',
+    'find.placeholder': 'Find',
+    'find.caseSensitive': 'Case Sensitive (Alt+C)',
+    'find.regex': 'Use Regular Expression (Alt+R)',
+    'find.previous': 'Previous Match (Shift+Enter)',
+    'find.next': 'Next Match (Enter)',
+    'find.noResults': 'No results',
+    'panel.toggleReplace': 'Toggle Replace',
+    'panel.close': 'Close (Escape)',
+    'replace.placeholder': 'Replace',
+    'replace.button': 'Replace',
+    'replace.title': 'Replace (Enter)',
+    'replace.allButton': 'Replace All',
+    'replace.allTitle': 'Replace All (Ctrl+Enter)',
+  },
+});

@@ -9,6 +9,7 @@ import { TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { schema } from '../../../editor/EditorSchema';
 import type { HeadingAnchor } from '../../blocks/heading/AnchorPlugin';
+import { tSlashMenu } from './slashMenu.i18n';
 
 export function showHeadingPicker(
   view: EditorView,
@@ -28,7 +29,7 @@ export function showHeadingPicker(
     popup.innerHTML = '';
     const title = document.createElement('div');
     title.className = 'heading-picker-title';
-    title.textContent = 'Select heading';
+    title.textContent = tSlashMenu('headingPicker.title');
     popup.appendChild(title);
 
     anchors.forEach((anchor, i) => {

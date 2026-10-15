@@ -14,6 +14,11 @@ on:
         required: false
         type: boolean
         default: true
+      store_only:
+        description: 'Submit the existing release AppX only; skip builds and website sync'
+        required: false
+        type: boolean
+        default: false
 
 # All versions share one queue because the website uses fixed download names.
 concurrency:
@@ -51,6 +56,7 @@ jobs:
 
   build:
     needs: version
+    if: github.event_name != 'workflow_dispatch' || !inputs.store_only
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -142,6 +148,7 @@ jobs:
 
   publish:
     needs: [version, build]
+    if: github.event_name != 'workflow_dispatch' || !inputs.store_only
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -250,6 +257,9 @@ jobs:
   store:
     needs: [version, publish]
     if: >-
+      always() && !cancelled() &&
+      needs.version.result == 'success' &&
+      (needs.publish.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.store_only)) &&
       vars.STORE_SUBMIT != 'false' &&
       (github.event_name != 'workflow_dispatch' || inputs.store_submit)
     runs-on: windows-latest
@@ -276,10 +286,20 @@ jobs:
             "ready=false" >> $env:GITHUB_OUTPUT
           }
       - uses: actions/download-artifact@v4
-        if: steps.creds.outputs.ready == 'true'
+        if: steps.creds.outputs.ready == 'true' && !inputs.store_only
         with:
           name: store-win32-x64
           path: store-assets
+      - name: Download existing release Store package
+        if: steps.creds.outputs.ready == 'true' && inputs.store_only
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          New-Item -ItemType Directory -Path store-assets -Force | Out-Null
+          gh release download $env:RELEASE_TAG --pattern 'EasyView_Md-win-x64-store.appx' --dir store-assets
+          if ($LASTEXITCODE -ne 0) { throw "Store package download failed ($LASTEXITCODE)" }
       - name: Setup Microsoft Store Developer CLI
         if: steps.creds.outputs.ready == 'true'
         uses: microsoft/microsoft-store-apppublisher@v1.1
@@ -293,6 +313,10 @@ jobs:
           if (-not (Test-Path $appx)) { throw "Missing $appx" }
           # publish starts a new submission from the last published one (listing kept),
           # replaces the package and commits it for certification.
-          msstore publish (Split-Path $appx) --inputFile $appx --appId $env:STORE_PRODUCT_ID
+          # The loose-package publisher recognizes .msix, not .appx. Preserve the
+          # existing package bytes and pass the file as the positional argument.
+          $msix = [System.IO.Path]::ChangeExtension($appx, '.msix')
+          Copy-Item -LiteralPath $appx -Destination $msix
+          msstore publish $msix --appId $env:STORE_PRODUCT_ID
           if ($LASTEXITCODE -ne 0) { throw "msstore publish failed ($LASTEXITCODE)" }
           msstore submission status $env:STORE_PRODUCT_ID

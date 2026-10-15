@@ -41,7 +41,8 @@ VSIX 与桌面端走同一条 Desktop Release 流程，但版本独立：tag 只
 - **身份信息：** 与 Partner Center 预留一致：`identityName` `wonderxy.EasyViewMd`、`publisher` `CN=19709C1F-89CA-4443-8E7F-815C01CEC37E`、`publisherDisplayName` `wonderxy`、显示名 `EasyView_Md`，Store ID `9MTQTBP489CN`，PFN `wonderxy.EasyViewMd_aeg7cng3hy970`。不要改这些值。
 - **不签名：** 商店提交不需要自己签名，Partner Center 会用微软证书重新签名。配置里没有证书，脚本在检测到 `CSC_LINK` / `WIN_CSC_LINK` / `CSC_NAME` 时直接失败。未签名的包不能直接双击安装，本地测试需开启开发者模式后用 `Add-AppxPackage` 安装。
 - **磁贴图标：** 在 `apps/desktop/build/appx/`，由 `node tooling/brand/generate-appx-assets.mjs`（macOS）从 `resources/brand/logo.png` 生成。换品牌图后重新生成并提交。
-- **自动提交：** Release 发布后 `store` job（windows-latest）用 `microsoft/microsoft-store-apppublisher@v1.1` 安装 `msstore`，执行 `msstore publish --inputFile …appx --appId 9MTQTBP489CN`：以上次已发布的提交为底新建提交，只替换程序包，商店信息不变，并直接提交认证。缺任一 secret 时只给 warning 跳过，不影响发版。关闭：仓库变量 `STORE_SUBMIT=false`，或手动运行时取消 `store_submit`。
+- **自动提交：** Release 发布后 `store` job（windows-latest）用 `microsoft/microsoft-store-apppublisher@v1.1` 安装 `msstore`。CLI 的独立安装包发布器按 `.msix` 扩展名识别文件，因此将既有 AppX 原样复制为 `.msix`，执行 `msstore publish …msix --appId 9MTQTBP489CN`：以上次已发布的提交为底新建提交，只替换程序包，商店信息不变，并直接提交认证。缺任一 secret 时只给 warning 跳过，不影响发版。关闭：仓库变量 `STORE_SUBMIT=false`，或手动运行时取消 `store_submit`。
+- **仅提交现有安装包：** 手动运行 Desktop Release，填写已有 Release 的 `tag`，启用 `store_only` 和 `store_submit`。流程校验 tag 后跳过构建和官网同步，直接下载该 Release 的 `EasyView_Md-win-x64-store.appx` 并执行同一个 `store` job，不重新打包。命令：`gh workflow run release.yml --ref main -f tag=vX.Y.Z -F store_only=true -F store_submit=true`。
 - **注意：** 版本号必须比商店现有版本大（`X.Y.Z` → `X.Y.Z.0`）；上一个提交还在认证中时新提交会失败或覆盖草稿，需等完成或在 Partner Center 处理；客户端密码过期后要更新 secret；更改描述/截图仍需在 Partner Center 手动做。
 - **一次性配置（自动提交前）：**
   1. Partner Center → 右上角齿轮“帐户设置” → 用户管理 → **Microsoft Entra 应用程序**：关联已有 Entra 租户或新建，再“添加 Microsoft Entra 应用程序”（新建或选已注册的应用），角色选 **Manager**。

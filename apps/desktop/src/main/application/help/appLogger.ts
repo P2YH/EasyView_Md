@@ -4,7 +4,7 @@ import { FileLogger, type LogLevel } from './logRotation';
 let logger: FileLogger | undefined;
 
 export function getLogsDirectory(): string {
-  return app.getPath('logs');
+  return process.env.EASYVIEW_LOG_DIR || app.getPath('logs');
 }
 
 export function log(level: LogLevel, scope: string, message: string): void {

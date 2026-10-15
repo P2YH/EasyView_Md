@@ -26,7 +26,7 @@ const settingsPath = () => path.join(app.getPath('userData'), 'update-settings.j
 const updatesRoot = () => path.join(app.getPath('userData'), 'updates');
 
 export function updatesDisabled(): boolean {
-  return isUpdateDisabled({ windowsStore: process.windowsStore, mas: process.mas });
+  return isUpdateDisabled({ windowsStore: process.windowsStore, mas: process.mas, disableFlag: process.env.EASYVIEW_DISABLE_UPDATE_CHECK });
 }
 export function setUpdateMenuRefresher(refresh: () => void): void { menuRefresher = refresh; }
 export function getUpdateSettings(): UpdateSettings { return settings; }
@@ -236,6 +236,10 @@ async function downloadUpdate(release: ReleaseInfo, asset: ReleaseAsset): Promis
 export async function startUpdateService(): Promise<void> {
   await loadSettings();
   if (updatesDisabled()) {
+    if (process.env.EASYVIEW_DISABLE_UPDATE_CHECK) {
+      ulog('info', 'update checks disabled by EASYVIEW_DISABLE_UPDATE_CHECK');
+      return;
+    }
     ulog('info', 'store build detected; self-update disabled');
     await rm(updatesRoot(), { recursive: true, force: true }).catch(() => {});
     return;

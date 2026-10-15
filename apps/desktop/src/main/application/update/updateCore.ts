@@ -72,11 +72,12 @@ export function parseSha256Sums(text: string): Map<string, string> {
   return result;
 }
 
-export interface UpdateEnvironment { windowsStore?: boolean; mas?: boolean; isPackaged?: boolean }
+export interface UpdateEnvironment { windowsStore?: boolean; mas?: boolean; isPackaged?: boolean; disableFlag?: string }
 
-/** Store builds (Microsoft Store / Mac App Store) must never self-update. */
+/** Store builds (Microsoft Store / Mac App Store) must never self-update; EASYVIEW_DISABLE_UPDATE_CHECK=1 disables it for CI/tests. */
 export function isUpdateDisabled(env: UpdateEnvironment): boolean {
-  return env.windowsStore === true || env.mas === true;
+  const flag = env.disableFlag?.trim().toLowerCase();
+  return env.windowsStore === true || env.mas === true || (Boolean(flag) && flag !== '0' && flag !== 'false');
 }
 
 export interface UpdateSettings { autoCheck: boolean; skippedVersion?: string; lastCheckAt?: number }

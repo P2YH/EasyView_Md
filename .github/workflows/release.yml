@@ -88,6 +88,13 @@ jobs:
         run: npm run make --workspace @easyview/desktop -- --arch="$TARGET_ARCH"
       - run: npm run verify:desktop-package
       - run: npm run verify:desktop-runtime
+      - name: Upload packaged runtime diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-runtime-diagnostics-${{ matrix.platform }}-${{ matrix.arch }}
+          path: apps/desktop/test-results/packaged-runtime
+          if-no-files-found: ignore
       - if: matrix.platform == 'darwin'
         run: npm run make:dmg --workspace @easyview/desktop
       # The VSIX is platform-neutral (node-pty prebuilds for all targets ship inside it); build it once, on macOS.

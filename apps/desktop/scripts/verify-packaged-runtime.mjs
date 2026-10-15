@@ -1,6 +1,6 @@
 import { _electron as electron, expect } from '@playwright/test';
 import { once } from 'node:events';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,17 +13,47 @@ const executablePath = process.platform === 'darwin'
 const tempDirectory = await mkdtemp(path.join(os.tmpdir(), 'easyview-packaged-runtime-'));
 const documentPath = path.join(tempDirectory, 'packaged-runtime.md');
 const userDataDirectory = path.join(tempDirectory, 'user-data');
+const logDirectory = path.join(tempDirectory, 'logs');
+const diagnosticsDirectory = path.join(appDir, 'test-results', 'packaged-runtime');
+const EDITOR_TIMEOUT_MS = 30_000;
+const consoleLines = [];
 await writeFile(documentPath, '# Packaged EasyView_Md\n\nRuntime check.\n', 'utf8');
 
 const application = await electron.launch({
   executablePath,
   args: [`--user-data-dir=${userDataDirectory}`, documentPath],
-  env: { ...process.env, NODE_OPTIONS: '' },
+  env: { ...process.env, NODE_OPTIONS: '', EASYVIEW_DISABLE_UPDATE_CHECK: '1', EASYVIEW_LOG_DIR: logDirectory },
 });
 
+async function dumpDiagnostics(page, error) {
+  console.error(`packaged runtime check failed: ${error instanceof Error ? error.message.split('\n')[0] : String(error)}`);
+  await mkdir(diagnosticsDirectory, { recursive: true }).catch(() => undefined);
+  if (page) {
+    await page.screenshot({ path: path.join(diagnosticsDirectory, 'failure.png'), timeout: 5_000 }).then(
+      () => console.error(`screenshot: ${path.join(diagnosticsDirectory, 'failure.png')}`),
+      (screenshotError) => console.error(`screenshot failed: ${String(screenshotError)}`),
+    );
+    const title = await page.title().catch(() => '<unknown>');
+    console.error(`window title: ${title}`);
+  }
+  console.error(`--- renderer console (${consoleLines.length} lines) ---\n${consoleLines.join('\n')}`);
+  const logFiles = await readdir(logDirectory).catch(() => []);
+  for (const name of logFiles) {
+    const text = await readFile(path.join(logDirectory, name), 'utf8').catch(() => '');
+    console.error(`--- ${name} ---\n${text}`);
+    await writeFile(path.join(diagnosticsDirectory, name), text).catch(() => undefined);
+  }
+  await writeFile(path.join(diagnosticsDirectory, 'renderer-console.log'), consoleLines.join('\n')).catch(() => undefined);
+}
+
+let page;
+
 try {
-  const page = await application.firstWindow();
-  await expect(page.locator('.ProseMirror')).toContainText('Packaged EasyView_Md');
+  page = await application.firstWindow();
+  page.on('console', (message) => consoleLines.push(`[${message.type()}] ${message.text()}`));
+  page.on('pageerror', (pageError) => consoleLines.push(`[pageerror] ${pageError.message}`));
+  // Cold start of a freshly packaged app on CI runners (Windows Defender scans, asar unpack) can exceed 5s.
+  await expect(page.locator('.ProseMirror')).toContainText('Packaged EasyView_Md', { timeout: EDITOR_TIMEOUT_MS });
 
   await page.locator('.ProseMirror p').last().click();
   await page.keyboard.press('Alt+t');
@@ -53,6 +83,9 @@ try {
   );
 
   console.log(`verified packaged runtime ${executablePath}`);
+} catch (error) {
+  await dumpDiagnostics(page, error);
+  throw error;
 } finally {
   const applicationProcess = application.process();
   if (applicationProcess.exitCode === null) {

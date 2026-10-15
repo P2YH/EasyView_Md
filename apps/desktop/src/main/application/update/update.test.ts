@@ -55,6 +55,10 @@ describe('store / settings / prompt', () => {
     expect(isUpdateDisabled({ windowsStore: true })).toBe(true);
     expect(isUpdateDisabled({ mas: true })).toBe(true);
     expect(isUpdateDisabled({})).toBe(false);
+    expect(isUpdateDisabled({ disableFlag: '1' })).toBe(true);
+    expect(isUpdateDisabled({ disableFlag: '0' })).toBe(false);
+    expect(isUpdateDisabled({ disableFlag: 'false' })).toBe(false);
+    expect(isUpdateDisabled({ disableFlag: '' })).toBe(false);
   });
   it('normalizes settings and respects skip only for automatic checks', () => {
     const s = normalizeUpdateSettings({ autoCheck: 'x', skippedVersion: '2.0.6', lastCheckAt: 5 });

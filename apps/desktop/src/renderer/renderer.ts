@@ -147,7 +147,7 @@ const welcomePage = new WelcomePage({
   },
 });
 /** Launch shows the welcome page over restored tabs until the user picks something. */
-let startupWelcome = true;
+let startupWelcome = !api.app.openedFileAtLaunch;
 /** With a folder open and no tab, the pane shows a light hint unless the user asks for the full welcome page. */
 let welcomeRequested = false;
 let workspaceRootPath: string | null = null;

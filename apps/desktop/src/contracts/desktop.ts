@@ -134,6 +134,8 @@ export type DesktopAppearanceMode = 'light' | 'gray' | 'dark';
 export type DesktopAccent = 'default' | 'blue' | 'orangeRed' | 'green' | 'purple' | 'cherryRed';
 /** Renderer process argument carrying the UI locale chosen by the main process. */
 export const DESKTOP_LOCALE_ARGUMENT_PREFIX = '--easyview-locale=';
+/** Renderer process argument set when the launch itself opened a document (argv / open-file). */
+export const DESKTOP_OPENED_FILE_AT_LAUNCH_ARGUMENT = '--easyview-opened-file-at-launch';
 export const DESKTOP_APPEARANCE_MODES: readonly DesktopAppearanceMode[] = ['light', 'gray', 'dark'];
 export const DESKTOP_ACCENTS: readonly DesktopAccent[] = ['default', 'blue', 'orangeRed', 'green', 'purple', 'cherryRed'];
 /** Background depth presets offered by the menu, in percent. */

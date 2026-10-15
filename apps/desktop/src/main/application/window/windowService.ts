@@ -59,7 +59,7 @@ import {
 } from '../host/desktopRuntime';
 import type { DesktopWindowContext } from '../host/windowContext';
 import { createDesktopWindowContext } from '../host/windowContext';
-import { DESKTOP_ACCENTS, DESKTOP_APPEARANCE_MODES, DESKTOP_LOCALE_ARGUMENT_PREFIX as LOCALE_ARGUMENT_PREFIX, DESKTOP_THEME_DEPTH_STEPS } from '../../../contracts';
+import { DESKTOP_ACCENTS, DESKTOP_APPEARANCE_MODES, DESKTOP_LOCALE_ARGUMENT_PREFIX as LOCALE_ARGUMENT_PREFIX, DESKTOP_OPENED_FILE_AT_LAUNCH_ARGUMENT, DESKTOP_THEME_DEPTH_STEPS } from '../../../contracts';
 import type { DesktopAccent, DesktopAppearanceMode, DesktopMenuCommand, DesktopThemeDepthStep } from '../../../contracts';
 import { getLocale, type LocalePreference } from '@easyview/contracts';
 import { getSelectedLanguagePreference, saveLanguagePreference } from '../settings/languageSettings';
@@ -91,6 +91,19 @@ async function chooseLanguage(preference: LocalePreference): Promise<void> {
     ? await dialog.showMessageBox(window, options)
     : await dialog.showMessageBox(options);
   if (response === 0) await restartApp();
+}
+
+let openedFileAtLaunch = false;
+
+/** The next window skips the startup welcome page because the launch already opened a document. */
+export function markOpenedFileAtLaunch(): void {
+  openedFileAtLaunch = true;
+}
+
+function consumeOpenedFileAtLaunch(): boolean {
+  const value = openedFileAtLaunch;
+  openedFileAtLaunch = false;
+  return value;
 }
 
 const RESTART_FLAG = '--easyview-restart';
@@ -345,7 +358,10 @@ export function createWindow(context: DesktopWindowContext = getWindowContext())
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#1e1e1e' : '#ffffff',
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
-      additionalArguments: [`${LOCALE_ARGUMENT_PREFIX}${getLocale()}`],
+      additionalArguments: [
+        `${LOCALE_ARGUMENT_PREFIX}${getLocale()}`,
+        ...(consumeOpenedFileAtLaunch() ? [DESKTOP_OPENED_FILE_AT_LAUNCH_ARGUMENT] : []),
+      ],
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,

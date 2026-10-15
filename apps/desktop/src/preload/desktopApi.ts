@@ -55,6 +55,8 @@ export interface EasyViewDesktopApi {
     getZoomFactor(): number;
     /** UI locale resolved by the main process at startup; changing it requires a restart. */
     readonly locale: Locale;
+    /** True when this window was created for a document opened by the launch (argv / Finder). */
+    readonly openedFileAtLaunch: boolean;
     onThemeChanged(listener: (theme: DesktopThemeMode) => void): { unsubscribe(): void };
   };
   workspace: WorkspaceApi;

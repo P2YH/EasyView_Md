@@ -24,6 +24,7 @@ import {
   createNewWindow,
   createWindow,
   findMarkdownArgument,
+  markOpenedFileAtLaunch,
   restartApp,
 } from '../../application/window/windowService';
 import { registerDesktopIpc } from './registerDesktopIpc';
@@ -92,6 +93,7 @@ if (!hasSingleInstanceLock) {
       const filePath = getPendingOpenPath()!;
       setPendingOpenPath(undefined);
       const result = await readDocument(filePath);
+      if (result.ok) markOpenedFileAtLaunch();
       if (!result.ok) console.error('[EasyView_Md] Failed to open startup file:', result.message);
     }
     createWindow();

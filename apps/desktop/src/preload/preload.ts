@@ -28,7 +28,7 @@ import type {
 } from '../contracts';
 import type { EasyViewDesktopApi } from './desktopApi';
 import { DEFAULT_LOCALE, normalizeLocale, setLocale, type Locale } from '@easyview/contracts/i18n';
-import { DESKTOP_LOCALE_ARGUMENT_PREFIX } from '../contracts/desktop';
+import { DESKTOP_LOCALE_ARGUMENT_PREFIX, DESKTOP_OPENED_FILE_AT_LAUNCH_ARGUMENT } from '../contracts/desktop';
 import { tPreload } from './preload.i18n';
 
 function assertString(value: unknown, name: string): asserts value is string {
@@ -105,6 +105,7 @@ const api: EasyViewDesktopApi = {
     newWindow: () => ipcRenderer.invoke('app.newWindow') as Promise<OperationResult<boolean>>,
     getZoomFactor: () => webFrame.getZoomFactor(),
     locale,
+    openedFileAtLaunch: process.argv.includes(DESKTOP_OPENED_FILE_AT_LAUNCH_ARGUMENT),
     onThemeChanged: (listener) => {
       const handler = (_event: Electron.IpcRendererEvent, theme: DesktopThemeMode) => listener(theme);
       ipcRenderer.on('app.themeChanged', handler);

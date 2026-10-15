@@ -125,3 +125,23 @@ test('welcome page opens a recent folder and hides once a file tab is open', asy
     await rm(temporaryDirectory, { recursive: true, force: true });
   }
 });
+
+test('launching with a document argument opens it directly instead of the welcome page', async () => {
+  const temporaryDirectory = await realpath(await mkdtemp(join(tmpdir(), 'easyview-desktop-welcome-argv-')));
+  const userData = join(temporaryDirectory, 'user-data');
+  const document = join(temporaryDirectory, 'opened.md');
+  await mkdir(userData, { recursive: true });
+  await writeFile(document, '# Opened From Launch\n\nBody.\n', 'utf8');
+
+  let application: ElectronApplication | undefined;
+  try {
+    application = await electron.launch({ args: [appDir, `--user-data-dir=${userData}`, document] });
+    const page = await application.firstWindow();
+    await expect(page.locator('.ProseMirror')).toContainText('Opened From Launch');
+    await expect(page.locator('#desktop-welcome')).toBeHidden();
+    await page.locator('.ProseMirror p').last().click();
+  } finally {
+    await terminateElectron(application);
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
+});

@@ -7,7 +7,7 @@ import type { TimelineUiState } from '@easyview/contracts';
 import type { HostToEditorMessage, EditorToHostMessage } from '@easyview/contracts';
 import { readLocalProductTheme } from '@easyview/contracts';
 import { applyDesktopProductAppearance } from './productThemeControl';
-import { createEasyViewEditor, EditorAppearanceStore, type EasyViewEditorInstance } from '@easyview/editor-core';
+import { createEasyViewEditor, createLazyAiChatPanel, EditorAppearanceStore, type AiChatPanel, type EasyViewEditorInstance } from '@easyview/editor-core';
 import { defaultDesktopPanelLayout, isDesktopAppearanceCommand, normalizeDesktopPanelLayout } from '../contracts';
 import type { DesktopAppearanceMode, DesktopEditorTab, DesktopPanelLayout, DesktopTab, DesktopTabSnapshot, DesktopThemeMode } from '../contracts';
 import { applyTitleBarToggles, applyWorkbenchPanelLayout, installPanelDock, type PanelDockElements, type TitleBarToggleElements } from './panelDock';
@@ -140,8 +140,42 @@ function applyPanelLayout(layout: DesktopPanelLayout): void {
 }
 applyPanelLayout(panelLayout);
 
-function commandEditor(): EasyViewEditorInstance | null {
-  return activeEditor() ?? editors.lastFocused() ?? editors.first();
+let aiChatVisible = false;
+
+function updateAiChatVisible(visible: boolean): void {
+  if (visible !== aiChatVisible) {
+    aiChatVisible = visible;
+    workspaceExplorer.setAiChatVisible(visible);
+  }
+  syncAiChatToggle(visible);
+}
+
+// Serves the AI chat while no Markdown editor is active, so it does not depend on an open file.
+let standaloneAiChat: AiChatPanel | undefined;
+function getStandaloneAiChat(): AiChatPanel {
+  if (standaloneAiChat) return standaloneAiChat;
+  const panel = createLazyAiChatPanel({
+    postMessage: (message) => sharedEditorHost.postMessage(message),
+    container: panelDockElements.panels.aiChat,
+    getDocumentContent: () => '',
+    getFilePath: () => '',
+    getFileName: () => '',
+    applyDocumentEdit: () => {},
+    copyText: (text, successMessage) => sharedEditorHost.postMessage({ type: 'copyTextToClipboard', text, successMessage }),
+    onVisibilityChange: (visible) => { if (!activeEditor()) updateAiChatVisible(visible); },
+  });
+  panel.setDocumentContextAvailable(false);
+  sharedEditorHost.subscribe((message) => { if (message.type.startsWith('aiChat.')) panel.handleMessage(message); });
+  standaloneAiChat = panel;
+  return panel;
+}
+
+function syncStandaloneAiChat(): void {
+  const hasEditor = Boolean(activeEditor());
+  if (!standaloneAiChat && (hasEditor || !aiChatVisible)) return;
+  const panel = getStandaloneAiChat();
+  panel.setSuspended(hasEditor);
+  if (!hasEditor) { if (aiChatVisible) panel.open(); else panel.close(); }
 }
 
 function bindActiveEditor(editor: EasyViewEditorInstance | null): void {
@@ -152,11 +186,40 @@ function bindActiveEditor(editor: EasyViewEditorInstance | null): void {
   if (editor) {
     editor.setOutlineVisible(lastOutlineVisible);
     editor.setOutlineWidth(lastOutlineWidth);
+    editor.setAiChatVisible(aiChatVisible);
   }
+  syncStandaloneAiChat();
+  syncAiChatToggle(aiChatVisible);
   editorStateSubscription = editor?.subscribeUiState((state) => {
     workspaceExplorer.setOutlineVisible(state.outlineVisible);
+    updateAiChatVisible(state.aiChatVisible);
     publishMenuState();
   });
+}
+
+/** The full welcome page hides the AI chat until the user opens it there explicitly. */
+let aiChatOnWelcome = false;
+function aiChatSuppressed(): boolean {
+  return welcomeCoversWorkspace && !aiChatOnWelcome;
+}
+
+function toggleAiChat(): void {
+  if (aiChatSuppressed()) {
+    aiChatOnWelcome = true;
+    document.body.classList.add('desktop-ai-chat-on-welcome');
+    if (aiChatVisible) { syncAiChatToggle(true); return; }
+  }
+  const editor = activeEditor();
+  if (editor) { editor.setAiChatVisible(!editor.getUiState().aiChatVisible); return; }
+  updateAiChatVisible(!aiChatVisible);
+  syncStandaloneAiChat();
+}
+
+function syncAiChatToggle(requested: boolean): void {
+  const visible = requested && !aiChatSuppressed();
+  const toggle = document.getElementById('ai-chat-toggle');
+  toggle?.classList.toggle('active', visible);
+  toggle?.setAttribute('aria-pressed', String(visible));
 }
 
 const timelineClient = new RpcTimelineClient({
@@ -218,8 +281,11 @@ function syncWelcome(snapshot: DesktopTabSnapshot): void {
   welcomePage.setCurrentRoot(startupWelcome ? null : workspaceRootPath);
   splitRoot.hidden = showWelcome;
   welcomeCoversWorkspace = showWelcome && fullWelcome;
+  if (!welcomeCoversWorkspace) aiChatOnWelcome = false;
   document.body.classList.toggle('desktop-welcome-active', showWelcome);
   document.body.classList.toggle('desktop-welcome-full', welcomeCoversWorkspace);
+  document.body.classList.toggle('desktop-ai-chat-on-welcome', aiChatOnWelcome);
+  syncAiChatToggle(aiChatVisible);
   welcomePage.setVisible(showWelcome);
   applyGuardVisibility();
   renderTitle();
@@ -278,7 +344,7 @@ const guardHost = panelDockElements.panels.versionGuard;
 let guardVisible = false;
 let guardWidth = 360;
 const guardPanel = new VersionGuardPanel({
-  grip: 'versionGuard', close: () => setGuardVisible(false),
+  grip: 'versionGuard',
   client: {
     onDiscovery: listener => api.versionGuard.onDiscovery(listener),
     request: async request => { const result = await api.versionGuard.request(request); if (!result.ok) throw new Error(result.message); return result.value; },
@@ -379,10 +445,7 @@ function publishMenuState(): void {
 
 document.getElementById('workspace-toggle')?.addEventListener('click', () => workspaceExplorer.toggle());
 const aiChatToggle = document.getElementById('ai-chat-toggle');
-aiChatToggle?.addEventListener('click', () => commandEditor()?.executeCommand('toggleAiChat'));
-window.addEventListener('easyview-ai-chat-visibility-change', (event) => {
-  aiChatToggle?.classList.toggle('active', (event as CustomEvent<boolean>).detail);
-});
+aiChatToggle?.addEventListener('click', toggleAiChat);
 api.document.onChanged((documentState) => {
   if (currentTab?.kind !== 'editor') return;
   if (!welcomeCoversWorkspace) {
@@ -429,6 +492,10 @@ api.menu.onCommand((command) => {
     }
     return;
   }
+  if (command === 'toggleAiChat') {
+    toggleAiChat();
+    return;
+  }
   activeEditor()?.executeCommand(command);
 });
 
@@ -456,6 +523,10 @@ void workspaceExplorer.initialize().then(async (state) => {
   document.getElementById('workspace-toggle')?.classList.toggle('active', state.explorerVisible);
   activeEditor()?.setOutlineVisible(state.outlineVisible);
   activeEditor()?.setOutlineWidth(state.outlineWidth);
+  aiChatVisible = state.aiChatVisible === true;
+  activeEditor()?.setAiChatVisible(aiChatVisible);
+  syncStandaloneAiChat();
+  syncAiChatToggle(aiChatVisible);
   await tabController.initialize();
   publishMenuState();
 });

@@ -459,7 +459,10 @@ export function registerDesktopIpc(): void {
       expandedRelativePaths: Array.isArray(value.expandedRelativePaths)
         ? value.expandedRelativePaths.filter((item): item is string => typeof item === 'string')
         : getWorkspaceState().expandedRelativePaths,
+      ...(value.explorerDisplayMode === 'icons' || value.explorerDisplayMode === 'list' ? { explorerDisplayMode: value.explorerDisplayMode } : {}),
+      ...(typeof value.explorerIconDirectory === 'string' ? { explorerIconDirectory: value.explorerIconDirectory } : {}),
       versionGuardVisible: typeof value.versionGuardVisible === 'boolean' ? value.versionGuardVisible : getWorkspaceState().versionGuardVisible,
+      aiChatVisible: typeof value.aiChatVisible === 'boolean' ? value.aiChatVisible : getWorkspaceState().aiChatVisible,
       versionGuardWidth: typeof value.versionGuardWidth === 'number' ? Math.max(280, Math.min(8000, value.versionGuardWidth)) : getWorkspaceState().versionGuardWidth,
       explorerVisible: typeof value.explorerVisible === 'boolean' ? value.explorerVisible : getWorkspaceState().explorerVisible,
       outlineVisible: typeof value.outlineVisible === 'boolean' ? value.outlineVisible : getWorkspaceState().outlineVisible,

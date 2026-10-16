@@ -85,6 +85,7 @@ import { HistoryPanel } from './ui/HistoryPanel';
 import { createStickyNoteModal } from './ui/StickyNoteModal';
 import { createLazyTerminalModal, type TerminalAppearance } from './ui/lazyTerminalModal';
 import { createLazyAiChatPanel } from './ui/lazyAiChatPanel';
+export { createLazyAiChatPanel, type AiChatPanel } from './ui/lazyAiChatPanel';
 import type { EditorHostTransport, EditorSourceDocumentRequest, GitRefreshStatus, HostToEditorMessage } from '@easyview/contracts';
 import { EditorSyncAdapter } from './sync/editorSyncAdapter';
 import type { EasyViewEditorHostActions } from './hosts/host-actions';
@@ -117,6 +118,7 @@ export type EasyViewEditorCommand =
 export interface EasyViewEditorUiState {
   sourceMode: boolean;
   outlineVisible: boolean;
+  aiChatVisible: boolean;
   fullWidth: boolean;
   tableWrap: boolean;
   viewChanges: boolean;
@@ -132,6 +134,7 @@ export interface EasyViewEditorThemeState {
 export interface EasyViewEditorInstance {
   executeCommand(command: EasyViewEditorCommand): void;
   setOutlineVisible(visible: boolean): void;
+  setAiChatVisible(visible: boolean): void;
   getUiState(): EasyViewEditorUiState;
   subscribeUiState(listener: (state: EasyViewEditorUiState) => void): { unsubscribe(): void };
   setOutlineWidth(width: number): void;
@@ -191,9 +194,13 @@ let currentOutlinePosition = outlinePosition;
 let setOutlinePositionImpl: (position: 'left' | 'right') => void = (position) => { currentOutlinePosition = position; };
 const uiStateListeners = new Set<(state: EasyViewEditorUiState) => void>();
 let executeCommandImpl: (command: EasyViewEditorCommand) => void = () => undefined;
+let pendingAiChatVisible = false;
+let isAiChatOpen = (): boolean => pendingAiChatVisible;
+let setAiChatVisibleImpl: (visible: boolean) => void = (visible) => { pendingAiChatVisible = visible; };
   const getUiState = (): EasyViewEditorUiState => ({
   sourceMode: isSourceMode,
   outlineVisible: isTocVisible,
+  aiChatVisible: isAiChatOpen(),
   fullWidth: isFullWidth,
   tableWrap: isTableWrap,
   viewChanges: Boolean(changeViewController?.isActive()),
@@ -1764,11 +1771,20 @@ function initEditor() {
     onVisibilityChange: (visible) => {
       fileHeader.syncAiChatState(visible);
       dom.eventTarget.dispatchEvent(new CustomEvent('easyview-ai-chat-visibility-change', { detail: visible }));
+      notifyUiState();
     },
   });
+  if (pendingAiChatVisible && host.capabilities.aiChat) aiChatPanel.open();
+  isAiChatOpen = () => aiChatPanel.isOpen();
+  setAiChatVisibleImpl = (visible) => {
+    if (!host.capabilities.aiChat || aiChatPanel.isOpen() === visible) return;
+    if (visible) aiChatPanel.open(); else aiChatPanel.close();
+    notifyUiState();
+  };
   setDocumentActiveImpl = (active) => {
     documentActive = active;
     aiChatPanel.setDocumentContextAvailable(active);
+    aiChatPanel.setSuspended(!active);
     aiChatPanel.setFilePath(active ? currentFilePath : '');
   };
 
@@ -2780,6 +2796,7 @@ function initEditor() {
   return {
     executeCommand: (command: EasyViewEditorCommand) => executeCommandImpl(command),
     setOutlineVisible: (visible: boolean) => setOutlineVisibleImpl(visible),
+    setAiChatVisible: (visible: boolean) => setAiChatVisibleImpl(visible),
     getUiState,
     subscribeUiState: (listener: (state: EasyViewEditorUiState) => void) => {
       uiStateListeners.add(listener);
@@ -2870,6 +2887,7 @@ function initEditor() {
   return {
     executeCommand: (command: EasyViewEditorCommand) => executeCommandImpl(command),
     setOutlineVisible: (visible: boolean) => setOutlineVisibleImpl(visible),
+    setAiChatVisible: (visible: boolean) => setAiChatVisibleImpl(visible),
     getUiState,
     subscribeUiState: (listener: (state: EasyViewEditorUiState) => void) => {
       uiStateListeners.add(listener);

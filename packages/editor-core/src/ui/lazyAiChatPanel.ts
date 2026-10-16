@@ -13,6 +13,7 @@ export function createLazyAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
   let loadPromise: Promise<AiChatPanel | undefined> | undefined;
   let desiredOpen = false;
   let documentContextAvailable = true;
+  let suspended = false;
   let filePath = '';
   let disposed = false;
 
@@ -23,6 +24,7 @@ export function createLazyAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         if (disposed) return undefined;
         panel = createAiChatPanel(deps);
         panel.setDocumentContextAvailable(documentContextAvailable);
+        panel.setSuspended(suspended);
         panel.setFilePath(filePath);
         if (desiredOpen) panel.open();
         return panel;
@@ -70,6 +72,10 @@ export function createLazyAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
     setDocumentContextAvailable(available: boolean): void {
       documentContextAvailable = available;
       panel?.setDocumentContextAvailable(available);
+    },
+    setSuspended(next: boolean): void {
+      suspended = next;
+      panel?.setSuspended(next);
     },
     handleMessage(message: HostToEditorMessage): boolean {
       if (panel) return panel.handleMessage(message);

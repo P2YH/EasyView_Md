@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { VersionGuardService, guardDiagnostics } from '../src/git/version-guard';
-import type { GuardComparison, GuardFile, GuardHistory } from '@easyview/contracts';
+import type { GuardBranch, GuardComparison, GuardFile, GuardHistory } from '@easyview/contracts';
 const temps: string[] = []; const services: VersionGuardService[] = [];
 afterEach(async () => { services.splice(0).forEach(service => service.dispose()); await Promise.all(temps.splice(0).map(dir => rm(dir, { recursive: true, force: true }))); });
 const git = (root: string, ...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim();
@@ -57,6 +57,19 @@ it('fetches and pushes the configured upstream and never performs a background n
   expect((await service.status(await service.repository(repo))).ahead).toBe(0); await service.handle({ method: 'fetch', repository: repo }); expect((await service.status(await service.repository(repo))).checkedAt).toBeTypeOf('number');
   const commands = guardDiagnostics.commands; await new Promise(resolve => setTimeout(resolve, 100)); expect(guardDiagnostics.commands).toBe(commands); expect(guardDiagnostics.peak).toBeLessThanOrEqual(2);
 });
+it('stages every change before committing when nothing is staged and stageAll is requested', async () => {
+  const { repo, service } = await fixture();
+  await writeFile(path.join(repo, 'kept'), 'one'); await writeFile(path.join(repo, 'gone'), 'x'); git(repo, 'add', '.'); git(repo, 'commit', '-qm', 'base');
+  await writeFile(path.join(repo, 'kept'), 'two'); await writeFile(path.join(repo, 'new file.md'), 'new'); await rm(path.join(repo, 'gone'));
+  await service.discover();
+  await expect(service.handle({ method: 'commit', repository: repo, message: 'nothing staged' })).rejects.toThrow('No staged changes');
+  await service.handle({ method: 'commit', repository: repo, message: 'all', stageAll: true });
+  expect(git(repo, 'status', '--porcelain')).toBe('');
+  expect(git(repo, 'ls-tree', '--name-only', 'HEAD').split('\n').sort()).toEqual(['kept', 'new file.md']);
+  await writeFile(path.join(repo, 'kept'), 'three'); await writeFile(path.join(repo, 'new file.md'), 'changed'); git(repo, 'add', 'kept');
+  await service.handle({ method: 'commit', repository: repo, message: 'staged only', stageAll: true });
+  expect(git(repo, 'status', '--porcelain')).toBe('M "new file.md"');
+});
 async function diverged() {
   const { root, repo, service } = await fixture(); const remote = path.join(root, 'remote.git'); git(root, 'init', '--bare', '-q', remote);
   await writeFile(path.join(repo, 'file'), 'base\n'); git(repo, 'add', '.'); git(repo, 'commit', '-qm', 'base'); git(repo, 'remote', 'add', 'origin', remote); git(repo, 'push', '-qu', 'origin', 'HEAD');
@@ -65,6 +78,24 @@ async function diverged() {
   await service.discover();
   return { repo, other, service, commitIn, status: async () => service.status(await service.repository(repo)) };
 }
+it('lists local and remote branches and switches, tracks or creates branches', async () => {
+  const { repo, other, service, commitIn, status } = await diverged();
+  git(other, 'switch', '-qc', 'feature'); await commitIn(other, 'f.md', 'feature\n'); git(other, 'push', '-qu', 'origin', 'feature');
+  await service.handle({ method: 'fetch', repository: repo });
+  const branches = await service.handle({ method: 'branches', repository: repo }) as GuardBranch[];
+  const names = branches.map(branch => `${branch.remote ? 'r' : 'l'}:${branch.name}${branch.current ? '*' : ''}`);
+  const current = git(repo, 'branch', '--show-current');
+  expect(names).toContain(`l:${current}*`); expect(names).toContain('r:origin/feature'); expect(names.some(name => name.endsWith('/HEAD'))).toBe(false);
+  expect(branches.find(branch => branch.name === 'origin/feature')).toMatchObject({ subject: 'feature', author: 'Guard Test' });
+  await service.handle({ method: 'checkout', repository: repo, branch: 'origin/feature' });
+  expect(await status()).toMatchObject({ branch: 'feature', upstream: 'origin/feature' });
+  await service.handle({ method: 'checkout', repository: repo, branch: current });
+  expect((await status()).branch).toBe(current);
+  await service.handle({ method: 'checkout', repository: repo, branch: 'topic/new', create: true });
+  expect((await status()).branch).toBe('topic/new');
+  await expect(service.handle({ method: 'checkout', repository: repo, branch: 'bad name..', create: true })).rejects.toThrow('Invalid branch name');
+  await expect(service.handle({ method: 'checkout', repository: repo, branch: 'missing' })).rejects.toThrow('Unknown branch');
+});
 const isolatedConfig = () => { const previous = process.env.GIT_CONFIG_GLOBAL; process.env.GIT_CONFIG_GLOBAL = '/dev/null'; return () => { if (previous === undefined) delete process.env.GIT_CONFIG_GLOBAL; else process.env.GIT_CONFIG_GLOBAL = previous; }; };
 it('pulls remote commits and syncs diverged branches by merging, like VS Code', async () => {
   const restore = isolatedConfig();

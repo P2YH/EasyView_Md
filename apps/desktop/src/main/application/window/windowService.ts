@@ -238,7 +238,26 @@ export function createMenu(): void {
     Math.abs(step - menuState.themeDepth) < Math.abs(best - menuState.themeDepth) ? step : best);
   const recentFiles = getAppStateStore().getRecentFiles();
   const recentFolders = recentFolderStore().snapshot();
+  const isMac = process.platform === 'darwin';
+  const appItems: Electron.MenuItemConstructorOptions[] = [
+    { label: tMenu('file.restart'), click: inContext(() => { void restartApp(); }) },
+    { label: tMenu('file.newWindow'), click: () => { void createNewWindow(); } },
+  ];
   const template: Electron.MenuItemConstructorOptions[] = [
+    ...(isMac ? [{
+      label: app.name,
+      submenu: [
+        { role: 'about', label: tMenu('app.about') },
+        { type: 'separator' },
+        ...appItems,
+        { type: 'separator' },
+        { role: 'hide', label: tMenu('app.hide') },
+        { role: 'hideOthers', label: tMenu('app.hideOthers') },
+        { role: 'unhide', label: tMenu('app.showAll') },
+        { type: 'separator' },
+        { role: 'quit', label: tMenu('file.quit') },
+      ] satisfies Electron.MenuItemConstructorOptions[],
+    }] : []),
     {
       label: tMenu('file'),
       submenu: [
@@ -262,10 +281,11 @@ export function createMenu(): void {
         { label: tMenu('file.importPdf'), click: inContext(() => { void importDocument(['pdf'], tMenu('file.pdfFilter')); }) },
         { label: tMenu('file.save'), accelerator: 'CmdOrCtrl+S', enabled: menuState.hasActiveDocument, click: inContext(() => { void saveFromMenu(false); }) },
         { label: tMenu('file.saveAs'), accelerator: 'CmdOrCtrl+Shift+S', enabled: menuState.hasActiveDocument, click: inContext(() => { void saveFromMenu(true); }) },
-        { type: 'separator' },
-        { label: tMenu('file.restart'), click: inContext(() => { void restartApp(); }) },
-        { label: tMenu('file.newWindow'), click: () => { void createNewWindow(); } },
-        { role: 'quit', label: tMenu('file.quit') },
+        ...(isMac ? [] : [
+          { type: 'separator' as const },
+          ...appItems,
+          { role: 'quit' as const, label: tMenu('file.quit') },
+        ]),
       ],
     },
     {

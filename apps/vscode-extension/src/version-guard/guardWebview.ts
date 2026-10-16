@@ -7,7 +7,7 @@ let sequence = 0;
 const pending = new Map<number, { resolve(value: unknown): void; reject(error: Error): void }>();
 const listeners = new Set<(paths: string[] | null) => void>();
 const discoveries = new Set<(repositories: GuardRepository[], warnings: string[]) => void>();
-const panel = new VersionGuardPanel({ client: {
+const panel = new VersionGuardPanel({ header: false, onExpandStateChange: allExpanded => api.postMessage({ type: 'guard.expandState', allExpanded }), client: {
   onDiscovery: listener => { discoveries.add(listener); return { dispose: () => discoveries.delete(listener) }; },
   request: (request: GuardRequest) => new Promise((resolve, reject) => { const id = ++sequence; pending.set(id, { resolve, reject }); api.postMessage({ type: 'guard.request', id, request }); }),
   subscribe: listener => { listeners.add(listener); return { dispose: () => listeners.delete(listener) }; },
@@ -21,6 +21,9 @@ window.addEventListener('message', event => {
   else if (message.type === 'guard.changed') listeners.forEach(listener => listener(message.paths));
   else if (message.type === 'guard.visible') panel.setVisible(message.visible);
   else if (message.type === 'guard.reset') panel.reset();
+  else if (message.type === 'guard.refresh') panel.refreshRepositories();
+  else if (message.type === 'guard.expandAll') panel.expandAll();
+  else if (message.type === 'guard.collapseAll') panel.collapseAll();
 });
 window.addEventListener('pagehide', () => { panel.dispose(); for (const waiter of pending.values()) waiter.reject(new Error('Version Guard closed.')); pending.clear(); });
 api.postMessage({ type: 'guard.ready' });

@@ -1,5 +1,18 @@
-import { WorkspaceSearchPanel, WORKSPACE_SEARCH_ICON_SVG, maxPanelWidth } from '@easyview/editor-core/workspace';
-import type { DesktopPanelLayout, DesktopWorkspaceState, WorkspaceEntry, WorkspaceTreeSortMode } from '../../contracts';
+import {
+  WorkspaceSearchPanel,
+  WORKSPACE_SEARCH_ICON_SVG,
+  maxPanelWidth,
+  openWorkspaceSettingsDialog,
+  type WorkspaceSettingsDialogHandle,
+  type WorkspaceSettingsValues,
+} from '@easyview/editor-core/workspace';
+import type {
+  DesktopExplorerDisplayMode,
+  DesktopPanelLayout,
+  DesktopWorkspaceState,
+  WorkspaceEntry,
+  WorkspaceTreeSortMode,
+} from '../../contracts';
 import { DOCK_GRIP_ICON_SVG } from '../panelDock';
 import type { EasyViewDesktopApi } from '../../preload/desktopApi';
 import {
@@ -20,17 +33,22 @@ import {
   resolveWorkspaceTreeIcon,
   type WorkspaceTreeDropTarget,
   workspaceEntryNameSelectionRange,
-  workspaceTreeSortModeLabel,
-  WORKSPACE_TREE_SORT_MODE_ICONS as SORT_MODE_ICONS,
-  workspaceTreeMenuIconSvg,
-  type WorkspaceTreeMenuIconId,
+  clampWorkspaceFontSizeOffset,
 } from '@easyview/contracts';
 import { tExplorer } from './workspaceExplorer.i18n';
 
 const WORKSPACE_SETTINGS_ICON_SVG = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="2"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.13 1.13M11.47 11.47l1.13 1.13M3.4 12.6l1.13-1.13M11.47 4.53l1.13-1.13"/><circle cx="8" cy="8" r="4.6"/></svg>';
 const WORKSPACE_NEW_FILE_ICON_SVG = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M8 2.5v11M2.5 8h11"/></svg>';
-const WORKSPACE_NEW_FOLDER_ICON_SVG = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><rect x="5.5" y="5.5" width="5" height="5" fill="currentColor" stroke="none"/></svg>';
+const WORKSPACE_NEW_FOLDER_ICON_SVG = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.75 4.25a1 1 0 0 1 1-1h3.1l1.4 1.5h5.98a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1H2.75a1 1 0 0 1-1-1z"/><path d="M8 7.4v3.7M6.15 9.25h3.7"/></svg>';
 const WORKSPACE_REFRESH_ICON_SVG = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.46-3.54"/><path d="M11.8 1.8v2.9H8.9"/></svg>';
+
+const FONT_SIZE_OFFSET_KEY = 'easyview.workspace.fontSizeOffset';
+/** Must match the base `--workspace-font-size` in desktop.css. */
+const DESKTOP_TREE_FONT_SIZE = 16;
+
+function readFontSizeOffset(): number {
+  try { return clampWorkspaceFontSizeOffset(Number(localStorage.getItem(FONT_SIZE_OFFSET_KEY))); } catch { return 0; }
+}
 
 interface WorkspaceExplorerOptions {
   footer?: HTMLElement;
@@ -42,6 +60,8 @@ interface WorkspaceExplorerOptions {
   onOpenWithDefaultApp(relativePath: string): void;
   onRevealInFolder(relativePath: string): void;
 }
+
+const FOLDER_TREE_ICON_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 1.75v9a1.25 1.25 0 0 0 1.25 1.25H7.5M2.5 3.25a1.25 1.25 0 0 0 1.25 1.25H7.5"/><path d="M8.5 1.75h1.6l1 1.1h2.15a1 1 0 0 1 1 1v2.4a1 1 0 0 1-1 1H8.5a1 1 0 0 1-1-1v-3.5a1 1 0 0 1 1-1z"/><path d="M8.5 9.25h1.6l1 1.1h2.15a1 1 0 0 1 1 1v2.4a1 1 0 0 1-1 1H8.5a1 1 0 0 1-1-1v-3.5a1 1 0 0 1 1-1z"/></svg>';
 
 export class WorkspaceExplorer {
   private state: DesktopWorkspaceState | null = null;
@@ -61,7 +81,8 @@ export class WorkspaceExplorer {
   private showUpdatedAt = false;
   private showDotEntries = true;
   private showTimestampHover = true;
-  private sortMenuOpen = false;
+  private settingsDialog: WorkspaceSettingsDialogHandle | null = null;
+  private fontSizeOffset = readFontSizeOffset();
   private searchOpen = false;
   private searchPanel: WorkspaceSearchPanel | null = null;
   private timestampTooltipEl: HTMLElement | null = null;
@@ -71,6 +92,19 @@ export class WorkspaceExplorer {
   private dropIntent: { targetRelativePath: string; target: WorkspaceTreeDropTarget } | null = null;
 
   constructor(private readonly options: WorkspaceExplorerOptions) {}
+
+  private get displayMode(): DesktopExplorerDisplayMode {
+    return this.state?.explorerDisplayMode ?? 'list';
+  }
+
+  private get iconDirectory(): string {
+    return this.state?.explorerIconDirectory ?? '';
+  }
+
+  /** Folder that root-level actions (new file, paste, external drop) target in the current view. */
+  private get currentDirectory(): string {
+    return this.displayMode === 'icons' ? this.iconDirectory : '';
+  }
 
   async initialize(): Promise<DesktopWorkspaceState> {
     const result = await this.options.api.workspace.getState();
@@ -94,11 +128,13 @@ export class WorkspaceExplorer {
     if (this.state.rootPath) {
       await this.loadSortMode();
       await this.loadDirectory('');
+      if (this.currentDirectory) await this.loadDirectory(this.currentDirectory);
     }
     return this.state;
   }
 
   dispose(): void {
+    this.settingsDialog?.close();
     for (const subscription of this.subscriptions) subscription.unsubscribe();
     this.options.container.removeEventListener('keydown', this.handleKeyDown);
     this.options.container.removeEventListener('dragover', this.handleContainerDragOver);
@@ -152,6 +188,7 @@ export class WorkspaceExplorer {
     this.options.onStateChange(next);
     await this.loadSortMode();
     await this.loadDirectory('');
+    if (this.currentDirectory) await this.loadDirectory(this.currentDirectory);
   }
 
   setOutlineVisible(visible: boolean): void {
@@ -161,6 +198,10 @@ export class WorkspaceExplorer {
   /** Panel layout rides on the explorer's state so its whole-state saves never overwrite it. */
   setVersionGuardState(visible: boolean, width: number): void {
     this.updateState({ versionGuardVisible: visible, versionGuardWidth: width });
+  }
+
+  setAiChatVisible(visible: boolean): void {
+    if (this.state && (this.state.aiChatVisible === true) !== visible) this.updateState({ aiChatVisible: visible });
   }
 
   setPanelLayout(layout: DesktopPanelLayout): void {
@@ -180,7 +221,9 @@ export class WorkspaceExplorer {
     this.activeRelativePath = relativePath;
     // Switching the active tab resumes follow-mode (default lock to the visible tab).
     this.selectionFollowsActive = true;
-    if (relativePath) {
+    if (relativePath && this.displayMode === 'icons') {
+      void this.showInIconDirectory(relativePath);
+    } else if (relativePath) {
       this.select(relativePath);
       const expanded = new Set(this.state.expandedRelativePaths);
       const segments = relativePath.split('/');
@@ -201,6 +244,12 @@ export class WorkspaceExplorer {
   /** Reveal in IndexArea: open the panel, expand parents, select and scroll to the node. */
   async revealRelativePath(relativePath: string): Promise<void> {
     if (!this.state?.rootPath) return;
+    if (this.displayMode === 'icons') {
+      if (!this.state.explorerVisible) this.updateState({ explorerVisible: true });
+      this.selectionFollowsActive = true;
+      await this.showInIconDirectory(relativePath);
+      return;
+    }
     const expanded = new Set(this.state.expandedRelativePaths);
     const segments = relativePath.split('/');
     segments.pop();
@@ -240,7 +289,7 @@ export class WorkspaceExplorer {
       return;
     }
     if (action === 'paste') {
-      void this.pasteEntry(this.selectedRelativePath ?? '');
+      void this.pasteEntry(this.selectedRelativePath ?? this.currentDirectory);
       return;
     }
     if (action === 'delete') void this.deleteEntries([...this.selectedRelativePaths]);
@@ -257,7 +306,10 @@ export class WorkspaceExplorer {
   private async loadDirectory(relativePath: string): Promise<void> {
     if (!this.state?.rootPath) return;
     const result = await this.options.api.workspace.readDirectory(relativePath);
-    if (!result.ok) return;
+    if (!result.ok) {
+      if (relativePath && relativePath === this.currentDirectory) await this.navigateIconDirectory(parentRelativePath(relativePath));
+      return;
+    }
     this.entriesByDirectory.set(relativePath, result.value);
     this.render();
   }
@@ -270,14 +322,15 @@ export class WorkspaceExplorer {
       await this.refreshExpanded();
       return;
     }
-    const expanded = new Set(['', ...this.state.expandedRelativePaths]);
+    const expanded = new Set(['', this.currentDirectory, ...this.state.expandedRelativePaths]);
     const targets = [...new Set(relativeDirectories.map(normalizeRelativePath))].filter((value) => expanded.has(value));
     await Promise.all(targets.map((relativePath) => this.loadDirectory(relativePath)));
   }
 
   private async refreshExpanded(): Promise<void> {
     if (!this.state?.rootPath) return;
-    await Promise.all(['', ...this.state.expandedRelativePaths].map((relativePath) => this.loadDirectory(relativePath)));
+    const directories = new Set(['', this.currentDirectory, ...this.state.expandedRelativePaths]);
+    await Promise.all([...directories].map((relativePath) => this.loadDirectory(relativePath)));
   }
 
   private toggleDirectory(relativePath: string): void {
@@ -310,6 +363,10 @@ export class WorkspaceExplorer {
   }
 
   private visibleRelativePaths(): string[] {
+    if (this.displayMode === 'icons') {
+      return filterWorkspaceEntriesByDotVisibility(this.entriesByDirectory.get(this.iconDirectory) ?? [], this.showDotEntries)
+        .map((entry) => entry.relativePath);
+    }
     const expanded = new Set(this.state?.expandedRelativePaths ?? []);
     return collectVisibleWorkspaceTreeRelativePaths(this.entriesByDirectory, (path) => expanded.has(path));
   }
@@ -344,6 +401,7 @@ export class WorkspaceExplorer {
     this.dropIndicator = null;
     this.hideTimestampTooltip();
     container.classList.toggle('is-hidden', !state?.explorerVisible);
+    document.documentElement.style.setProperty('--workspace-font-offset', `${this.fontSizeOffset}px`);
     if (state) container.style.width = `${state.explorerWidth}px`;
     const searchFocused = this.searchPanel?.hasFocus() ?? false;
     container.replaceChildren();
@@ -363,8 +421,17 @@ export class WorkspaceExplorer {
     grip.title = tExplorer('dragToDock');
     grip.innerHTML = DOCK_GRIP_ICON_SVG;
     header.appendChild(grip);
+    const panelIcon = document.createElement('span');
+    panelIcon.className = 'workspace-header-icon';
+    panelIcon.title = tExplorer('panelTitle');
+    panelIcon.setAttribute('role', 'img');
+    panelIcon.setAttribute('aria-label', tExplorer('panelTitle'));
+    panelIcon.innerHTML = FOLDER_TREE_ICON_SVG;
+    header.appendChild(panelIcon);
     const title = document.createElement('span');
+    title.className = 'workspace-header-title';
     title.textContent = state.rootPath.split(/[\\/]/).at(-1) || state.rootPath;
+    title.title = state.rootPath;
     header.appendChild(title);
     const searchButton = document.createElement('button');
     searchButton.type = 'button';
@@ -382,20 +449,19 @@ export class WorkspaceExplorer {
     const settingsButton = document.createElement('button');
     settingsButton.type = 'button';
     settingsButton.className = 'workspace-action workspace-settings-toggle';
-    settingsButton.classList.toggle('is-active', this.sortMenuOpen);
+    settingsButton.classList.toggle('is-active', this.settingsDialog !== null);
     settingsButton.title = tExplorer('settings');
-    settingsButton.setAttribute('aria-haspopup', 'menu');
-    settingsButton.setAttribute('aria-expanded', String(this.sortMenuOpen));
+    settingsButton.setAttribute('aria-haspopup', 'dialog');
+    settingsButton.setAttribute('aria-expanded', String(this.settingsDialog !== null));
     settingsButton.innerHTML = WORKSPACE_SETTINGS_ICON_SVG;
     settingsButton.addEventListener('click', (event) => {
       event.stopPropagation();
-      this.sortMenuOpen = !this.sortMenuOpen;
-      this.render();
+      if (this.settingsDialog) this.settingsDialog.close();
+      else this.openSettings();
     });
-    header.appendChild(settingsButton);
     for (const [iconSvg, titleText, action] of [
-      [WORKSPACE_NEW_FILE_ICON_SVG, tExplorer('newFile'), () => this.beginCreate('', 'file')],
-      [WORKSPACE_NEW_FOLDER_ICON_SVG, tExplorer('newFolder'), () => this.beginCreate('', 'directory')],
+      [WORKSPACE_NEW_FILE_ICON_SVG, tExplorer('newFile'), () => this.beginCreate(this.currentDirectory, 'file')],
+      [WORKSPACE_NEW_FOLDER_ICON_SVG, tExplorer('newFolder'), () => this.beginCreate(this.currentDirectory, 'directory')],
       [WORKSPACE_REFRESH_ICON_SVG, tExplorer('refresh'), () => { this.entriesByDirectory.clear(); void this.refreshExpanded(); }],
     ] as const) {
       const button = document.createElement('button');
@@ -407,58 +473,8 @@ export class WorkspaceExplorer {
       });
       header.appendChild(button);
     }
+    header.appendChild(settingsButton);
     container.appendChild(header);
-
-    if (this.sortMenuOpen) {
-      const menu = document.createElement('div');
-      menu.className = 'workspace-sort-menu';
-      const appendToggle = (iconId: WorkspaceTreeMenuIconId, text: string, checked: boolean, onClick: () => void) => {
-        const item = document.createElement('button');
-        item.type = 'button';
-        item.className = 'workspace-sort-menu-item';
-        item.setAttribute('role', 'menuitemcheckbox');
-        item.setAttribute('aria-checked', String(checked));
-        const icon = document.createElement('span');
-        icon.className = 'workspace-menu-item-icon';
-        icon.innerHTML = workspaceTreeMenuIconSvg(iconId);
-        item.appendChild(icon);
-        const label = document.createElement('span');
-        label.className = 'workspace-menu-item-label';
-        label.textContent = text;
-        item.appendChild(label);
-        const check = document.createElement('span');
-        check.className = 'workspace-menu-item-check';
-        check.setAttribute('aria-hidden', 'true');
-        check.textContent = checked ? '✓' : '';
-        item.appendChild(check);
-        item.addEventListener('click', onClick);
-        menu.appendChild(item);
-      };
-      for (const mode of ['created', 'name', 'custom'] as const) {
-        appendToggle(SORT_MODE_ICONS[mode], workspaceTreeSortModeLabel(mode), this.sortMode === mode, () => {
-          void this.changeSortMode(mode);
-        });
-      }
-      const separator = document.createElement('div');
-      separator.className = 'workspace-sort-menu-separator';
-      menu.appendChild(separator);
-      appendToggle('showCreated', tExplorer('showCreatedTime'), this.showCreatedAt, () => {
-        void this.changeShowCreatedAt(!this.showCreatedAt);
-      });
-      appendToggle('showUpdated', tExplorer('showUpdatedTime'), this.showUpdatedAt, () => {
-        void this.changeShowUpdatedAt(!this.showUpdatedAt);
-      });
-      appendToggle('showTimeOnHover', tExplorer('showTimeOnHover'), this.showTimestampHover, () => {
-        void this.changeShowTimestampHover(!this.showTimestampHover);
-      });
-      const dotSeparator = document.createElement('div');
-      dotSeparator.className = 'workspace-sort-menu-separator';
-      menu.appendChild(dotSeparator);
-      appendToggle('showDotEntries', tExplorer('showDotEntries'), this.showDotEntries, () => {
-        void this.changeShowDotEntries(!this.showDotEntries);
-      });
-      container.appendChild(menu);
-    }
 
     if (this.searchOpen && this.searchPanel) {
       container.appendChild(this.searchPanel.element);
@@ -471,10 +487,16 @@ export class WorkspaceExplorer {
 
     const tree = document.createElement('div');
     tree.className = 'workspace-tree';
-    tree.setAttribute('role', 'tree');
-    tree.appendChild(this.renderDirectory('', 0));
+    if (this.displayMode === 'icons') {
+      tree.classList.add('workspace-icon-view');
+      tree.appendChild(this.renderIconDirectory());
+    } else {
+      tree.setAttribute('role', 'tree');
+      tree.appendChild(this.renderDirectory('', 0));
+    }
     tree.addEventListener('click', (event) => {
-      if (event.target instanceof Element && event.target.closest('.workspace-entry, .workspace-create-row')) return;
+      if (event.target instanceof Element
+        && event.target.closest('.workspace-entry, .workspace-create-row, .workspace-icon-tile, .workspace-icon-navigation')) return;
       this.selectionFollowsActive = false;
       this.options.container.focus({ preventScroll: true });
       if (this.selectedRelativePaths.size === 0 && this.selectedRelativePath === null) return;
@@ -487,6 +509,44 @@ export class WorkspaceExplorer {
     tree.scrollTop = previousScrollTop;
     tree.scrollLeft = previousScrollLeft;
     this.appendResizer(container);
+  }
+
+  private openSettings(): void {
+    if (this.settingsDialog || !this.state?.rootPath) return;
+    this.settingsDialog = openWorkspaceSettingsDialog({
+      values: {
+        displayMode: this.displayMode,
+        sortMode: this.sortMode,
+        showCreatedAt: this.showCreatedAt,
+        showUpdatedAt: this.showUpdatedAt,
+        showTimestampHover: this.showTimestampHover,
+        showDotEntries: this.showDotEntries,
+        fontSizeOffset: this.fontSizeOffset,
+      },
+      baseFontSize: DESKTOP_TREE_FONT_SIZE,
+      onSave: (values) => { void this.applySettings(values); },
+      onClose: () => {
+        this.settingsDialog = null;
+        this.render();
+      },
+    });
+    this.render();
+  }
+
+  private async applySettings(values: WorkspaceSettingsValues): Promise<void> {
+    if (values.fontSizeOffset !== this.fontSizeOffset) this.changeFontSizeOffset(values.fontSizeOffset);
+    if (values.showCreatedAt !== this.showCreatedAt) await this.changeShowCreatedAt(values.showCreatedAt);
+    if (values.showUpdatedAt !== this.showUpdatedAt) await this.changeShowUpdatedAt(values.showUpdatedAt);
+    if (values.showTimestampHover !== this.showTimestampHover) await this.changeShowTimestampHover(values.showTimestampHover);
+    if (values.showDotEntries !== this.showDotEntries) await this.changeShowDotEntries(values.showDotEntries);
+    if (values.sortMode !== this.sortMode) await this.changeSortMode(values.sortMode);
+    if (values.displayMode !== this.displayMode) await this.changeDisplayMode(values.displayMode);
+  }
+
+  private changeFontSizeOffset(offset: number): void {
+    this.fontSizeOffset = clampWorkspaceFontSizeOffset(offset);
+    try { localStorage.setItem(FONT_SIZE_OFFSET_KEY, String(this.fontSizeOffset)); } catch { /* storage unavailable */ }
+    this.render();
   }
 
   private appendResizer(container: HTMLElement): void {
@@ -507,7 +567,7 @@ export class WorkspaceExplorer {
       onClose: () => this.closeSearch(),
       onQueryActiveChange: () => this.render(),
     });
-    this.sortMenuOpen = false;
+    this.settingsDialog?.close();
     if (!this.state.explorerVisible) this.updateState({ explorerVisible: true });
     this.searchOpen = true;
     this.render();
@@ -526,6 +586,10 @@ export class WorkspaceExplorer {
   private async openSearchResult(entry: WorkspaceEntry): Promise<void> {
     if (entry.kind === 'directory') {
       this.closeSearch();
+      if (this.displayMode === 'icons') {
+        await this.navigateIconDirectory(entry.relativePath);
+        return;
+      }
       await this.revealRelativePath(entry.relativePath);
       if (!this.state?.expandedRelativePaths.includes(entry.relativePath)) this.toggleDirectory(entry.relativePath);
       return;
@@ -534,6 +598,212 @@ export class WorkspaceExplorer {
     if (!opened) return;
     this.selectionFollowsActive = true;
     this.setActiveRelativePath(entry.relativePath);
+  }
+
+  private async changeDisplayMode(mode: DesktopExplorerDisplayMode): Promise<void> {
+    if (!this.state || mode === this.displayMode) {
+      this.render();
+      return;
+    }
+    if (mode === 'icons') {
+      const directory = this.selectedDirectory();
+      if (this.selectedRelativePath && parentRelativePath(this.selectedRelativePath) !== directory) this.clearSelection();
+      this.updateState({ explorerDisplayMode: 'icons', explorerIconDirectory: directory });
+      await this.loadDirectory(directory);
+      return;
+    }
+    const expanded = new Set(this.state.expandedRelativePaths);
+    const segments = this.iconDirectory.split('/').filter(Boolean);
+    for (let index = 1; index <= segments.length; index += 1) expanded.add(segments.slice(0, index).join('/'));
+    this.updateState({ explorerDisplayMode: 'list', expandedRelativePaths: [...expanded] });
+    await this.refreshExpanded();
+  }
+
+  /** The selected folder, or the folder holding the selected file. */
+  private selectedDirectory(): string {
+    const selected = this.selectedRelativePath;
+    if (!selected) return '';
+    const parent = parentRelativePath(selected);
+    const entry = this.entriesByDirectory.get(parent)?.find((item) => item.relativePath === selected);
+    return entry?.kind === 'directory' ? selected : parent;
+  }
+
+  private clearSelection(): void {
+    this.selectedRelativePath = null;
+    this.selectedRelativePaths.clear();
+    this.selectionAnchorRelativePath = null;
+  }
+
+  private async navigateIconDirectory(relativePath: string): Promise<void> {
+    const tree = this.options.container.querySelector<HTMLElement>('.workspace-tree');
+    if (tree) tree.scrollTop = 0;
+    this.clearSelection();
+    this.pendingCreate = null;
+    this.renameRelativePath = null;
+    this.updateState({ explorerIconDirectory: normalizeRelativePath(relativePath) });
+    await this.loadDirectory(this.iconDirectory);
+  }
+
+  private async showInIconDirectory(relativePath: string): Promise<void> {
+    const directory = parentRelativePath(relativePath);
+    if (directory !== this.iconDirectory) this.updateState({ explorerIconDirectory: directory });
+    await this.loadDirectory(directory);
+    this.select(relativePath);
+    [...this.options.container.querySelectorAll<HTMLElement>('.workspace-icon-tile')]
+      .find((tile) => tile.dataset.relativePath === relativePath)
+      ?.scrollIntoView({ block: 'nearest' });
+  }
+
+  private renderIconDirectory(): HTMLElement {
+    const content = document.createElement('div');
+    content.className = 'workspace-icon-content';
+    const navigation = document.createElement('div');
+    navigation.className = 'workspace-icon-navigation';
+    const back = document.createElement('button');
+    back.type = 'button';
+    back.className = 'workspace-icon-back';
+    back.textContent = '‹';
+    back.title = tExplorer('iconsBack');
+    back.setAttribute('aria-label', back.title);
+    back.disabled = this.iconDirectory === '';
+    back.addEventListener('click', () => { void this.navigateIconDirectory(parentRelativePath(this.iconDirectory)); });
+    const rootName = this.state?.rootPath?.split(/[\\/]/).at(-1) || tExplorer('iconsRootFallback');
+    const pathLabel = document.createElement('span');
+    pathLabel.className = 'workspace-icon-path';
+    pathLabel.textContent = this.iconDirectory.split('/').at(-1) || rootName;
+    pathLabel.title = this.iconDirectory || rootName;
+    navigation.append(back, pathLabel);
+    content.appendChild(navigation);
+
+    const grid = document.createElement('div');
+    grid.className = 'workspace-icon-grid';
+    grid.setAttribute('role', 'grid');
+    grid.setAttribute('aria-label', tExplorer('iconsGridLabel', { name: pathLabel.textContent }));
+    const entries = filterWorkspaceEntriesByDotVisibility(
+      this.entriesByDirectory.get(this.iconDirectory) ?? [],
+      this.showDotEntries,
+    );
+    if (entries.length === 0 && !this.pendingCreate) {
+      const empty = document.createElement('p');
+      empty.className = 'workspace-icon-empty';
+      empty.textContent = tExplorer('iconsEmptyFolder');
+      grid.appendChild(empty);
+    }
+    for (const entry of entries) grid.appendChild(this.renderIconTile(entry));
+    if (this.pendingCreate?.parentRelativePath === this.iconDirectory) {
+      const create = this.renderCreateInput(0);
+      create.style.paddingInlineStart = '';
+      grid.appendChild(create);
+    }
+    grid.addEventListener('dragover', (event) => {
+      if (this.dragRelativePath && parentRelativePath(this.dragRelativePath) === this.iconDirectory) {
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+      }
+    });
+    grid.addEventListener('drop', (event) => {
+      if (!this.dragRelativePath || parentRelativePath(this.dragRelativePath) !== this.iconDirectory) return;
+      if (event.target instanceof Element && event.target.closest('.workspace-icon-tile')) return;
+      event.preventDefault();
+      event.stopPropagation();
+      void this.reorderBefore(this.iconDirectory, this.dragRelativePath.split('/').at(-1)!, undefined);
+    });
+    content.appendChild(grid);
+    return content;
+  }
+
+  private renderIconTile(entry: WorkspaceEntry): HTMLElement {
+    const tile = document.createElement('div');
+    tile.className = 'workspace-icon-tile';
+    tile.dataset.relativePath = entry.relativePath;
+    tile.dataset.kind = entry.kind;
+    tile.tabIndex = 0;
+    tile.setAttribute('role', 'gridcell');
+    const selected = this.selectedRelativePaths.has(entry.relativePath);
+    tile.setAttribute('aria-selected', String(selected));
+    tile.classList.toggle('selected', selected);
+    tile.classList.toggle('active', entry.relativePath === this.activeRelativePath);
+    const icon = document.createElement('span');
+    icon.className = entry.kind === 'directory' ? 'workspace-icon-large is-folder' : 'workspace-icon-large';
+    if (entry.kind !== 'directory') {
+      const descriptor = resolveWorkspaceTreeIcon({ kind: entry.kind, name: entry.name });
+      icon.dataset.icon = descriptor.id;
+      icon.innerHTML = descriptor.svg;
+    }
+    tile.appendChild(icon);
+    if (this.renameRelativePath === entry.relativePath) tile.appendChild(this.renderRenameInput(entry));
+    else {
+      const label = document.createElement('span');
+      label.className = 'workspace-icon-label';
+      label.textContent = entry.name;
+      label.title = entry.name;
+      tile.appendChild(label);
+    }
+    this.appendEntryTimestamps(tile, entry);
+    tile.addEventListener('click', (event) => {
+      this.selectionFollowsActive = false;
+      this.select(entry.relativePath, { shiftKey: event.shiftKey, metaKey: event.metaKey, ctrlKey: event.ctrlKey });
+    });
+    tile.addEventListener('dblclick', (event) => {
+      event.preventDefault();
+      if (entry.kind === 'directory') {
+        void this.navigateIconDirectory(entry.relativePath);
+        return;
+      }
+      void this.options.onOpenFile(entry.relativePath).then((opened) => {
+        if (!opened) return;
+        this.selectionFollowsActive = true;
+        this.setActiveRelativePath(entry.relativePath);
+      });
+    });
+    tile.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+      this.selectionFollowsActive = false;
+      if (!this.selectedRelativePaths.has(entry.relativePath)) this.select(entry.relativePath);
+      void this.options.api.workspace.showContextMenu(entry.relativePath, entry.kind);
+    });
+    this.attachIconDragHandlers(tile, entry);
+    return tile;
+  }
+
+  private attachIconDragHandlers(tile: HTMLElement, entry: WorkspaceEntry): void {
+    const clearMarkers = () => {
+      this.options.container.querySelectorAll('.workspace-icon-tile')
+        .forEach((item) => item.classList.remove('is-drop-before', 'is-drop-after'));
+    };
+    const reorderable = () => Boolean(this.dragRelativePath)
+      && this.dragRelativePath !== entry.relativePath
+      && parentRelativePath(this.dragRelativePath!) === this.iconDirectory;
+    tile.draggable = true;
+    tile.addEventListener('dragstart', (event) => {
+      this.dragRelativePath = entry.relativePath;
+      event.dataTransfer?.setData('text/plain', entry.relativePath);
+      if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+      tile.classList.add('is-dragging');
+    });
+    tile.addEventListener('dragend', () => {
+      this.dragRelativePath = null;
+      tile.classList.remove('is-dragging');
+      clearMarkers();
+    });
+    tile.addEventListener('dragover', (event) => {
+      if (!reorderable()) return;
+      event.preventDefault();
+      event.stopPropagation();
+      clearMarkers();
+      const rect = tile.getBoundingClientRect();
+      tile.classList.add(event.clientX < rect.left + rect.width / 2 ? 'is-drop-before' : 'is-drop-after');
+    });
+    tile.addEventListener('drop', (event) => {
+      if (!reorderable()) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const siblings = (this.entriesByDirectory.get(this.iconDirectory) ?? []).map((item) => item.name);
+      const targetIndex = siblings.indexOf(entry.name);
+      const beforeName = tile.classList.contains('is-drop-after') ? siblings[targetIndex + 1] : entry.name;
+      clearMarkers();
+      void this.reorderBefore(this.iconDirectory, this.dragRelativePath!.split('/').at(-1)!, beforeName);
+    });
   }
 
   private renderDirectory(relativePath: string, depth: number): DocumentFragment {
@@ -798,7 +1068,6 @@ export class WorkspaceExplorer {
   }
 
   private async changeSortMode(sortMode: WorkspaceTreeSortMode): Promise<void> {
-    this.sortMenuOpen = false;
     if (sortMode === this.sortMode) {
       this.render();
       return;
@@ -815,7 +1084,6 @@ export class WorkspaceExplorer {
   }
 
   private async changeShowCreatedAt(showCreatedAt: boolean): Promise<void> {
-    this.sortMenuOpen = false;
     const result = await this.options.api.workspace.setShowCreatedAt(showCreatedAt);
     if (!result.ok) {
       window.alert(result.message);
@@ -827,7 +1095,6 @@ export class WorkspaceExplorer {
   }
 
   private async changeShowUpdatedAt(showUpdatedAt: boolean): Promise<void> {
-    this.sortMenuOpen = false;
     const result = await this.options.api.workspace.setShowUpdatedAt(showUpdatedAt);
     if (!result.ok) {
       window.alert(result.message);
@@ -839,7 +1106,6 @@ export class WorkspaceExplorer {
   }
 
   private async changeShowTimestampHover(showTimestampHover: boolean): Promise<void> {
-    this.sortMenuOpen = false;
     this.hideTimestampTooltip();
     const result = await this.options.api.workspace.setShowTimestampHover(showTimestampHover);
     if (!result.ok) {
@@ -852,7 +1118,6 @@ export class WorkspaceExplorer {
   }
 
   private async changeShowDotEntries(showDotEntries: boolean): Promise<void> {
-    this.sortMenuOpen = false;
     const result = await this.options.api.workspace.setShowDotEntries(showDotEntries);
     if (!result.ok) {
       window.alert(result.message);
@@ -995,7 +1260,7 @@ export class WorkspaceExplorer {
     if (!isExternalWorkspaceFileDrag(event.dataTransfer, this.dragRelativePath !== null)) return;
     event.preventDefault();
     this.clearDropVisuals();
-    void this.importExternalDrop(event.dataTransfer, '');
+    void this.importExternalDrop(event.dataTransfer, this.currentDirectory);
   };
 
   private async importExternalDrop(dataTransfer: DataTransfer, targetParentRelativePath: string): Promise<void> {

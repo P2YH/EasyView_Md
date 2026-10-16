@@ -202,7 +202,10 @@ function normalizeWorkspaceState(value: unknown): DesktopWorkspaceState {
     expandedRelativePaths: Array.isArray(value.expandedRelativePaths)
       ? value.expandedRelativePaths.filter((item): item is string => typeof item === 'string')
       : [],
+    ...(value.explorerDisplayMode === 'icons' || value.explorerDisplayMode === 'list' ? { explorerDisplayMode: value.explorerDisplayMode } : {}),
+    ...(typeof value.explorerIconDirectory === 'string' ? { explorerIconDirectory: value.explorerIconDirectory } : {}),
     versionGuardVisible: value.versionGuardVisible === true,
+    ...(value.aiChatVisible === true ? { aiChatVisible: true } : {}),
     versionGuardWidth: typeof value.versionGuardWidth === 'number' ? Math.max(280, Math.min(8000, value.versionGuardWidth)) : 360,
     explorerVisible: typeof value.explorerVisible === 'boolean' ? value.explorerVisible : true,
     outlineVisible: typeof value.outlineVisible === 'boolean' ? value.outlineVisible : true,

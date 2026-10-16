@@ -14,6 +14,7 @@ import { applyAiTextPatches, DEFAULT_AI_CHAT_SETTINGS } from '@easyview/contract
 import { decorateRenderedMarkdown, renderAssistantMarkdown, renderStreamingMarkdown } from './aiChatMarkdown';
 import { tAiChat } from './aiChat.i18n';
 import { escapeHtml } from './escapeHtml';
+import { openSettingsDialog, settingsCheckbox, settingsFieldWithHint, type SettingsDialogHandle } from './SettingsDialog';
 import { maxPanelWidth, PANEL_WIDTH_SANITY_MAX } from '../runtime/panelWidth';
 
 const PANEL_WIDTH_STORAGE_KEY = 'easyview-ai-chat-width';
@@ -73,6 +74,8 @@ export interface AiChatPanel {
   isOpen: () => boolean;
   setFilePath: (filePath: string) => void;
   setDocumentContextAvailable: (available: boolean) => void;
+  /** Hides a docked panel while its document is in the background, without closing it or stopping a reply. */
+  setSuspended: (suspended: boolean) => void;
   handleMessage: (message: HostToEditorMessage) => boolean;
   destroy: () => void;
 }
@@ -104,6 +107,9 @@ function ensureAiChatPanelStyles(): void {
       margin-right: calc(-1 * var(--easyview-ai-chat-width, 360px));
       opacity: 0;
       pointer-events: none;
+    }
+    .ai-chat-panel.ai-chat-panel-docked.suspended {
+      display: none;
     }
     /* Desktop docks the panel in #desktop-ai-chat-host; collapse host width fully. */
     .ai-chat-panel.ai-chat-panel-docked.hidden {
@@ -138,15 +144,21 @@ function ensureAiChatPanelStyles(): void {
       border-bottom: 1px solid var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.2));
       flex-shrink: 0;
     }
-    .ai-chat-title {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--vscode-editor-foreground, #e5e7eb);
-      flex: 1;
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+    .ai-chat-panel-icon {
+      display: inline-flex;
+      flex: none;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      margin-right: auto;
+      opacity: 0.85;
+      cursor: default;
+    }
+    .ai-chat-panel-icon svg {
+      display: block;
+      width: 15px;
+      height: 15px;
     }
     .ai-chat-icon-btn {
       width: 24px;
@@ -292,7 +304,6 @@ function ensureAiChatPanelStyles(): void {
     }
     .ai-chat-bubble pre:hover .ai-chat-code-copy { opacity: 1; }
     .ai-chat-composer {
-      border-top: 1px solid var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.2));
       padding: 8px 10px;
       display: flex;
       flex-direction: column;
@@ -470,98 +481,6 @@ function ensureAiChatPanelStyles(): void {
     .ai-chat-send-btn.stop {
       background: rgba(248, 113, 113, 0.9);
     }
-    .ai-chat-settings-view {
-      display: none;
-      position: absolute;
-      inset: 0;
-      z-index: 20;
-      flex-direction: column;
-      background: var(--vscode-editor-background, #1e1e1e);
-      overflow-y: auto;
-      padding: 12px;
-    }
-    .ai-chat-settings-view.open { display: flex; }
-    .ai-chat-settings-header {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-bottom: 10px;
-    }
-    .ai-chat-settings-title {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--vscode-editor-foreground, #e5e7eb);
-      flex: 1;
-    }
-    .ai-chat-field {
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-      margin-bottom: 10px;
-    }
-    .ai-chat-field label {
-      font-size: 11px;
-      color: var(--vscode-descriptionForeground, #888);
-    }
-    .ai-chat-field input[type="text"], .ai-chat-field input[type="password"], .ai-chat-field input[type="number"], .ai-chat-field textarea, .ai-chat-field select {
-      font-size: 12px;
-      padding: 5px 8px;
-      border: 1px solid var(--vscode-input-border, rgba(128, 128, 128, 0.35));
-      border-radius: 6px;
-      background: var(--vscode-input-background, rgba(128, 128, 128, 0.1));
-      color: var(--vscode-input-foreground, #eee);
-      font-family: inherit;
-      width: 100%;
-      box-sizing: border-box;
-    }
-    .ai-chat-field textarea { resize: vertical; min-height: 54px; }
-    .ai-chat-field-row {
-      display: flex;
-      gap: 8px;
-    }
-    .ai-chat-field-row .ai-chat-field { flex: 1; }
-    .ai-chat-checkbox-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-bottom: 10px;
-      font-size: 12px;
-      color: var(--vscode-editor-foreground, #e5e7eb);
-    }
-    .ai-chat-key-status, .ai-chat-web-search-key-status {
-      font-size: 10px;
-      color: var(--vscode-descriptionForeground, #888);
-    }
-    .ai-chat-key-status.saved, .ai-chat-web-search-key-status.saved { color: #4ade80; }
-    .ai-chat-settings-actions {
-      display: flex;
-      gap: 8px;
-      margin-top: 6px;
-    }
-    .ai-chat-settings-save {
-      flex: 1;
-      padding: 6px;
-      font-size: 12px;
-      border: none;
-      border-radius: 6px;
-      background: var(--mdpre-accent, #4080d0);
-      color: #fff;
-      cursor: pointer;
-      font-family: inherit;
-    }
-    .ai-chat-settings-hint {
-      font-size: 10px;
-      color: var(--vscode-descriptionForeground, #888);
-      margin-top: 6px;
-      line-height: 1.6;
-    }
-    .ai-chat-settings-status {
-      font-size: 11px;
-      min-height: 16px;
-      margin-top: 6px;
-    }
-    .ai-chat-settings-status.ok { color: #4ade80; }
-    .ai-chat-settings-status.err { color: #f87171; }
   `;
   document.head.appendChild(style);
 }
@@ -584,7 +503,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
   root.innerHTML = `
     <div class="ai-chat-resizer" title="${tHtml('resize')}"></div>
     <div class="ai-chat-header">
-      <span class="ai-chat-title">${tHtml('title')}</span>
+      <span class="ai-chat-panel-icon" role="img" title="${tHtml('title')}" aria-label="${tHtml('title')}"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M3.25 2.25h9.5A1.75 1.75 0 0 1 14.5 4v5.75a1.75 1.75 0 0 1-1.75 1.75H8l-3.25 2.75V11.5h-1.5A1.75 1.75 0 0 1 1.5 9.75V4a1.75 1.75 0 0 1 1.75-1.75z"/><path d="M8 4.4l.75 1.6 1.6.75-1.6.75L8 9.1l-.75-1.6-1.6-.75 1.6-.75z" fill="currentColor" stroke-width=".6"/></svg></span>
       <button class="ai-chat-icon-btn" data-action="settings" type="button" title="${tHtml('settings')}">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
@@ -638,57 +557,6 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         </button>
       </div>
     </div>
-    <div class="ai-chat-settings-view">
-      <div class="ai-chat-settings-header">
-        <span class="ai-chat-settings-title">${tHtml('settings.title')}</span>
-        <button class="ai-chat-icon-btn" data-action="settings-back" type="button" title="${tHtml('settings.back')}">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-        </button>
-      </div>
-      <div class="ai-chat-field">
-        <label>API Key <span class="ai-chat-key-status"></span></label>
-        <input class="ai-chat-settings-key" type="password" placeholder="sk-..." autocomplete="off" />
-      </div>
-      <div class="ai-chat-field">
-        <label>Brave Search API Key <span class="ai-chat-web-search-key-status"></span></label>
-        <input class="ai-chat-settings-web-search-key" type="password" placeholder="${tHtml('settings.webSearchKeyPlaceholder')}" autocomplete="off" />
-      </div>
-      <div class="ai-chat-field">
-        <label>${tHtml('settings.baseUrl')}</label>
-        <input class="ai-chat-settings-baseurl" type="text" placeholder="https://api.deepseek.com" />
-      </div>
-      <div class="ai-chat-field">
-        <label>${tHtml('settings.models')}</label>
-        <textarea class="ai-chat-settings-models" rows="3" placeholder="deepseek-flash&#10;deepseek-v4-pro"></textarea>
-      </div>
-      <div class="ai-chat-field-row">
-        <div class="ai-chat-field">
-          <label>Temperature (0–2)</label>
-          <input class="ai-chat-settings-temperature" type="number" min="0" max="2" step="0.1" />
-        </div>
-        <div class="ai-chat-field">
-          <label>Top P (0–1)</label>
-          <input class="ai-chat-settings-topp" type="number" min="0" max="1" step="0.05" />
-        </div>
-      </div>
-      <div class="ai-chat-field">
-        <label>Max Tokens</label>
-        <input class="ai-chat-settings-maxtokens" type="number" min="1" step="1" />
-      </div>
-      <div class="ai-chat-field">
-        <label>${tHtml('settings.systemPrompt')}</label>
-        <textarea class="ai-chat-settings-sysprompt" rows="3" placeholder="${tHtml('settings.systemPromptPlaceholder')}"></textarea>
-      </div>
-      <div class="ai-chat-checkbox-row">
-        <input class="ai-chat-settings-stream" type="checkbox" id="ai-chat-settings-stream" />
-        <label for="ai-chat-settings-stream">${tHtml('settings.stream')}</label>
-      </div>
-      <div class="ai-chat-settings-actions">
-        <button class="ai-chat-settings-save" type="button">${tHtml('settings.save')}</button>
-      </div>
-      <div class="ai-chat-settings-status"></div>
-      <div class="ai-chat-settings-hint">${tHtml('settings.hint')}</div>
-    </div>
   `;
 
   const panelContainer = deps.container ?? document.getElementById('editor-body');
@@ -716,23 +584,6 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
   const pendingAttachmentsEl = root.querySelector('.ai-chat-pending-attachments') as HTMLElement;
   const urlRow = root.querySelector('.ai-chat-url-row') as HTMLElement;
   const urlInput = root.querySelector('.ai-chat-url-input') as HTMLInputElement;
-  const settingsView = root.querySelector('.ai-chat-settings-view') as HTMLElement;
-  const keyStatusEl = root.querySelector('.ai-chat-key-status') as HTMLElement;
-  const webSearchKeyStatusEl = root.querySelector('.ai-chat-web-search-key-status') as HTMLElement;
-
-  const settingsEls = {
-    key: root.querySelector('.ai-chat-settings-key') as HTMLInputElement,
-    webSearchKey: root.querySelector('.ai-chat-settings-web-search-key') as HTMLInputElement,
-    baseUrl: root.querySelector('.ai-chat-settings-baseurl') as HTMLInputElement,
-    models: root.querySelector('.ai-chat-settings-models') as HTMLTextAreaElement,
-    temperature: root.querySelector('.ai-chat-settings-temperature') as HTMLInputElement,
-    topP: root.querySelector('.ai-chat-settings-topp') as HTMLInputElement,
-    maxTokens: root.querySelector('.ai-chat-settings-maxtokens') as HTMLInputElement,
-    systemPrompt: root.querySelector('.ai-chat-settings-sysprompt') as HTMLTextAreaElement,
-    stream: root.querySelector('.ai-chat-settings-stream') as HTMLInputElement,
-    save: root.querySelector('.ai-chat-settings-save') as HTMLButtonElement,
-    status: root.querySelector('.ai-chat-settings-status') as HTMLElement,
-  };
 
   let openState = false;
   let disposed = false;
@@ -1065,34 +916,111 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
 
   // ------------------------------------------------------------- settings
 
-  const fillSettingsForm = (): void => {
-    settingsEls.baseUrl.value = settings.baseUrl;
-    settingsEls.models.value = settings.models.join('\n');
-    settingsEls.temperature.value = String(settings.temperature);
-    settingsEls.topP.value = String(settings.topP);
-    settingsEls.maxTokens.value = String(settings.maxTokens);
-    settingsEls.systemPrompt.value = settings.systemPrompt;
-    settingsEls.stream.checked = settings.stream;
-    settingsEls.key.value = '';
-    settingsEls.webSearchKey.value = '';
-    keyStatusEl.textContent = hasApiKey ? tAiChat('settings.keySaved') : tAiChat('settings.keyUnset');
-    keyStatusEl.classList.toggle('saved', hasApiKey);
-    webSearchKeyStatusEl.textContent = hasWebSearchApiKey ? tAiChat('settings.keySaved') : tAiChat('settings.keyUnset');
-    webSearchKeyStatusEl.classList.toggle('saved', hasWebSearchApiKey);
-  };
+  let settingsDialog: SettingsDialogHandle | null = null;
 
-  const openSettings = (): void => {
-    fillSettingsForm();
-    settingsView.classList.add('open');
+  const openSettings = (initialError?: string): void => {
+    settingsDialog?.close();
+    const input = (type: string, value: string, placeholder = '', wide = true): HTMLInputElement => {
+      const element = document.createElement('input');
+      element.type = type;
+      element.className = wide ? 'easyview-settings-input is-wide' : 'easyview-settings-input';
+      element.value = value;
+      element.placeholder = placeholder;
+      element.autocomplete = 'off';
+      element.spellcheck = false;
+      return element;
+    };
+    const textarea = (value: string, placeholder: string): HTMLTextAreaElement => {
+      const element = document.createElement('textarea');
+      element.className = 'easyview-settings-textarea';
+      element.rows = 3;
+      element.value = value;
+      element.placeholder = placeholder;
+      element.spellcheck = false;
+      return element;
+    };
+    const numberWithRange = (value: number, min: number, step: number, max?: number): { control: HTMLElement; input: HTMLInputElement } => {
+      const element = input('number', String(value), '', false);
+      element.min = String(min);
+      element.step = String(step);
+      if (max !== undefined) element.max = String(max);
+      const row = document.createElement('div');
+      row.className = 'easyview-settings-inline';
+      row.append(element);
+      if (max !== undefined) {
+        const range = document.createElement('span');
+        range.className = 'easyview-settings-hint';
+        range.textContent = `${min}–${max}`;
+        row.append(range);
+      }
+      return { control: row, input: element };
+    };
+    const keyField = (placeholder: string, saved: boolean): { control: HTMLElement; input: HTMLInputElement } => {
+      const element = input('password', '', placeholder);
+      const control = settingsFieldWithHint(element, saved ? tAiChat('settings.keySaved') : tAiChat('settings.keyUnset'));
+      if (saved) control.querySelector('.easyview-settings-hint')?.classList.add('is-ok');
+      return { control, input: element };
+    };
+
+    const apiKey = keyField('sk-...', hasApiKey);
+    const webSearchKey = keyField(tAiChat('settings.webSearchKeyPlaceholder'), hasWebSearchApiKey);
+    const baseUrl = input('text', settings.baseUrl, 'https://api.deepseek.com');
+    const models = textarea(settings.models.join('\n'), 'deepseek-flash\ndeepseek-v4-pro');
+    const temperature = numberWithRange(settings.temperature, 0, 0.1, 2);
+    const topP = numberWithRange(settings.topP, 0, 0.05, 1);
+    const maxTokens = numberWithRange(settings.maxTokens, 1, 1);
+    const systemPrompt = textarea(settings.systemPrompt, tAiChat('settings.systemPromptPlaceholder'));
+    let stream = settings.stream;
+
+    const dialog = openSettingsDialog({
+      title: tAiChat('settings.title'),
+      fields: [
+        { label: 'API Key', control: apiKey.control, alignTop: true },
+        { label: 'Brave Search API Key', control: webSearchKey.control, alignTop: true },
+        { label: tAiChat('settings.baseUrl'), control: settingsFieldWithHint(baseUrl, tAiChat('settings.baseUrlHint')), alignTop: true },
+        { label: tAiChat('settings.models'), control: settingsFieldWithHint(models, tAiChat('settings.modelsHint')), alignTop: true },
+        { label: 'Temperature', control: temperature.control },
+        { label: 'Top P', control: topP.control },
+        { label: 'Max Tokens', control: maxTokens.control },
+        { label: tAiChat('settings.systemPrompt'), control: systemPrompt, alignTop: true },
+        { label: tAiChat('settings.output'), control: settingsCheckbox(tAiChat('settings.stream'), stream, (checked) => { stream = checked; }) },
+      ],
+      note: tAiChat('settings.hint'),
+      onSave: () => {
+        const modelList = models.value.split('\n').map((line) => line.trim()).filter((line) => line.length > 0);
+        const temperatureValue = Number(temperature.input.value);
+        const topPValue = Number(topP.input.value);
+        const maxTokensValue = Number(maxTokens.input.value);
+        const invalid = modelList.length === 0 ? tAiChat('settings.modelsRequired')
+          : !Number.isFinite(temperatureValue) || temperatureValue < 0 || temperatureValue > 2 ? tAiChat('settings.temperatureRange')
+            : !Number.isFinite(topPValue) || topPValue < 0 || topPValue > 1 ? tAiChat('settings.topPRange')
+              : !Number.isFinite(maxTokensValue) || maxTokensValue < 1 ? tAiChat('settings.maxTokensInvalid')
+                : null;
+        if (invalid) {
+          dialog.setError(invalid);
+          return false;
+        }
+        return saveSettings({
+          baseUrl: baseUrl.value.trim(),
+          models: modelList,
+          defaultModel: modelList[0],
+          temperature: temperatureValue,
+          topP: topPValue,
+          maxTokens: Math.round(maxTokensValue),
+          systemPrompt: systemPrompt.value,
+          stream,
+        }, apiKey.input.value.trim(), webSearchKey.input.value.trim());
+      },
+      onClose: () => {
+        if (settingsDialog === dialog) settingsDialog = null;
+      },
+    });
+    settingsDialog = dialog;
+    if (initialError) dialog.setError(initialError);
   };
 
   const closeSettings = (): void => {
-    settingsView.classList.remove('open');
-  };
-
-  const setSettingsStatus = (text: string, ok: boolean): void => {
-    settingsEls.status.textContent = text;
-    settingsEls.status.className = `ai-chat-settings-status ${ok ? 'ok' : 'err'}`;
+    settingsDialog?.close();
   };
 
   const requestSettings = (): void => {
@@ -1102,84 +1030,48 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
   };
 
   const settingsRequests = new Map<string, 'get' | 'save'>();
-  /** One click on Save posts up to three requests; the status settles when all have answered. */
-  let pendingSave: { ids: Set<string>; errors: string[]; timer: ReturnType<typeof setTimeout> } | null = null;
+  /** One Save posts up to three requests; it settles when all have answered. */
+  let pendingSave: { ids: Set<string>; errors: string[]; timer: ReturnType<typeof setTimeout>; resolve(): void; reject(error: Error): void } | null = null;
   const finishSave = (): void => {
     if (!pendingSave) return;
     clearTimeout(pendingSave.timer);
-    const { errors } = pendingSave; pendingSave = null;
-    settingsEls.save.disabled = false;
-    setSettingsStatus(errors.length ? errors.join('\n') : tAiChat('settings.saved'), errors.length === 0);
+    const { errors, resolve, reject } = pendingSave; pendingSave = null;
+    if (errors.length) reject(new Error(errors.join('\n')));
+    else resolve();
   };
 
-  settingsEls.save.addEventListener('click', () => {
-    const models = settingsEls.models.value
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0);
-    const temperature = Number(settingsEls.temperature.value);
-    const topP = Number(settingsEls.topP.value);
-    const maxTokens = Number(settingsEls.maxTokens.value);
-
-    if (models.length === 0) {
-      setSettingsStatus(tAiChat('settings.modelsRequired'), false);
-      return;
-    }
-    if (!Number.isFinite(temperature) || temperature < 0 || temperature > 2) {
-      setSettingsStatus(tAiChat('settings.temperatureRange'), false);
-      return;
-    }
-    if (!Number.isFinite(topP) || topP < 0 || topP > 1) {
-      setSettingsStatus(tAiChat('settings.topPRange'), false);
-      return;
-    }
-    if (!Number.isFinite(maxTokens) || maxTokens < 1) {
-      setSettingsStatus(tAiChat('settings.maxTokensInvalid'), false);
-      return;
-    }
-
-    const nextSettings: AiChatSettings = {
-      baseUrl: settingsEls.baseUrl.value.trim(),
-      models,
-      defaultModel: models[0],
-      temperature,
-      topP,
-      maxTokens: Math.round(maxTokens),
-      systemPrompt: settingsEls.systemPrompt.value,
-      stream: settingsEls.stream.checked,
-    };
-
-    if (pendingSave) return;
-    const requestId = createRequestId();
-    const ids = new Set<string>([requestId]);
-    const apiKey = settingsEls.key.value.trim();
-    const webSearchApiKey = settingsEls.webSearchKey.value.trim();
-    // Optional keys left empty keep the stored key and send nothing.
-    if (apiKey.length > 0) ids.add(`${requestId}-key`);
-    if (webSearchApiKey.length > 0) ids.add(`${requestId}-web-search-key`);
-    for (const id of ids) settingsRequests.set(id, 'save');
-    pendingSave = {
-      ids,
-      errors: [],
-      timer: setTimeout(() => {
-        if (!pendingSave) return;
-        for (const id of pendingSave.ids) settingsRequests.delete(id);
-        pendingSave.errors.push(tAiChat('settings.saveTimeout'));
+  const saveSettings = (nextSettings: AiChatSettings, apiKey: string, webSearchApiKey: string): Promise<void> => {
+    if (pendingSave) return Promise.reject(new Error(tAiChat('settings.saveFailed')));
+    return new Promise<void>((resolve, reject) => {
+      const requestId = createRequestId();
+      const ids = new Set<string>([requestId]);
+      // Optional keys left empty keep the stored key and send nothing.
+      if (apiKey.length > 0) ids.add(`${requestId}-key`);
+      if (webSearchApiKey.length > 0) ids.add(`${requestId}-web-search-key`);
+      for (const id of ids) settingsRequests.set(id, 'save');
+      pendingSave = {
+        ids,
+        errors: [],
+        resolve,
+        reject,
+        timer: setTimeout(() => {
+          if (!pendingSave) return;
+          for (const id of pendingSave.ids) settingsRequests.delete(id);
+          pendingSave.errors.push(tAiChat('settings.saveTimeout'));
+          finishSave();
+        }, SETTINGS_SAVE_TIMEOUT_MS),
+      };
+      try {
+        deps.postMessage({ type: 'aiChat.saveSettings', requestId, settings: nextSettings });
+        if (apiKey.length > 0) deps.postMessage({ type: 'aiChat.saveApiKey', requestId: `${requestId}-key`, apiKey });
+        if (webSearchApiKey.length > 0) deps.postMessage({ type: 'aiChat.saveWebSearchApiKey', requestId: `${requestId}-web-search-key`, apiKey: webSearchApiKey });
+      } catch (error) {
+        for (const id of ids) settingsRequests.delete(id);
+        pendingSave.errors.push(error instanceof Error ? error.message : String(error));
         finishSave();
-      }, SETTINGS_SAVE_TIMEOUT_MS),
-    };
-    settingsEls.save.disabled = true;
-    setSettingsStatus(tAiChat('settings.saving'), true);
-    try {
-      deps.postMessage({ type: 'aiChat.saveSettings', requestId, settings: nextSettings });
-      if (apiKey.length > 0) deps.postMessage({ type: 'aiChat.saveApiKey', requestId: `${requestId}-key`, apiKey });
-      if (webSearchApiKey.length > 0) deps.postMessage({ type: 'aiChat.saveWebSearchApiKey', requestId: `${requestId}-web-search-key`, apiKey: webSearchApiKey });
-    } catch (error) {
-      for (const id of ids) settingsRequests.delete(id);
-      pendingSave.errors.push(error instanceof Error ? error.message : String(error));
-      finishSave();
-    }
-  });
+      }
+    });
+  };
 
   // ------------------------------------------------------------ composer
 
@@ -1251,8 +1143,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
     const text = inputEl.value.trim();
     if (text.length === 0 && pendingAttachments.length === 0) return;
     if (!hasApiKey) {
-      openSettings();
-      setSettingsStatus(tAiChat('settings.apiKeyRequired'), false);
+      openSettings(tAiChat('settings.apiKeyRequired'));
       return;
     }
 
@@ -1416,9 +1307,6 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         closeModelMenu();
         openSettings();
         break;
-      case 'settings-back':
-        closeSettings();
-        break;
       case 'attach':
         deps.postMessage({ type: 'aiChat.pickImage' });
         break;
@@ -1555,7 +1443,6 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         hasApiKey = message.hasApiKey;
         hasWebSearchApiKey = message.hasWebSearchApiKey;
         rebuildModelMenu();
-        if (settingsView.classList.contains('open')) fillSettingsForm();
         return true;
       }
       case 'aiChat.settingsSaved': {
@@ -1627,6 +1514,12 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
     renderMessages();
   };
 
+  const setSuspended = (suspended: boolean): void => {
+    if (disposed || root.classList.contains('suspended') === suspended) return;
+    root.classList.toggle('suspended', suspended);
+    if (openState) notifyLayoutChange();
+  };
+
   const destroy = (): void => {
     if (disposed) return;
     disposed = true;
@@ -1650,6 +1543,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
     isOpen: () => openState,
     setFilePath,
     setDocumentContextAvailable,
+    setSuspended,
     handleMessage,
     destroy,
   };

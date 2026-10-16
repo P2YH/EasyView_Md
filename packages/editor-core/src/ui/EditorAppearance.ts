@@ -19,8 +19,11 @@ const ACCENT_THEMES: readonly EasyViewAccentTheme[] = ['default', 'blue', 'orang
 
 type RgbTuple = [number, number, number];
 
-const THEME_DEPTH_STORAGE_KEY = 'mdpre-zalman-theme-depth';
+/** Older single depth shared by every mode; seeds the active mode once. */
+const LEGACY_THEME_DEPTH_STORAGE_KEY = 'mdpre-zalman-theme-depth';
+const themeDepthStorageKey = (mode: ThemeModeName): string => `mdpre-zalman-theme-depth-${mode}`;
 const THEME_DEPTH_DEFAULT = 0.5;
+const THEME_MODES: readonly ThemeModeName[] = ['light', 'gray', 'dark'];
 
 /** Per-mode bg/fg anchors at depth 0 (top/light), 0.5 (default), 1 (bottom/deep). */
 const THEME_DEPTH_AXIS: Record<ThemeModeName, { bg: [string, string, string]; fg: [string, string, string] }> = {
@@ -118,20 +121,29 @@ function applyThemeDepthColors(mode: ThemeModeName, depth: number, themeRoot: HT
 /** One owner for persisted product appearance; editor instances subscribe as views. */
 export class EditorAppearanceStore {
   private value: EditorAppearanceState;
+  private readonly depths: Record<ThemeModeName, number> = { light: THEME_DEPTH_DEFAULT, gray: THEME_DEPTH_DEFAULT, dark: THEME_DEPTH_DEFAULT };
   private readonly listeners = new Set<(state: Readonly<EditorAppearanceState>) => void>();
 
   constructor(private readonly storage: AppearanceStorage, defaultMode: ThemeModeName = 'light') {
-    let depth = THEME_DEPTH_DEFAULT;
+    const mode = readLocalProductTheme(storage, defaultMode);
     let accent: EasyViewAccentTheme = 'default';
     try {
-      const rawDepth = storage.getItem(THEME_DEPTH_STORAGE_KEY);
-      if (rawDepth !== null && Number.isFinite(Number(rawDepth))) depth = clamp01(Number(rawDepth));
+      const parse = (raw: string | null): number | undefined => raw !== null && raw.trim() !== '' && Number.isFinite(Number(raw)) ? clamp01(Number(raw)) : undefined;
+      for (const each of THEME_MODES) {
+        const stored = parse(storage.getItem(themeDepthStorageKey(each)));
+        if (stored !== undefined) this.depths[each] = stored;
+      }
+      const legacy = parse(storage.getItem(LEGACY_THEME_DEPTH_STORAGE_KEY));
+      if (legacy !== undefined && storage.getItem(themeDepthStorageKey(mode)) === null) {
+        this.depths[mode] = legacy;
+        storage.setItem(themeDepthStorageKey(mode), String(legacy));
+      }
       const storedAccent = storage.getItem(ACCENT_STORAGE_KEY) as EasyViewAccentTheme | null;
       if (storedAccent && ACCENT_THEMES.includes(storedAccent)) accent = storedAccent;
     } catch {
       // Webview storage can be unavailable in restricted contexts.
     }
-    this.value = { mode: readLocalProductTheme(storage, defaultMode), depth, accent };
+    this.value = { mode, depth: this.depths[mode], accent };
     writeLocalProductTheme(storage, this.value.mode);
   }
 
@@ -143,7 +155,7 @@ export class EditorAppearanceStore {
   }
 
   cycleMode(): void { this.setMode(nextEasyViewThemeMode(this.value.mode)); }
-  setMode(mode: ThemeModeName, persist = true): void { this.update({ ...this.value, mode }, persist); }
+  setMode(mode: ThemeModeName, persist = true): void { this.update({ ...this.value, mode, depth: this.depths[mode] }, persist); }
   setDepth(depth: number): void { this.update({ ...this.value, depth: clamp01(depth) }); }
   setAccent(accent: EasyViewAccentTheme): void { this.update({ ...this.value, accent }); }
 
@@ -151,10 +163,12 @@ export class EditorAppearanceStore {
     const previous = this.value;
     if (previous.mode === next.mode && previous.depth === next.depth && previous.accent === next.accent) return;
     this.value = next;
+    const depthChanged = this.depths[next.mode] !== next.depth;
+    this.depths[next.mode] = next.depth;
     if (persist) {
       try {
         if (previous.mode !== next.mode) writeLocalProductTheme(this.storage, next.mode);
-        if (previous.depth !== next.depth) this.storage.setItem(THEME_DEPTH_STORAGE_KEY, String(next.depth));
+        if (depthChanged) this.storage.setItem(themeDepthStorageKey(next.mode), String(next.depth));
         if (previous.accent !== next.accent) this.storage.setItem(ACCENT_STORAGE_KEY, next.accent);
       } catch {
         // Webview storage can be unavailable in restricted contexts.

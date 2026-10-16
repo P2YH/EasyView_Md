@@ -66,6 +66,7 @@ export function registerVersionGuard(context: vscode.ExtensionContext): vscode.D
       webview.html = `<!doctype html><html lang="${getLocale()}"><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src ${webview.cspSource}; style-src ${webview.cspSource} 'unsafe-inline';"></head><body style="padding:0;height:100vh;overflow:hidden"><main id="guard-root" style="height:100%"></main><script type="module" src="${webview.asWebviewUri(vscode.Uri.joinPath(dist, 'version-guard.js'))}"></script></body></html>`;
       const messages = webview.onDidReceiveMessage(async message => {
         if (message.type === 'guard.ready') { post({ type: 'guard.visible', visible: view?.visible }); active(); return; }
+        if (message.type === 'guard.expandState') { void vscode.commands.executeCommand('setContext', 'easyviewMd.versionGuard.allExpanded', message.allExpanded === true); return; }
         if (message.type !== 'guard.request' || !Number.isSafeInteger(message.id)) return;
         try {
           if (!vscode.workspace.isTrusted) throw new Error(tGuardHost('trust'));
@@ -89,7 +90,10 @@ export function registerVersionGuard(context: vscode.ExtensionContext): vscode.D
       view.onDidDispose(() => { messages.dispose(); visibility.dispose(); view = undefined; active(); });
     },
   }, { webviewOptions: { retainContextWhenHidden: true } });
+  const refresh = vscode.commands.registerCommand('easyviewMd.versionGuard.refresh', () => post({ type: 'guard.refresh' }));
+  const expandAll = vscode.commands.registerCommand('easyviewMd.versionGuard.expandAll', () => post({ type: 'guard.expandAll' }));
+  const collapseAll = vscode.commands.registerCommand('easyviewMd.versionGuard.collapseAll', () => post({ type: 'guard.collapseAll' }));
   const focus = vscode.window.onDidChangeWindowState(active);
   const roots = vscode.workspace.onDidChangeWorkspaceFolders(() => { post({ type: 'guard.reset' }); active(); });
-  return vscode.Disposable.from(provider, focus, roots, { dispose: () => { watcher?.dispose(); service.dispose(); for (const panel of panels) panel.dispose(); } });
+  return vscode.Disposable.from(provider, refresh, expandAll, collapseAll, focus, roots, { dispose: () => { watcher?.dispose(); service.dispose(); for (const panel of panels) panel.dispose(); } });
 }

@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import { promises as fs, watch, type FSWatcher } from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import type { GuardRepository, GuardFile, GuardStatus, GuardHistory, GuardComparison, GuardRequest } from '@easyview/contracts';
+import type { GuardRepository, GuardFile, GuardStatus, GuardHistory, GuardComparison, GuardRequest, GuardBranch } from '@easyview/contracts';
 
 // One limiter per host process, shared across windows and repositories.
 const waiting: Array<() => void> = [];
@@ -175,18 +175,37 @@ export class VersionGuardService {
         return files;
       }
       if (request.method === 'comparison') return this.comparison(repository, request);
+      if (request.method === 'branches') return this.branches(root);
       throw new Error('Unsupported Version Guard request.');
     };
-    if (['status', 'history', 'commitFiles', 'comparison'].includes(request.method)) {
+    if (['status', 'history', 'commitFiles', 'comparison', 'branches'].includes(request.method)) {
       const key = JSON.stringify(request); const existing = this.queries.get(key); if (existing) return existing;
       const promise = read(); this.queries.set(key, promise); try { return await promise; } finally { if (this.queries.get(key) === promise) this.queries.delete(key); }
     }
     return serial(root, async () => {
+      if (request.method === 'checkout') {
+        const name = typeof request.branch === 'string' ? request.branch.trim() : '';
+        if (!name) throw new Error('Branch name is required.');
+        if ((await this.status(repository)).files.some(file => file.index === 'U')) throw new Error('Resolve conflicts before switching branches.');
+        if (request.create) { await guardGit(root, ['check-ref-format', '--branch', name]).catch(() => { throw new Error(`Invalid branch name: ${name}`); }); return guardGit(root, ['switch', '-c', name]); }
+        const refs = new Set((await guardGit(root, ['for-each-ref', '--format=%(refname)', 'refs/heads', 'refs/remotes'])).split('\n').filter(Boolean));
+        if (refs.has(`refs/heads/${name}`)) return guardGit(root, ['switch', name]);
+        if (!refs.has(`refs/remotes/${name}`)) throw new Error(`Unknown branch: ${name}`);
+        const remotes = (await guardGit(root, ['remote'])).split('\n').filter(Boolean).sort((a, b) => b.length - a.length);
+        const remote = remotes.find(each => name.startsWith(`${each}/`));
+        const local = remote ? name.slice(remote.length + 1) : name;
+        return guardGit(root, refs.has(`refs/heads/${local}`) ? ['switch', local] : ['switch', '--track', name]);
+      }
       if (request.method === 'commit') {
         if (typeof request.message !== 'string' || !request.message.trim()) throw new Error('Commit message is required.');
         const status = await this.status(repository);
         if (status.files.some(file => file.index === 'U')) throw new Error('Resolve conflicts before committing.');
-        if (!status.files.some(file => file.index !== '.' && file.index !== '?')) throw new Error('No staged changes.');
+        if (!status.files.some(file => file.index !== '.' && file.index !== '?')) {
+          const paths = request.stageAll ? status.files.filter(file => file.worktree !== '.').flatMap(file => file.oldPath ? [file.oldPath, file.path] : [file.path]) : [];
+          if (!paths.length) throw new Error('No staged changes.');
+          await this.host.beforeStage(paths.map(file => path.join(root, file)));
+          await guardGit(root, ['add', '--', ...paths]);
+        }
         return guardGit(root, ['commit', '-m', request.message]);
       }
       if (request.method === 'fetch' || request.method === 'pull' || request.method === 'push' || request.method === 'sync') {
@@ -225,6 +244,17 @@ export class VersionGuardService {
       }
       throw new Error('Unsupported Version Guard operation.');
     });
+  }
+  private async branches(root: string): Promise<GuardBranch[]> {
+    const output = await guardGit(root, ['for-each-ref', '--sort=-committerdate', '--format=%(refname)%00%(refname:short)%00%(HEAD)%00%(upstream:short)%00%(upstream:track,nobracket)%00%(authorname)%00%(committerdate:unix)%00%(contents:subject)', 'refs/heads', 'refs/remotes'], this.controller.signal);
+    const branches: GuardBranch[] = [];
+    for (const line of output.split('\n')) {
+      const [ref, name, head, upstream, track, author, time, subject] = line.split('\0');
+      if (!ref || ref.endsWith('/HEAD')) continue;
+      const ahead = /ahead (\d+)/.exec(track ?? '')?.[1]; const behind = /behind (\d+)/.exec(track ?? '')?.[1];
+      branches.push({ name, remote: ref.startsWith('refs/remotes/'), current: head === '*', upstream: upstream || undefined, ahead: upstream ? Number(ahead ?? 0) : undefined, behind: upstream ? Number(behind ?? 0) : undefined, subject: subject ?? '', author: author ?? '', timestamp: Number(time) * 1000 });
+    }
+    return branches;
   }
   private async pull(root: string): Promise<string> {
     const config = async (key: string) => (await guardGit(root, ['config', '--get', key]).catch(() => '')).trim();

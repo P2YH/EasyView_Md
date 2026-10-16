@@ -1,5 +1,10 @@
 import { TimelinePanel } from '@easyview/editor-core/timeline';
-import { WorkspaceSearchPanel } from '@easyview/editor-core/workspace';
+import {
+  WorkspaceSearchPanel,
+  openWorkspaceSettingsDialog,
+  type WorkspaceSettingsDialogHandle,
+  type WorkspaceSettingsValues,
+} from '@easyview/editor-core/workspace';
 import type { TimelineClient, WorkspaceSearchResult } from '@easyview/contracts';
 import {
   describeWorkspaceEntryTimestamps,
@@ -19,11 +24,8 @@ import {
   resolveWorkspaceTreeIcon,
   type WorkspaceTreeDropTarget,
   workspaceEntryNameSelectionRange,
-  workspaceTreeSortModeLabel,
-  WORKSPACE_TREE_SORT_MODE_ICONS as SORT_MODE_ICONS,
-  workspaceTreeMenuIconSvg,
-  type WorkspaceTreeMenuIconId,
   type WorkspaceTreeSortMode,
+  clampWorkspaceFontSizeOffset,
 } from '@easyview/contracts';
 import type {
   WorkspaceExplorerEntry,
@@ -51,7 +53,7 @@ interface ContextMenuItem {
 }
 
 type WorkspaceDisplayMode = 'list' | 'icons';
-interface SavedDisplayState { displayMode?: WorkspaceDisplayMode; iconDirectory?: string; rootUri?: string | null }
+interface SavedDisplayState { displayMode?: WorkspaceDisplayMode; iconDirectory?: string; rootUri?: string | null; fontSizeOffset?: number }
 
 const IS_MAC =
   /mac|iphone|ipad/i.test(navigator.platform)
@@ -86,7 +88,8 @@ export class WorkspaceExplorerView {
   private showTimestampHover = true;
   private pendingCreate: { parentRelativePath: string; kind: 'file' | 'directory' } | null = null;
   private renamePath: string | null = null;
-  private sortMenuOpen = false;
+  private settingsDialog: WorkspaceSettingsDialogHandle | null = null;
+  private fontSizeOffset = 0;
   private searchOpen = false;
   private searchPanel: WorkspaceSearchPanel | null = null;
   private readonly pendingSearches = new Map<string, (result: WorkspaceSearchResult | null) => void>();
@@ -94,7 +97,6 @@ export class WorkspaceExplorerView {
   private dropIntent: { targetRelativePath: string; target: WorkspaceTreeDropTarget } | null = null;
   private dropIndicator: HTMLElement | null = null;
   private contextMenuEl: HTMLElement | null = null;
-  private sortMenuEl: HTMLElement | null = null;
   private timestampTooltipEl: HTMLElement | null = null;
   private selectionFollowsActive = true;
   private activeRelativePath: string | null = null;
@@ -107,12 +109,7 @@ export class WorkspaceExplorerView {
   private readonly handleWindowPointerDown = (event: PointerEvent): void => {
     if (!(event.target instanceof Node)) return;
     if (this.contextMenuEl?.contains(event.target)) return;
-    if (this.sortMenuEl?.contains(event.target)) return;
     this.closeContextMenu();
-    if (this.sortMenuOpen) {
-      this.sortMenuOpen = false;
-      this.closeSortMenu();
-    }
   };
   private readonly handleContextMenuPointerMove = (event: PointerEvent): void => {
     const menu = this.contextMenuEl;
@@ -132,6 +129,8 @@ export class WorkspaceExplorerView {
     if (timelineClient) this.timeline = new TimelinePanel(timelineClient);
     const saved = this.vscodeApi.getState() as SavedDisplayState | undefined;
     if (saved?.displayMode === 'icons') this.displayMode = 'icons';
+    this.fontSizeOffset = clampWorkspaceFontSizeOffset(saved?.fontSizeOffset);
+    this.applyFontSizeOffset();
     this.container.classList.add('workspace-explorer');
     this.container.tabIndex = 0;
     // Capture so Enter on a focused name <button> renames instead of activating click.
@@ -146,6 +145,7 @@ export class WorkspaceExplorerView {
   }
 
   dispose(): void {
+    this.settingsDialog?.close();
     this.timeline?.dispose();
     this.container.removeEventListener('keydown', this.handleKeyDown, true);
     this.container.removeEventListener('dragover', this.handleContainerDragOver);
@@ -154,7 +154,6 @@ export class WorkspaceExplorerView {
     document.removeEventListener('dragenter', this.handleDocumentDragEnter);
     window.removeEventListener('pointerdown', this.handleWindowPointerDown, true);
     this.closeContextMenu();
-    this.closeSortMenu();
     this.hideTimestampTooltip();
     this.timestampTooltipEl?.remove();
     this.timestampTooltipEl = null;
@@ -261,7 +260,13 @@ export class WorkspaceExplorerView {
   private saveDisplayState(): void {
     const previous = this.vscodeApi.getState();
     const state = previous && typeof previous === 'object' && !Array.isArray(previous) ? previous : {};
-    this.vscodeApi.setState({ ...state, displayMode: this.displayMode, iconDirectory: this.iconDirectory, rootUri: this.rootUri });
+    this.vscodeApi.setState({
+      ...state,
+      displayMode: this.displayMode,
+      iconDirectory: this.iconDirectory,
+      rootUri: this.rootUri,
+      fontSizeOffset: this.fontSizeOffset,
+    });
   }
 
   private onBootstrap(event: Extract<WorkspaceExplorerEvent, { type: 'bootstrap' }>): void {
@@ -283,7 +288,7 @@ export class WorkspaceExplorerView {
     this.pendingCreate = null;
     this.renamePath = null;
     this.setEditing(false);
-    this.sortMenuOpen = false;
+    this.settingsDialog?.close();
     this.resetSearch();
     this.render();
     if (this.rootUri !== null || this.rootName !== null) {
@@ -309,7 +314,7 @@ export class WorkspaceExplorerView {
     this.pendingCreate = null;
     this.renamePath = null;
     this.setEditing(false);
-    this.sortMenuOpen = false;
+    this.settingsDialog?.close();
     this.resetSearch();
     this.clearDropVisuals();
     this.closeContextMenu();
@@ -378,9 +383,8 @@ export class WorkspaceExplorerView {
         this.beginCreate(relativePath ?? this.primarySelectedDirectory() ?? (this.displayMode === 'icons' ? this.iconDirectory : ''), 'directory');
         break;
       case 'toggleSortMenu':
-        this.sortMenuOpen = !this.sortMenuOpen;
-        if (this.sortMenuOpen) this.openSortMenu();
-        else this.closeSortMenu();
+        if (this.settingsDialog) this.settingsDialog.close();
+        else this.openSettings();
         break;
       case 'toggleSearch':
         if (this.searchOpen) this.closeSearch();
@@ -579,8 +583,7 @@ export class WorkspaceExplorerView {
     this.container.replaceChildren();
 
     if (!this.hasRoot()) {
-      this.closeSortMenu();
-      this.sortMenuOpen = false;
+      this.settingsDialog?.close();
       const empty = document.createElement('div');
       empty.className = 'workspace-empty';
       empty.textContent = tExplorer('noRoot');
@@ -610,11 +613,7 @@ export class WorkspaceExplorerView {
     if (this.searchOpen && this.searchPanel) {
       this.container.appendChild(this.searchPanel.element);
       if (searchFocused) this.searchPanel.focus();
-      if (this.searchPanel.hasQuery) {
-        if (this.sortMenuOpen) this.openSortMenu();
-        else this.closeSortMenu();
-        return;
-      }
+      if (this.searchPanel.hasQuery) return;
     }
 
     const tree = document.createElement('div');
@@ -637,14 +636,6 @@ export class WorkspaceExplorerView {
     this.container.appendChild(tree);
     tree.scrollTop = previousScrollTop;
     tree.scrollLeft = previousScrollLeft;
-
-    if (this.sortMenuOpen) this.openSortMenu();
-    else this.closeSortMenu();
-  }
-
-  private closeSortMenu(): void {
-    this.sortMenuEl?.remove();
-    this.sortMenuEl = null;
   }
 
   private openSearch(): void {
@@ -661,7 +652,7 @@ export class WorkspaceExplorerView {
       panel.element.addEventListener('focusout', () => this.post({ type: 'setInputFocus', focused: this.editing }));
       this.searchPanel = panel;
     }
-    this.sortMenuOpen = false;
+    this.settingsDialog?.close();
     this.searchOpen = true;
     this.render();
     this.searchPanel.focus(true);
@@ -706,86 +697,42 @@ export class WorkspaceExplorerView {
     if (!this.expanded.has(entry.relativePath)) this.toggleDirectory(entry.relativePath);
   }
 
-  private openSortMenu(): void {
-    this.closeSortMenu();
-    const menu = this.buildSortMenu();
-    // Mount on body with position:fixed so overflow:hidden on the tree cannot clip it.
-    // Still confined to the webview viewport — align to the right edge so labels stay visible.
-    document.body.appendChild(menu);
-    this.sortMenuEl = menu;
-    const pad = 8;
-    const width = menu.offsetWidth;
-    const height = menu.offsetHeight;
-    let left = window.innerWidth - width - pad;
-    let top = pad;
-    if (left < pad) left = pad;
-    if (top + height > window.innerHeight - pad) {
-      top = Math.max(pad, window.innerHeight - height - pad);
-    }
-    menu.style.left = `${left}px`;
-    menu.style.top = `${top}px`;
+  private openSettings(): void {
+    if (this.settingsDialog || !this.hasRoot()) return;
+    this.settingsDialog = openWorkspaceSettingsDialog({
+      values: {
+        displayMode: this.displayMode,
+        sortMode: this.sortMode,
+        showCreatedAt: this.showCreatedAt,
+        showUpdatedAt: this.showUpdatedAt,
+        showTimestampHover: this.showTimestampHover,
+        showDotEntries: this.showDotEntries,
+        fontSizeOffset: this.fontSizeOffset,
+      },
+      baseFontSize: Math.round(parseFloat(getComputedStyle(document.body).fontSize) || 13),
+      onSave: (values) => { void this.applySettings(values); },
+      onClose: () => { this.settingsDialog = null; },
+    });
   }
 
-  private buildSortMenu(): HTMLElement {
-    const menu = document.createElement('div');
-    menu.className = 'workspace-sort-menu';
-    menu.setAttribute('role', 'menu');
+  private async applySettings(values: WorkspaceSettingsValues): Promise<void> {
+    if (values.fontSizeOffset !== this.fontSizeOffset) this.changeFontSizeOffset(values.fontSizeOffset);
+    if (values.showCreatedAt !== this.showCreatedAt) await this.changeShowCreatedAt(values.showCreatedAt);
+    if (values.showUpdatedAt !== this.showUpdatedAt) await this.changeShowUpdatedAt(values.showUpdatedAt);
+    if (values.showTimestampHover !== this.showTimestampHover) await this.changeShowTimestampHover(values.showTimestampHover);
+    if (values.showDotEntries !== this.showDotEntries) await this.changeShowDotEntries(values.showDotEntries);
+    if (values.sortMode !== this.sortMode) await this.changeSortMode(values.sortMode);
+    if (values.displayMode !== this.displayMode) await this.changeDisplayMode(values.displayMode);
+  }
 
-    this.appendSortMenuItem(menu, {
-      icon: 'viewList',
-      label: tExplorer('menu.viewAsList'),
-      checked: this.displayMode === 'list',
-      onClick: () => { void this.changeDisplayMode('list'); },
-    });
-    this.appendSortMenuItem(menu, {
-      icon: 'viewIcons',
-      label: tExplorer('menu.viewAsIcons'),
-      checked: this.displayMode === 'icons',
-      onClick: () => { void this.changeDisplayMode('icons'); },
-    });
-    const viewSeparator = document.createElement('div');
-    viewSeparator.className = 'workspace-sort-menu-separator';
-    menu.appendChild(viewSeparator);
+  private changeFontSizeOffset(offset: number): void {
+    this.fontSizeOffset = clampWorkspaceFontSizeOffset(offset);
+    this.applyFontSizeOffset();
+    this.saveDisplayState();
+  }
 
-    for (const mode of ['created', 'name', 'custom'] as const) {
-      this.appendSortMenuItem(menu, {
-        icon: SORT_MODE_ICONS[mode],
-        label: workspaceTreeSortModeLabel(mode),
-        checked: this.sortMode === mode,
-        onClick: () => { void this.changeSortMode(mode); },
-      });
-    }
-    const separator = document.createElement('div');
-    separator.className = 'workspace-sort-menu-separator';
-    menu.appendChild(separator);
-    this.appendSortMenuItem(menu, {
-      icon: 'showCreated',
-      label: tExplorer('menu.showCreatedTime'),
-      checked: this.showCreatedAt,
-      onClick: () => { void this.changeShowCreatedAt(!this.showCreatedAt); },
-    });
-    this.appendSortMenuItem(menu, {
-      icon: 'showUpdated',
-      label: tExplorer('menu.showUpdatedTime'),
-      checked: this.showUpdatedAt,
-      onClick: () => { void this.changeShowUpdatedAt(!this.showUpdatedAt); },
-    });
-    this.appendSortMenuItem(menu, {
-      icon: 'showTimeOnHover',
-      label: tExplorer('menu.showTimeOnHover'),
-      checked: this.showTimestampHover,
-      onClick: () => { void this.changeShowTimestampHover(!this.showTimestampHover); },
-    });
-    const dotSeparator = document.createElement('div');
-    dotSeparator.className = 'workspace-sort-menu-separator';
-    menu.appendChild(dotSeparator);
-    this.appendSortMenuItem(menu, {
-      icon: 'showDotEntries',
-      label: tExplorer('menu.showDotEntries'),
-      checked: this.showDotEntries,
-      onClick: () => { void this.changeShowDotEntries(!this.showDotEntries); },
-    });
-    return menu;
+  private applyFontSizeOffset(): void {
+    document.documentElement.style.setProperty('--workspace-font-offset', `${this.fontSizeOffset}px`);
   }
 
   private async navigateIconDirectory(relativePath: string): Promise<void> {
@@ -957,8 +904,6 @@ export class WorkspaceExplorerView {
   }
 
   private async changeDisplayMode(mode: WorkspaceDisplayMode): Promise<void> {
-    this.sortMenuOpen = false;
-    this.closeSortMenu();
     if (mode === this.displayMode) return;
     this.displayMode = mode;
     if (mode === 'icons') {
@@ -1138,35 +1083,6 @@ export class WorkspaceExplorerView {
 
   private hideTimestampTooltip(): void {
     if (this.timestampTooltipEl) this.timestampTooltipEl.hidden = true;
-  }
-
-  private appendSortMenuItem(
-    menu: HTMLElement,
-    options: { icon: WorkspaceTreeMenuIconId; label: string; checked: boolean; onClick: () => void },
-  ): void {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'workspace-sort-menu-item';
-    button.setAttribute('role', 'menuitemcheckbox');
-    button.setAttribute('aria-checked', String(options.checked));
-    const icon = document.createElement('span');
-    icon.className = 'workspace-menu-item-icon';
-    icon.innerHTML = workspaceTreeMenuIconSvg(options.icon);
-    button.appendChild(icon);
-    const label = document.createElement('span');
-    label.className = 'workspace-menu-item-label';
-    label.textContent = options.label;
-    button.appendChild(label);
-    const check = document.createElement('span');
-    check.className = 'workspace-menu-item-check';
-    check.setAttribute('aria-hidden', 'true');
-    check.textContent = options.checked ? '✓' : '';
-    button.appendChild(check);
-    button.addEventListener('click', (event) => {
-      event.stopPropagation();
-      options.onClick();
-    });
-    menu.appendChild(button);
   }
 
   private appendMenuItem(
@@ -1571,8 +1487,6 @@ export class WorkspaceExplorerView {
   }
 
   private async changeSortMode(sortMode: WorkspaceTreeSortMode): Promise<void> {
-    this.sortMenuOpen = false;
-    this.closeSortMenu();
     if (sortMode === this.sortMode) {
       this.render();
       return;
@@ -1594,8 +1508,6 @@ export class WorkspaceExplorerView {
   }
 
   private async changeShowCreatedAt(showCreatedAt: boolean): Promise<void> {
-    this.sortMenuOpen = false;
-    this.closeSortMenu();
     const result = await this.requestOp((requestId) => ({
       type: 'setShowCreatedAt',
       requestId,
@@ -1612,8 +1524,6 @@ export class WorkspaceExplorerView {
   }
 
   private async changeShowUpdatedAt(showUpdatedAt: boolean): Promise<void> {
-    this.sortMenuOpen = false;
-    this.closeSortMenu();
     const result = await this.requestOp((requestId) => ({
       type: 'setShowUpdatedAt',
       requestId,
@@ -1630,8 +1540,6 @@ export class WorkspaceExplorerView {
   }
 
   private async changeShowTimestampHover(showTimestampHover: boolean): Promise<void> {
-    this.sortMenuOpen = false;
-    this.closeSortMenu();
     this.hideTimestampTooltip();
     const result = await this.requestOp((requestId) => ({
       type: 'setShowTimestampHover',
@@ -1649,8 +1557,6 @@ export class WorkspaceExplorerView {
   }
 
   private async changeShowDotEntries(showDotEntries: boolean): Promise<void> {
-    this.sortMenuOpen = false;
-    this.closeSortMenu();
     const result = await this.requestOp((requestId) => ({
       type: 'setShowDotEntries',
       requestId,

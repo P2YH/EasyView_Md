@@ -65,7 +65,9 @@ describe('FileHeader lifecycle', () => {
     const thirdRoot = document.createElement('section');
     document.body.append(thirdRoot);
     const third = createHeader({}, { dom: createEditorDomContext(thirdRoot), appearance });
-    expect(third.getThemeState()).toEqual({ mode: 'dark', depth: 0.7 });
+    expect(third.getThemeState()).toEqual({ mode: 'dark', depth: 0.5 });
+    appearance.setMode('gray');
+    expect(third.getThemeState()).toEqual({ mode: 'gray', depth: 0.7 });
     expect(third.getAccentTheme()).toBe('green');
     expect(new EditorAppearanceStore(localStorage).state).toEqual(appearance.state);
     second.destroy();

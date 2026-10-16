@@ -5,7 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { buildIco, decodePng } from './ico.mjs';
+import { buildIco, decodePng, encodeRgbaPng } from './ico.mjs';
+import { removeWhiteBackdrop } from './transparent.mjs';
 
 if (process.platform !== 'darwin') throw new Error('Desktop icon generation currently requires macOS sips and iconutil.');
 const execFileAsync = promisify(execFile);
@@ -30,11 +31,14 @@ for (const [size, name] of iconsetFiles) await resize(size, path.join(iconset, n
 await execFileAsync('/usr/bin/iconutil', ['-c', 'icns', iconset, '-o', path.join(outputDir, 'icon.icns')]);
 await resize(512, path.join(outputDir, 'icon.png'));
 
+// Windows draws the ICO as-is in title bars and the taskbar, so it uses a transparent, tightly cropped logo.
+const transparentSource = path.join(temp, 'logo-transparent.png');
+await writeFile(transparentSource, encodeRgbaPng(removeWhiteBackdrop(decodePng(await readFile(source)))));
 const icoSizes = [16, 24, 32, 48, 64, 128, 256];
 const icoImages = [];
 for (const size of icoSizes) {
   const file = path.join(temp, `icon-${size}.png`);
-  await resize(size, file);
+  await execFileAsync('/usr/bin/sips', ['-z', String(size), String(size), transparentSource, '--out', file]);
   icoImages.push(decodePng(await readFile(file)));
 }
 await writeFile(path.join(outputDir, 'icon.ico'), buildIco(icoImages));

@@ -12,7 +12,8 @@ export type WorkspaceTreeMenuIconId =
   | 'showCreated'
   | 'showUpdated'
   | 'showTimeOnHover'
-  | 'showDotEntries';
+  | 'showDotEntries'
+  | 'fontSize';
 
 const ICON_PATHS: Record<WorkspaceTreeMenuIconId, string> = {
   viewList:
@@ -49,7 +50,19 @@ const ICON_PATHS: Record<WorkspaceTreeMenuIconId, string> = {
   showDotEntries:
     '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/>'
     + '<circle cx="12" cy="12" r="2.75"/>',
+  fontSize:
+    '<path d="M3 19 8.5 5h1L15 19"/><path d="M5.2 14h7.6"/>'
+    + '<path d="m15.5 19 3-8 3 8"/><path d="M16.6 16.3h3.8"/>',
 };
+
+/** Pixels added to every font size in the workspace panel; 0 keeps each host's native sizes. */
+export const WORKSPACE_FONT_SIZE_OFFSET_MIN = -4;
+export const WORKSPACE_FONT_SIZE_OFFSET_MAX = 6;
+
+export function clampWorkspaceFontSizeOffset(value: unknown): number {
+  const number = typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : 0;
+  return Math.max(WORKSPACE_FONT_SIZE_OFFSET_MIN, Math.min(WORKSPACE_FONT_SIZE_OFFSET_MAX, number));
+}
 
 export function workspaceTreeMenuIconSvg(id: WorkspaceTreeMenuIconId): string {
   return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" '

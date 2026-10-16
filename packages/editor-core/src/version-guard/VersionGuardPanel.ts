@@ -1,6 +1,7 @@
-import type { GuardClient, GuardCommit, GuardFile, GuardHistory, GuardRepository, GuardRequest, GuardStatus, GuardUiState } from '@easyview/contracts';
-import { tGuard } from './guard.i18n';
-export interface GuardPanelOptions { client: GuardClient; close?(): void; grip?: string }
+import type { GuardBranch, GuardClient, GuardCommit, GuardFile, GuardHistory, GuardRepository, GuardRequest, GuardStatus, GuardUiState } from '@easyview/contracts';
+import { formatGuard, tGuard } from './guard.i18n';
+/** `header: false` drops the built-in title bar when the host already shows a title and refresh action. */
+export interface GuardPanelOptions { client: GuardClient; grip?: string; header?: boolean; onExpandStateChange?: (allExpanded: boolean) => void }
 export class VersionGuardPanel {
   readonly element = document.createElement('section');
   private readonly body = document.createElement('div');
@@ -27,19 +28,22 @@ export class VersionGuardPanel {
   private commitFiles = new Map<string, GuardFile[]>();
   private historyKey?: string;
   private historyCollapsed = false;
+  private expandToggle?: HTMLButtonElement;
+  private lastAllExpanded?: boolean;
+  private branchPicker?: { element: HTMLElement; dispose(): void };
   private subscription: { dispose(): void };
   constructor(private readonly options: GuardPanelOptions) {
     this.ui = options.client.loadState() ?? { expanded: [], drafts: {} };
     this.element.className = 'version-guard';
     installStyles();
     const header = document.createElement('header');
-    if (options.grip) { const grip = document.createElement('span'); grip.dataset.dockGrip = options.grip; grip.className = 'guard-grip'; grip.textContent = '⠿'; header.append(grip); }
-    const title = document.createElement('strong'); title.textContent = tGuard('title'); header.append(title);
+    if (options.grip) { const grip = document.createElement('span'); grip.dataset.dockGrip = options.grip; grip.className = 'guard-grip'; grip.innerHTML = ICONS.dockGrip; header.append(grip); }
+    const icon = document.createElement('span'); icon.className = 'guard-panel-icon'; icon.setAttribute('role', 'img'); icon.title = tGuard('title'); icon.setAttribute('aria-label', tGuard('title')); icon.innerHTML = ICONS.versionControl; header.append(icon);
     this.refresh = this.button('↻', tGuard('refresh'), () => this.scanning ? this.cancelScan() : this.scan()); header.append(this.refresh);
-    if (options.close) header.append(this.button('×', tGuard('close'), options.close));
+    this.expandToggle = this.iconButton(ICONS.expandAll, tGuard('expandAll'), () => this.toggleExpandAll()); header.append(this.expandToggle); this.syncExpandToggle();
     this.notice.className = 'guard-notice'; this.notice.setAttribute('role', 'status');
     this.body.className = 'guard-repositories'; this.footer.className = 'guard-history';
-    this.footer.style.height = `${this.ui.historyHeight ?? 240}px`;
+    this.footer.style.height = `${this.ui.historyHeight ?? 220}px`;
     const resize = this.resizeHandle; resize.className = 'guard-history-resize';
     resize.onpointerdown = event => {
       event.preventDefault(); const start = event.clientY; const height = this.footer.getBoundingClientRect().height;
@@ -47,7 +51,7 @@ export class VersionGuardPanel {
       const end = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); this.persist(); };
       window.addEventListener('pointermove', move); window.addEventListener('pointerup', end, { once: true });
     };
-    this.element.append(header, this.notice, this.body, resize, this.footer);
+    this.element.append(...(options.header === false ? [] : [header]), this.notice, this.body, resize, this.footer);
     this.subscription = options.client.subscribe(paths => this.invalidate(paths));
     this.discoverySubscription = options.client.onDiscovery?.((repositories, warnings) => {
       if (!this.scanning) return;
@@ -67,10 +71,28 @@ export class VersionGuardPanel {
     if (!this.repositories.length) void this.scan();
     else { this.repositories.forEach(repo => this.stale.add(repo.id)); this.schedule(); }
   }
+  expandAll(): void {
+    const collapsed = this.repositories.filter(repo => !this.ui.expanded.includes(repo.id));
+    this.ui.expanded = this.repositories.map(repo => repo.id); this.collapsedDirs.clear(); this.persist(); this.render();
+    for (const repo of collapsed) void this.loadStatus(repo.id);
+  }
+  collapseAll(): void { this.ui.expanded = []; this.closeBranchPicker(); this.persist(); this.render(); }
+  toggleExpandAll(): void { if (this.allExpanded()) this.collapseAll(); else this.expandAll(); }
+  private allExpanded(): boolean { return this.repositories.length > 0 && this.repositories.every(repo => this.ui.expanded.includes(repo.id)); }
+  private syncExpandToggle(): void {
+    const expanded = this.allExpanded();
+    if (this.expandToggle && this.expandToggle.dataset.state !== String(expanded)) {
+      const title = tGuard(expanded ? 'collapseAll' : 'expandAll');
+      this.expandToggle.dataset.state = String(expanded); this.expandToggle.innerHTML = expanded ? ICONS.collapseAll : ICONS.expandAll; this.expandToggle.title = title; this.expandToggle.setAttribute('aria-label', title);
+    }
+    if (this.lastAllExpanded !== expanded) { this.lastAllExpanded = expanded; this.options.onExpandStateChange?.(expanded); }
+  }
+  refreshRepositories(): void { if (this.scanning) this.cancelScan(); else void this.scan(); }
   reset(): void { if (this.scanning) this.cancelScan(); this.generation++; this.repositories = []; this.statuses.clear(); this.histories.clear(); this.commitFiles.clear(); this.historyKey = undefined; this.pending.clear(); this.selectedCommit = undefined; if (this.visible) void this.scan(); else this.render(); }
   private cancelScan(): void { this.generation++; this.scanning = false; this.refresh.textContent = '↻'; this.refresh.title = tGuard('refresh'); this.refresh.setAttribute('aria-label', tGuard('refresh')); this.notice.textContent = this.scanWarnings.join('\n'); void this.options.client.request({ method: 'cancel' }).catch(error => this.error(error)); }
   private persist(): void { this.options.client.saveState(this.ui); }
   private error(error: unknown): void { this.notice.textContent = error instanceof Error ? error.message : String(error); this.notice.classList.add('is-error'); }
+  private iconButton(icon: string, title: string, action: () => void): HTMLButtonElement { const button = this.button('', title, action); button.classList.add('guard-header-icon'); button.innerHTML = icon; return button; }
   private button(label: string, title: string, action: () => void | Promise<unknown>): HTMLButtonElement {
     const button = document.createElement('button'); button.type = 'button'; button.textContent = label; button.title = title; button.setAttribute('aria-label', title);
     button.onclick = event => { event.stopPropagation(); void Promise.resolve().then(action).catch(error => this.error(error)); }; return button;
@@ -120,11 +142,12 @@ export class VersionGuardPanel {
   private async operation(id: string, request: Omit<GuardRequest, 'repository'>): Promise<void> {
     if (this.pending.has(id)) return;
     this.pending.add(id); this.notice.textContent = ''; this.notice.classList.remove('is-error'); this.render();
-    try { await this.options.client.request({ ...request, repository: id }); if (request.method === 'commit') { this.ui.drafts[id] = ''; this.persist(); this.histories.delete(id); } }
+    try { await this.options.client.request({ ...request, repository: id }); if (request.method === 'commit') { this.ui.drafts[id] = ''; this.persist(); this.histories.delete(id); } if (request.method === 'checkout') { this.histories.delete(id); this.selectedCommit = undefined; } }
     finally { this.pending.delete(id); await this.loadStatus(id); }
   }
   private render(): void {
     if (this.disposed) return;
+    this.syncExpandToggle();
     // Preserve text input selection while status updates arrive.
     const input = document.activeElement instanceof HTMLTextAreaElement && this.body.contains(document.activeElement) ? document.activeElement : null;
     const selection = input ? { id: input.dataset.repository, start: input.selectionStart, end: input.selectionEnd } : null;
@@ -143,40 +166,116 @@ export class VersionGuardPanel {
       row.onclick = toggle; row.onkeydown = event => { if (event.target === row && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); toggle(); } };
       const twisty = document.createElement('span'); twisty.className = 'guard-twisty'; twisty.innerHTML = expanded ? ICONS.chevronDown : ICONS.chevronRight;
       const name = document.createElement('span'); name.className = 'guard-repo-name'; name.textContent = repo.name; row.append(twisty, name);
-      const status = this.statuses.get(repo.id); const branch = document.createElement('span'); branch.className = 'guard-branch'; branch.textContent = status ? `${status.branch}  ↑${status.ahead} ↓${status.behind} · ${status.files.length}` : '…'; row.append(branch);
-      if (this.stale.has(repo.id)) { const badge = document.createElement('span'); badge.textContent = '•'; badge.title = tGuard('stale'); row.append(badge); }
+      const status = this.statuses.get(repo.id); const branch = document.createElement('span'); branch.className = 'guard-branch';
+      branch.textContent = status ? `↑${status.ahead} ↓${status.behind} · ${status.files.length}` : '…'; row.append(branch);
+      if (this.stale.has(repo.id)) { const badge = document.createElement('span'); badge.className = 'guard-stale'; badge.textContent = '•'; badge.title = tGuard('stale'); row.append(badge); }
+      if (status) {
+        const controls = document.createElement('span'); controls.className = 'guard-repo-controls';
+        const name = this.button('', `${tGuard('switchBranch')} (${status.branch})`, () => this.openBranchPicker(repo, name)); name.className = 'guard-branch-name'; name.disabled = this.pending.has(repo.id);
+        name.innerHTML = ICONS.branch; const label = document.createElement('span'); label.className = 'guard-branch-label'; label.textContent = status.branch; name.append(label); controls.append(name);
+        if (status.upstream) {
+          const fetchTitle = status.checkedAt ? `${tGuard('fetch')} · ${tGuard('checked')}: ${new Date(status.checkedAt).toLocaleTimeString()}` : `${tGuard('fetch')} · ${tGuard('previous')}`;
+          const fetch = this.button('', fetchTitle, () => this.operation(repo.id, { method: 'fetch' })); fetch.className = 'guard-fetch'; fetch.innerHTML = ICONS.fetch; fetch.disabled = this.pending.has(repo.id); controls.append(fetch);
+        }
+        row.append(controls);
+      }
       section.append(row);
       if (expanded && status) {
         const input = document.createElement('textarea'); input.dataset.repository = repo.id; input.placeholder = tGuard('message'); input.setAttribute('aria-label', `${repo.name}: ${tGuard('message')}`); input.value = this.ui.drafts[repo.id] ?? ''; input.rows = 1;
-        input.oninput = () => { this.ui.drafts[repo.id] = input.value; this.persist(); commit.disabled = !input.value.trim() || !staged.length || busy || conflicts.length > 0; };
+        input.oninput = () => { this.ui.drafts[repo.id] = input.value; this.persist(); commit.disabled = !input.value.trim() || !committable || busy || conflicts.length > 0; };
         const busy = this.pending.has(repo.id); const conflicts = status.files.filter(file => file.index === 'U');
         const staged = status.files.filter(file => !['.', '?', 'U'].includes(file.index)); const changes = status.files.filter(file => file.worktree !== '.' && file.index !== 'U');
         const actions = document.createElement('div'); actions.className = 'guard-actions';
-        const commit = this.button(tGuard('commit'), tGuard('commit'), () => this.operation(repo.id, { method: 'commit', message: this.ui.drafts[repo.id] })); commit.disabled = busy || !input.value.trim() || !staged.length || conflicts.length > 0;
+        const stageAll = !staged.length; const committable = staged.length > 0 || changes.length > 0;
+        const commit = this.button(tGuard('commit'), stageAll ? tGuard('commitAllHint') : tGuard('commit'), () => this.operation(repo.id, { method: 'commit', message: this.ui.drafts[repo.id], stageAll })); commit.disabled = busy || !input.value.trim() || !committable || conflicts.length > 0;
         const syncMethod = status.ahead && status.behind ? 'sync' : status.behind ? 'pull' : status.ahead ? 'push' : undefined;
         const syncLabel = syncMethod === 'sync' ? `${tGuard('sync')} ↓${status.behind} ↑${status.ahead}` : syncMethod === 'pull' ? `${tGuard('pull')} ↓${status.behind}` : syncMethod === 'push' ? `${tGuard('push')} ↑${status.ahead}` : tGuard('synced');
         const sync = this.button(syncLabel, syncMethod ? tGuard(`${syncMethod}Hint`) : tGuard('synced'), () => syncMethod && this.operation(repo.id, { method: syncMethod }));
         sync.classList.add('guard-sync'); sync.dataset.method = syncMethod ?? 'none'; sync.disabled = busy || !status.upstream || !syncMethod || (syncMethod !== 'push' && conflicts.length > 0);
-        const fetchTitle = status.checkedAt ? `${tGuard('fetch')} · ${tGuard('checked')}: ${new Date(status.checkedAt).toLocaleTimeString()}` : `${tGuard('fetch')} · ${tGuard('previous')}`;
-        const fetch = this.button('', fetchTitle, () => this.operation(repo.id, { method: 'fetch' })); fetch.className = 'guard-icon-button guard-fetch'; fetch.innerHTML = ICONS.fetch; fetch.disabled = busy || !status.upstream;
-        commit.classList.add('is-primary'); actions.append(commit, sync, fetch); section.append(input, actions);
+        commit.classList.add('is-primary'); actions.append(commit, sync);
+        const body = document.createElement('div'); body.className = 'guard-repo-body';
+        const composer = document.createElement('div'); composer.className = 'guard-composer'; composer.append(input, actions); body.append(composer);
         const group = (label: string, files: GuardFile[], source: 'working' | 'staged', conflict = false) => {
           if (!files.length) return;
           const header = document.createElement('div'); header.className = 'guard-group'; header.textContent = `${label} (${files.length})`;
           if (!conflict) header.append(this.button(source === 'staged' ? '−' : '+', `${tGuard('all')} ${source === 'staged' ? tGuard('unstage') : tGuard('stage')}`, () => this.operation(repo.id, { method: source === 'staged' ? 'unstage' : 'stage', paths: files.flatMap(file => file.oldPath ? [file.oldPath, file.path] : [file.path]) })));
-          section.append(header); this.fileTree(section, repo.id, files, source, busy, conflict);
+          body.append(header); this.fileTree(body, repo.id, files, source, busy, conflict);
         };
         group(tGuard('conflicts'), conflicts, 'working', true); group(tGuard('staged'), staged, 'staged'); group(tGuard('changes'), changes, 'working');
+        section.append(body);
       }
       this.body.append(section);
     }
     this.renderHistory();
     if (selection) { const next = [...this.body.querySelectorAll('textarea')].find(input => input.dataset.repository === selection.id); next?.focus(); next?.setSelectionRange(selection.start, selection.end); }
   }
+  private closeBranchPicker(): void { const picker = this.branchPicker; this.branchPicker = undefined; picker?.dispose(); }
+  private openBranchPicker(repo: GuardRepository, anchor: HTMLElement): void {
+    const reopen = this.branchPicker?.element.dataset.repository === repo.id; this.closeBranchPicker(); if (reopen) return;
+    const picker = document.createElement('div'); picker.className = 'guard-branch-picker'; picker.dataset.repository = repo.id; picker.setAttribute('role', 'dialog'); picker.setAttribute('aria-label', tGuard('switchBranch'));
+    const input = document.createElement('input'); input.type = 'text'; input.placeholder = tGuard('branchPlaceholder'); input.setAttribute('aria-label', tGuard('branchPlaceholder'));
+    const list = document.createElement('div'); list.className = 'guard-branch-list'; list.setAttribute('role', 'listbox');
+    picker.append(input, list); this.element.append(picker);
+    const host = this.element.getBoundingClientRect(); picker.style.top = `${anchor.getBoundingClientRect().bottom - host.top + 4}px`;
+    type Item = { kind: 'create' | 'branch'; branch?: GuardBranch; name: string };
+    let branches: GuardBranch[] | undefined; let failure = ''; let items: Item[] = []; let active = 0;
+    const choose = (item: Item | undefined): void => {
+      if (!item) return;
+      if (item.kind === 'create' && !item.name) { input.focus(); input.placeholder = tGuard('branchNamePlaceholder'); return; }
+      this.closeBranchPicker();
+      if (item.kind === 'branch' && item.branch?.current) return;
+      void this.operation(repo.id, { method: 'checkout', branch: item.name, create: item.kind === 'create' }).catch(error => this.error(error));
+    };
+    const draw = (): void => {
+      const query = input.value.trim(); const needle = query.toLowerCase();
+      const matches = (branches ?? []).filter(branch => !needle || branch.name.toLowerCase().includes(needle));
+      const exact = (branches ?? []).some(branch => !branch.remote && branch.name === query);
+      items = [...(exact ? [] : [{ kind: 'create' as const, name: query }]), ...matches.filter(branch => !branch.remote), ...matches.filter(branch => branch.remote)].map(item => 'kind' in item ? item : { kind: 'branch' as const, branch: item, name: item.name });
+      active = Math.min(active, Math.max(0, items.length - 1));
+      list.replaceChildren();
+      let previous: string | undefined;
+      items.forEach((item, index) => {
+        const group = item.kind === 'create' ? 'create' : item.branch!.remote ? 'remote' : 'local';
+        if (previous && previous !== group) { const separator = document.createElement('div'); separator.className = 'guard-branch-sep'; list.append(separator); }
+        previous = group;
+        const option = document.createElement('div'); option.className = `guard-branch-item${index === active ? ' is-active' : ''}`; option.setAttribute('role', 'option'); option.setAttribute('aria-selected', String(index === active));
+        const main = document.createElement('div'); main.className = 'guard-branch-item-main';
+        const icon = document.createElement('span'); icon.className = 'guard-file-icon'; icon.innerHTML = item.kind === 'create' ? ICONS.plus : item.branch!.remote ? ICONS.cloud : item.branch!.current ? ICONS.check : ICONS.branch;
+        const label = document.createElement('span'); label.className = 'guard-branch-item-name'; label.textContent = item.kind === 'create' ? (item.name ? formatGuard('createBranchNamed', { name: item.name }) : `${tGuard('createBranch')}…`) : item.name;
+        main.append(icon, label);
+        if (item.branch) {
+          const { branch } = item;
+          const meta = document.createElement('span'); meta.className = 'guard-branch-item-meta';
+          meta.textContent = [branch.upstream ? `${branch.behind ?? 0}↓ ${branch.ahead ?? 0}↑` : '', relativeTime(branch.timestamp)].filter(Boolean).join(' · '); main.append(meta);
+          if (branch.remote) { const tag = document.createElement('span'); tag.className = 'guard-branch-item-tag'; tag.textContent = tGuard('remote'); main.append(tag); }
+          option.append(main);
+          if (branch.subject) { const detail = document.createElement('div'); detail.className = 'guard-branch-item-detail'; detail.textContent = `${branch.author} • ${branch.subject}`; option.append(detail); }
+        } else option.append(main);
+        option.onmousemove = () => { if (active !== index) { active = index; draw(); } };
+        option.onmousedown = event => { event.preventDefault(); choose(item); };
+        list.append(option);
+      });
+      if (!branches || failure || !items.some(item => item.kind === 'branch')) { const note = document.createElement('div'); note.className = 'guard-branch-note'; note.textContent = failure || (branches ? tGuard('noBranches') : tGuard('branchesLoading')); list.append(note); }
+      list.querySelector('.is-active')?.scrollIntoView?.({ block: 'nearest' });
+    };
+    input.oninput = () => { active = 0; draw(); };
+    input.onkeydown = event => {
+      if (event.key === 'ArrowDown') { event.preventDefault(); active = Math.min(items.length - 1, active + 1); draw(); }
+      else if (event.key === 'ArrowUp') { event.preventDefault(); active = Math.max(0, active - 1); draw(); }
+      else if (event.key === 'Enter') { event.preventDefault(); choose(items[active]); }
+      else if (event.key === 'Escape') { event.preventDefault(); this.closeBranchPicker(); anchor.focus(); }
+    };
+    const outside = (event: Event): void => { if (!picker.contains(event.target as Node) && !anchor.contains(event.target as Node)) this.closeBranchPicker(); };
+    const close = (): void => this.closeBranchPicker();
+    document.addEventListener('pointerdown', outside, true); this.body.addEventListener('scroll', close); window.addEventListener('blur', close);
+    this.branchPicker = { element: picker, dispose: () => { document.removeEventListener('pointerdown', outside, true); this.body.removeEventListener('scroll', close); window.removeEventListener('blur', close); picker.remove(); } };
+    draw(); input.focus();
+    void this.options.client.request({ method: 'branches', repository: repo.id }).then(value => { branches = value as GuardBranch[]; }, error => { branches = []; failure = error instanceof Error ? error.message : String(error); }).then(() => { if (this.branchPicker?.element === picker) draw(); });
+  }
   private fileTree(root: HTMLElement, id: string, files: GuardFile[], source: 'working' | 'staged' | 'commit', busy = false, conflict = false): void {
     type Node = { dirs: Map<string, Node>; files: GuardFile[] };
     const tree: Node = { dirs: new Map(), files: [] };
-    for (const file of files) { let node = tree; for (const part of file.path.split('/').slice(0, -1)) { let next = node.dirs.get(part); if (!next) { next = { dirs: new Map(), files: [] }; node.dirs.set(part, next); } node = next; } node.files.push(file); }
+    for (const file of files) { let node = tree; for (const part of file.path.replace(/\/$/, '').split('/').slice(0, -1)) { let next = node.dirs.get(part); if (!next) { next = { dirs: new Map(), files: [] }; node.dirs.set(part, next); } node = next; } node.files.push(file); }
     const walk = (node: Node, depth: number, prefix: string): void => {
       for (const [name, child] of [...node.dirs].sort(([a], [b]) => a.localeCompare(b))) {
         // Collapse single-child directory chains like VS Code's compact folders.
@@ -196,7 +295,7 @@ export class VersionGuardPanel {
   }
   private fileRow(id: string, file: GuardFile, source: 'working' | 'staged' | 'commit', busy = false, conflict = false, nested = false): HTMLElement {
     const row = document.createElement('div'); row.className = 'guard-file'; row.title = file.oldPath ? `${file.oldPath} → ${file.path}` : file.path; row.dataset.path = file.path;
-    const name = file.path.split('/').pop()!; const folder = file.path.slice(0, -name.length);
+    const trimmed = file.path.replace(/\/$/, ''); const name = trimmed.split('/').pop()!; const folder = trimmed.slice(0, -name.length);
     const openDiff = this.button(name, row.title, () => this.options.client.request({ method: 'openDiff', repository: id, paths: [file.path], source, revision: this.selectedCommit?.hash })); openDiff.className = 'guard-file-name'; openDiff.disabled = file.submodule || conflict;
     const parent = document.createElement('span'); parent.className = 'guard-file-path'; parent.textContent = nested ? '' : folder;
     const letter = file.submodule ? 'S' : source === 'working' ? file.worktree : file.index;
@@ -226,7 +325,7 @@ export class VersionGuardPanel {
    */
   private applyHistoryCollapsed(): void {
     this.footer.classList.toggle('is-collapsed', this.historyCollapsed); this.resizeHandle.hidden = this.historyCollapsed;
-    this.footer.style.height = this.historyCollapsed ? '' : `${this.ui.historyHeight ?? 240}px`;
+    this.footer.style.height = this.historyCollapsed ? '' : `${this.ui.historyHeight ?? 220}px`;
   }
   private renderHistory(): void {
     const id = this.ui.selected; const history = id ? this.histories.get(id) : undefined;
@@ -237,8 +336,12 @@ export class VersionGuardPanel {
     head.title = this.historyCollapsed ? tGuard('expandHistory') : tGuard('collapseHistory');
     const toggleHistory = (): void => { this.historyCollapsed = !this.historyCollapsed; this.applyHistoryCollapsed(); this.renderHistory(); };
     head.onclick = toggleHistory; head.onkeydown = event => { if (event.target === head && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); toggleHistory(); } };
-    const twisty = document.createElement('span'); twisty.className = 'guard-twisty'; twisty.innerHTML = this.historyCollapsed ? ICONS.chevronRight : ICONS.chevronDown; head.append(twisty);
-    const title = document.createElement('strong'); title.textContent = `${tGuard('history')} · ${this.repositories.find(repo => repo.id === id)?.name ?? ''}`; head.append(title); this.footer.append(head);
+    const twisty = document.createElement('span'); twisty.className = 'guard-twisty'; twisty.classList.toggle('is-expanded', !this.historyCollapsed); twisty.innerHTML = ICONS.sectionChevron; head.append(twisty);
+    const title = document.createElement('strong'); title.textContent = tGuard('history');
+    const repositoryName = this.repositories.find(repo => repo.id === id)?.name ?? '';
+    const repository = document.createElement('span'); repository.className = 'guard-history-repo'; repository.title = repositoryName; repository.innerHTML = ICONS.versionControl;
+    const repositoryLabel = document.createElement('span'); repositoryLabel.textContent = repositoryName; repository.append(repositoryLabel);
+    head.append(title, repository); this.footer.append(head);
     if (this.historyCollapsed) return;
     if (this.selectedCommit) {
       const commit = this.selectedCommit;
@@ -255,14 +358,14 @@ export class VersionGuardPanel {
     }
     const cursor = this.histories.get(id)?.cursor; if (cursor) this.footer.append(this.button(tGuard('more'), tGuard('more'), () => this.loadHistory(cursor)));
   }
-  dispose(): void { this.disposed = true; this.generation++; if (this.timer) clearTimeout(this.timer); this.subscription.dispose(); this.discoverySubscription?.dispose(); window.removeEventListener('focus', this.onFocus); window.removeEventListener('blur', this.onBlur); void this.options.client.request({ method: 'active', active: false }).catch(() => undefined); this.element.remove(); }
+  dispose(): void { this.closeBranchPicker(); this.disposed = true; this.generation++; if (this.timer) clearTimeout(this.timer); this.subscription.dispose(); this.discoverySubscription?.dispose(); window.removeEventListener('focus', this.onFocus); window.removeEventListener('blur', this.onBlur); void this.options.client.request({ method: 'active', active: false }).catch(() => undefined); this.element.remove(); }
 }
 function installStyles(): void {
   if (document.getElementById('version-guard-styles')) return;
   const style = document.createElement('style'); style.id = 'version-guard-styles'; style.textContent = `
 .version-guard{height:100%;min-height:0;display:flex;flex-direction:column;color:var(--vscode-foreground,#ccc);background:var(--vscode-sideBar-background,var(--vscode-editorWidget-background,#202020));font:inherit;line-height:1.5;overflow:hidden}
-.version-guard header{display:flex;align-items:center;gap:6px;padding:8px;min-height:24px;border-bottom:1px solid var(--vscode-panel-border,#444)}.version-guard header strong{flex:1}.version-guard button{font:inherit;color:inherit;background:transparent;border:0;border-radius:3px;cursor:pointer;padding:3px 5px}.version-guard button:hover{background:var(--vscode-list-hoverBackground,#ffffff15)}.version-guard button:disabled{opacity:.45;cursor:default}.version-guard button:focus-visible,.version-guard textarea:focus-visible{outline:1px solid var(--vscode-focusBorder,#3794ff)}
-.guard-grip{cursor:grab}.guard-notice{padding:0 8px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:120px;overflow:auto}.guard-notice:not(:empty){padding:8px}.guard-notice.is-error{color:var(--vscode-errorForeground,#f88)}.guard-repositories{flex:1;min-height:80px;overflow:auto;padding-bottom:6px}.guard-repo-title{position:relative;display:flex;align-items:center;padding:4px 6px;gap:4px;min-height:22px;cursor:pointer;border-bottom:1px solid var(--vscode-panel-border,color-mix(in srgb,currentColor 14%,transparent))}.guard-repo-title:hover{background:var(--vscode-list-hoverBackground,color-mix(in srgb,currentColor 8%,transparent))}.guard-repo-title:focus-visible{outline:1px solid var(--vscode-focusBorder,#3794ff);outline-offset:-1px}.guard-repo-title.is-loading::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:2px;background:linear-gradient(90deg,transparent 0,var(--vscode-progressBar-background,#0e70c0) 40%,var(--vscode-progressBar-background,#0e70c0) 60%,transparent 100%) no-repeat;background-size:35% 100%;animation:guard-progress 1.1s linear infinite}@keyframes guard-progress{from{background-position:-50% 0}to{background-position:150% 0}}@media (prefers-reduced-motion:reduce){.guard-repo-title.is-loading::after{animation:none;background:var(--vscode-progressBar-background,#0e70c0);opacity:.6}}.guard-repo-title.is-selected{background:var(--vscode-list-inactiveSelectionBackground,#ffffff10)}.guard-repo-name{font-weight:600!important;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.guard-branch{margin-left:auto;opacity:.75;white-space:nowrap}.guard-repository textarea{box-sizing:border-box;width:calc(100% - 16px);margin:5px 8px;padding:6px;resize:vertical;font:inherit;line-height:1.4;min-height:calc(1.4em + 14px);color:inherit;background:var(--vscode-input-background,#333);border:1px solid var(--vscode-input-border,#555);border-radius:4px}.guard-actions{display:flex;gap:4px;padding:0 8px}.version-guard .guard-actions button{border:1px solid var(--vscode-button-border,color-mix(in srgb,currentColor 25%,transparent));background:var(--vscode-button-secondaryBackground,color-mix(in srgb,currentColor 10%,transparent));color:var(--vscode-button-secondaryForeground,inherit)}.version-guard .guard-actions button:hover:not(:disabled){background:var(--vscode-button-secondaryHoverBackground,color-mix(in srgb,currentColor 18%,transparent))}.version-guard .guard-actions button.is-primary{flex:1;background:var(--vscode-button-background,#225d89);color:var(--vscode-button-foreground,#fff)}.version-guard .guard-actions button.is-primary:hover:not(:disabled){background:var(--vscode-button-hoverBackground,#1c4f75)}.version-guard .guard-actions button:disabled{opacity:.45}.version-guard .guard-actions .guard-sync{white-space:nowrap}.version-guard .guard-actions .guard-fetch{flex:none;width:auto;height:auto;padding:0 6px;opacity:1}.guard-checked{display:block;opacity:.6;padding:5px 8px}.guard-group{display:flex;align-items:center;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:4px 8px;margin-top:6px;background:var(--vscode-sideBarSectionHeader-background,color-mix(in srgb,currentColor 9%,transparent));border-top:1px solid var(--vscode-sideBarSectionHeader-border,color-mix(in srgb,currentColor 14%,transparent));border-bottom:1px solid var(--vscode-sideBarSectionHeader-border,color-mix(in srgb,currentColor 14%,transparent))}.guard-group button{margin-left:auto}.guard-file{display:flex;align-items:center;gap:3px;padding:1px 6px;min-height:24px}.guard-file:hover,.guard-file:focus-within{background:var(--vscode-list-hoverBackground,color-mix(in srgb,currentColor 8%,transparent))}.guard-dir{cursor:pointer;gap:2px}.guard-dir:focus-visible{outline:1px solid var(--vscode-focusBorder,#3794ff);outline-offset:-1px}.guard-twisty,.guard-file-icon{display:inline-flex;flex:none;width:16px;height:16px;align-items:center;justify-content:center;opacity:.9}.guard-twisty{opacity:.7}.guard-file-actions{display:none;flex:none;gap:1px}.guard-file:hover .guard-file-actions,.guard-file:focus-within .guard-file-actions{display:inline-flex}.version-guard .guard-icon-button{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border-radius:4px;opacity:.8}.version-guard .guard-icon-button:hover{opacity:1;background:var(--vscode-toolbar-hoverBackground,color-mix(in srgb,currentColor 14%,transparent))}.guard-file.is-deleted .guard-file-name{text-decoration:line-through;opacity:.6}.guard-file .guard-file-status.is-deleted{color:var(--vscode-gitDecoration-deletedResourceForeground,#c74e39)}.guard-file .guard-file-status.is-added{color:var(--vscode-gitDecoration-addedResourceForeground,#3fa266)}.guard-file .guard-file-status.is-untracked{color:var(--vscode-gitDecoration-untrackedResourceForeground,#3fa266)}.guard-file .guard-file-status.is-renamed{color:var(--vscode-gitDecoration-renamedResourceForeground,#3fa266)}.guard-file-status{width:14px;text-align:center;flex:none}.guard-file-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;flex-shrink:1;min-width:40px}.guard-file-path{opacity:.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}.guard-file-status{color:var(--vscode-gitDecoration-modifiedResourceForeground,#c99)}.guard-history-resize{height:5px;flex:none;cursor:row-resize;border-top:1px solid var(--vscode-panel-border,#444)}.guard-history{flex:none;min-height:100px;max-height:60%;overflow:auto;padding:6px;box-sizing:border-box}.guard-history-head{display:flex;align-items:center;gap:6px;margin-bottom:8px;cursor:pointer;border-radius:3px}.guard-history-head:focus-visible{outline:1px solid var(--vscode-focusBorder,#3794ff)}.guard-history.is-collapsed{height:auto!important;min-height:0;flex:none}.guard-history.is-collapsed .guard-history-head{margin-bottom:0}.guard-history-resize[hidden]{display:none}.guard-repository.is-nested{margin-left:calc(var(--guard-depth,1) * 12px);border-left:1px solid var(--vscode-tree-indentGuidesStroke,color-mix(in srgb,currentColor 18%,transparent))}.guard-history-head strong{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.version-guard .guard-back{display:inline-flex;align-items:center;gap:4px;flex:none;padding:2px 8px 2px 6px;border:1px solid var(--vscode-button-border,color-mix(in srgb,currentColor 25%,transparent));background:var(--vscode-button-secondaryBackground,color-mix(in srgb,currentColor 10%,transparent));color:var(--vscode-button-secondaryForeground,inherit)}.version-guard .guard-back:hover{background:var(--vscode-button-secondaryHoverBackground,color-mix(in srgb,currentColor 18%,transparent))}.guard-history pre{white-space:pre-wrap;font:inherit;overflow-wrap:anywhere}.guard-commit{display:block;width:100%;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.guard-commit:before{content:'●';color:var(--vscode-focusBorder,#3794ff);margin-right:8px}.guard-commit small{opacity:.5}
+.version-guard header{display:flex;align-items:center;gap:6px;padding:8px;min-height:24px;border-bottom:1px solid var(--vscode-panel-border,#444)}.guard-panel-icon{display:inline-flex;flex:none;margin-right:auto;align-items:center;justify-content:center;width:16px;height:16px;opacity:.85;cursor:default}.guard-panel-icon svg{display:block;width:15px;height:15px}.version-guard .guard-header-icon{display:inline-flex;align-items:center;justify-content:center}.guard-header-icon svg{width:16px;height:16px}.version-guard button{font:inherit;color:inherit;background:transparent;border:0;border-radius:3px;cursor:pointer;padding:3px 5px}.version-guard button:hover{background:var(--vscode-list-hoverBackground,#ffffff15)}.version-guard button:disabled{opacity:.45;cursor:default}.version-guard button:focus-visible,.version-guard textarea:focus-visible{outline:1px solid var(--vscode-focusBorder,#3794ff)}
+.guard-grip{cursor:grab}.guard-grip svg{width:14px;height:14px;fill:currentColor}.guard-notice{padding:0 8px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:120px;overflow:auto}.guard-notice:not(:empty){padding:8px}.guard-notice.is-error{color:var(--vscode-errorForeground,#f88)}.guard-repositories{flex:1;min-height:80px;overflow:auto;padding-bottom:6px}.guard-repo-title{position:relative;display:flex;align-items:center;padding:4px 6px;gap:4px;min-height:22px;cursor:pointer;background:color-mix(in srgb,currentColor 4%,transparent);border-bottom:1px solid var(--vscode-panel-border,color-mix(in srgb,currentColor 14%,transparent))}.guard-repo-title:hover{background:color-mix(in srgb,currentColor 7%,transparent)}.guard-repo-title:focus-visible{outline:1px solid var(--vscode-focusBorder,#3794ff);outline-offset:-1px}.guard-repo-title.is-loading::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:2px;background:linear-gradient(90deg,transparent 0,var(--vscode-progressBar-background,#0e70c0) 40%,var(--vscode-progressBar-background,#0e70c0) 60%,transparent 100%) no-repeat;background-size:35% 100%;animation:guard-progress 1.1s linear infinite}@keyframes guard-progress{from{background-position:-50% 0}to{background-position:150% 0}}@media (prefers-reduced-motion:reduce){.guard-repo-title.is-loading::after{animation:none;background:var(--vscode-progressBar-background,#0e70c0);opacity:.6}}.guard-repo-title.is-selected{background:color-mix(in srgb,var(--vscode-focusBorder,#3794ff) 16%,transparent)}.guard-repo-title.is-selected:hover{background:color-mix(in srgb,var(--vscode-focusBorder,#3794ff) 22%,transparent)}.version-guard{position:relative}.guard-repo-controls{display:inline-flex;flex:0 6 auto;align-items:center;gap:3px;min-width:58px;max-width:45%;margin-left:auto;padding-left:6px}.guard-repo-controls .guard-fetch{flex:none}.version-guard .guard-repo-controls button{display:inline-flex;align-items:center;gap:3px;height:20px;box-sizing:border-box;padding:0 6px;border:1px solid color-mix(in srgb,currentColor 12%,transparent);border-radius:4px;background:transparent;color:inherit;opacity:.85;cursor:pointer}.version-guard .guard-repo-controls button:hover:not(:disabled){opacity:1;background:var(--vscode-toolbar-hoverBackground,color-mix(in srgb,currentColor 10%,transparent))}.version-guard .guard-repo-controls button:disabled{opacity:.45;cursor:default}.guard-repo-controls svg{width:14px;height:14px;flex:none}.guard-branch-name{min-width:0}.guard-branch-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.version-guard .guard-repo-controls .guard-fetch{width:24px;padding:0;justify-content:center}.guard-stale{opacity:.6}.guard-branch-picker{position:absolute;left:6px;right:6px;z-index:30;max-height:min(420px,70%);display:flex;flex-direction:column;color:var(--vscode-quickInput-foreground,var(--vscode-foreground,inherit));background:var(--vscode-quickInput-background,var(--vscode-editorWidget-background,#252526));border:1px solid var(--vscode-widget-border,var(--vscode-panel-border,#454545));border-radius:6px;box-shadow:0 4px 16px var(--vscode-widget-shadow,rgba(0,0,0,.36));overflow:hidden}.guard-branch-picker input{margin:6px;padding:3px 6px;font:inherit;color:inherit;background:var(--vscode-input-background,#333);border:1px solid var(--vscode-focusBorder,#3794ff);border-radius:3px;outline:none}.guard-branch-list{overflow:auto;padding-bottom:4px}.guard-branch-item{padding:3px 10px;cursor:pointer}.guard-branch-item.is-active{color:var(--vscode-quickInputList-focusForeground,var(--vscode-list-activeSelectionForeground,inherit));background:var(--vscode-quickInputList-focusBackground,var(--vscode-list-activeSelectionBackground,#04395e))}.guard-branch-item-main{display:flex;align-items:center;gap:6px;white-space:nowrap;min-width:0}.guard-branch-item-name{overflow:hidden;text-overflow:ellipsis}.guard-branch-item-meta,.guard-branch-item-tag,.guard-branch-item-detail,.guard-branch-note{opacity:.7;font-size:.88em}.guard-branch-item-tag{margin-left:auto}.guard-branch-item-detail{padding-left:22px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.guard-branch-note{padding:6px 10px}.guard-branch-sep{margin:3px 0;border-top:1px solid var(--vscode-widget-border,color-mix(in srgb,currentColor 14%,transparent))}.guard-repo-name{font-weight:400;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.guard-branch{flex:none;margin-left:6px;font-size:.85em;opacity:.6;white-space:nowrap;cursor:default}.guard-repo-body{padding:6px 0 6px 19px;border-bottom:1px solid var(--vscode-panel-border,color-mix(in srgb,currentColor 14%,transparent))}.guard-composer{display:flex;align-items:flex-start;gap:4px;padding:0 6px 4px 2px}.guard-repository textarea{flex:1;min-width:0;box-sizing:border-box;width:auto;margin:0;padding:3px 6px;resize:vertical;font:inherit;line-height:1.5;min-height:calc(1.5em + 8px);color:inherit;background:var(--vscode-input-background,#333);border:1px solid var(--vscode-input-border,#555);border-radius:4px}.guard-actions{display:flex;flex:none;gap:4px}.version-guard .guard-actions button{border:1px solid var(--vscode-button-border,color-mix(in srgb,currentColor 25%,transparent));background:var(--vscode-button-secondaryBackground,color-mix(in srgb,currentColor 10%,transparent));color:var(--vscode-button-secondaryForeground,inherit)}.version-guard .guard-actions button:hover:not(:disabled){background:var(--vscode-button-secondaryHoverBackground,color-mix(in srgb,currentColor 18%,transparent))}.version-guard .guard-actions button{white-space:nowrap;padding:3px 8px}.version-guard .guard-actions button.is-primary{background:var(--vscode-button-background,#225d89);color:var(--vscode-button-foreground,#fff)}.version-guard .guard-actions button.is-primary:hover:not(:disabled){background:var(--vscode-button-hoverBackground,#1c4f75)}.version-guard .guard-actions button:disabled{opacity:.45}.version-guard .guard-actions .guard-sync{white-space:nowrap}.guard-checked{display:block;opacity:.6;padding:5px 8px}.guard-group{display:flex;align-items:center;min-height:22px;padding:0 6px 0 4px;margin-top:4px;font-size:.85em;opacity:.65}.guard-group:hover,.guard-group:focus-within{opacity:1}.guard-group button{visibility:hidden;padding:0 5px}.guard-group:hover button,.guard-group:focus-within button{visibility:visible}.guard-group button{margin-left:auto}.guard-file{display:flex;align-items:center;gap:3px;padding:1px 6px;min-height:24px}.guard-file:hover,.guard-file:focus-within{background:var(--vscode-list-hoverBackground,color-mix(in srgb,currentColor 8%,transparent))}.guard-dir{cursor:pointer;gap:2px}.guard-dir:focus-visible{outline:1px solid var(--vscode-focusBorder,#3794ff);outline-offset:-1px}.guard-twisty,.guard-file-icon{display:inline-flex;flex:none;width:16px;height:16px;align-items:center;justify-content:center;opacity:.9}.guard-twisty{opacity:.7}.guard-file-actions{display:none;flex:none;gap:1px}.guard-file:hover .guard-file-actions,.guard-file:focus-within .guard-file-actions{display:inline-flex}.version-guard .guard-icon-button{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border-radius:4px;opacity:.8}.version-guard .guard-icon-button:hover{opacity:1;background:var(--vscode-toolbar-hoverBackground,color-mix(in srgb,currentColor 14%,transparent))}.guard-file.is-deleted .guard-file-name{text-decoration:line-through;opacity:.6}.guard-file .guard-file-status.is-deleted{color:var(--vscode-gitDecoration-deletedResourceForeground,#c74e39)}.guard-file .guard-file-status.is-added{color:var(--vscode-gitDecoration-addedResourceForeground,#3fa266)}.guard-file .guard-file-status.is-untracked{color:var(--vscode-gitDecoration-untrackedResourceForeground,#3fa266)}.guard-file .guard-file-status.is-renamed{color:var(--vscode-gitDecoration-renamedResourceForeground,#3fa266)}.guard-file-status{width:14px;text-align:center;flex:none}.guard-file-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;flex-shrink:1;min-width:40px}.guard-file-path{opacity:.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}.guard-file-status{color:var(--vscode-gitDecoration-modifiedResourceForeground,#c99)}.guard-history-resize{position:relative;z-index:2;height:0;flex:none;cursor:row-resize}.guard-history-resize::after{content:'';position:absolute;left:0;right:0;top:-2px;height:5px}.guard-history{background:inherit;flex:none;min-height:100px;max-height:60%;overflow:auto;padding:0 0 6px;box-sizing:border-box;border-top:1px solid var(--vscode-panel-border,#444);font-size:13px}.guard-history-head{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:4px;height:24px;padding:0 6px 0 4px;margin-bottom:2px;box-sizing:border-box;font-size:11px;line-height:16px;letter-spacing:.02em;cursor:pointer;background-color:inherit;background-image:linear-gradient(color-mix(in srgb,currentColor 5%,transparent),color-mix(in srgb,currentColor 5%,transparent))}.guard-history-head:focus-visible{outline:1px solid var(--vscode-focusBorder,#3794ff);outline-offset:-1px}.guard-history-head .guard-twisty svg{width:12px;height:12px;transition:transform .12s}.guard-history-head .guard-twisty.is-expanded svg{transform:rotate(90deg)}.guard-history.is-collapsed{height:auto!important;min-height:0;flex:none;padding-bottom:0;overflow:hidden}.guard-history.is-collapsed .guard-history-head{margin-bottom:0}.guard-history-resize[hidden]{display:none}.guard-repository.is-nested{margin-left:calc(var(--guard-depth,1) * 12px)}.guard-history-head strong{flex:none;font-weight:600}.guard-history-repo{display:inline-flex;align-items:center;gap:4px;min-width:0;max-width:65%;height:18px;box-sizing:border-box;margin-left:auto;padding:0 7px 0 5px;border-radius:9px;background:color-mix(in srgb,currentColor 9%,transparent);font-weight:400;letter-spacing:0;opacity:.8}.guard-history-repo svg{flex:none;width:11px;height:11px}.guard-history-repo span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.version-guard .guard-back{display:inline-flex;align-items:center;gap:3px;flex:none;height:18px;box-sizing:border-box;padding:0 6px 0 4px;font-size:11px;border:1px solid var(--vscode-button-border,color-mix(in srgb,currentColor 25%,transparent));background:var(--vscode-button-secondaryBackground,color-mix(in srgb,currentColor 10%,transparent));color:var(--vscode-button-secondaryForeground,inherit)}.version-guard .guard-back:hover{background:var(--vscode-button-secondaryHoverBackground,color-mix(in srgb,currentColor 18%,transparent))}.guard-history pre{margin:6px 10px;white-space:pre-wrap;font:inherit;overflow-wrap:anywhere}.version-guard .guard-commit{display:block;width:100%;box-sizing:border-box;min-height:24px;padding:3px 10px;border:0;border-radius:0;background:transparent;color:inherit;font-size:13px;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.version-guard .guard-commit:hover{background:var(--vscode-list-hoverBackground,color-mix(in srgb,currentColor 8%,transparent))}.guard-commit:before{content:'●';color:var(--vscode-focusBorder,#3794ff);font-size:9px;vertical-align:2px;margin-right:8px}.guard-commit small{font-size:11px;opacity:.6}
 `; document.head.append(style);
 }
 const svg = (body: string, extra = ''): string => `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" ${extra}>${body}</svg>`;
@@ -280,8 +383,21 @@ const ICONS = {
   discard: svg('<path d="M3.5 6.5h6.5a3 3 0 010 6H7M6 3.5l-3 3 3 3"/>', stroke),
   back: svg('<path d="M13 8H3M7 4L3 8l4 4"/>', stroke),
   plus: svg('<path d="M8 3v10M3 8h10"/>', stroke), minus: svg('<path d="M3 8h10"/>', stroke),
+  branch: svg('<circle cx="5" cy="3.5" r="1.5"/><circle cx="5" cy="12.5" r="1.5"/><circle cx="11" cy="5.5" r="1.5"/><path d="M5 5v6M11 7c0 2.5-3 2.5-5.4 4.4"/>', stroke),
+  cloud: svg('<path d="M4.5 12.5a3 3 0 01-.3-6 4 4 0 017.6-.8 3.2 3.2 0 01.4 6.8z"/>', stroke),
+  check: svg('<path d="M3 8.5l3 3 7-7"/>', stroke),
+  expandAll: svg('<path d="M4 3.5l4 4 4-4M4 8.5l4 4 4-4"/>', stroke), collapseAll: svg('<path d="M4 7.5l4-4 4 4M4 12.5l4-4 4 4"/>', stroke),
+  dockGrip: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/></svg>',
+  sectionChevron: '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>',
+  versionControl: svg('<circle cx="4" cy="3.5" r="1.75"/><circle cx="12" cy="3.5" r="1.75"/><circle cx="8" cy="12.5" r="1.75"/><path d="M4 5.25v.75a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-.75M8 8v2.75"/>', stroke.replace('1.2', '1.3')),
   fetch: svg('<path d="M4.5 12.5a3 3 0 01-.3-6 4 4 0 017.6-.8 3.2 3.2 0 01.4 6.8"/><path d="M8 8v5.5M6.2 11.8L8 13.5l1.8-1.7"/>', stroke),
 };
+function relativeTime(timestamp: number): string {
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return '';
+  const seconds = Math.round((timestamp - Date.now()) / 1000); const format = new Intl.RelativeTimeFormat(document.documentElement.lang || undefined, { numeric: 'auto' });
+  for (const [unit, size] of [['year', 31536000], ['month', 2592000], ['week', 604800], ['day', 86400], ['hour', 3600], ['minute', 60]] as const) if (Math.abs(seconds) >= size) return format.format(Math.round(seconds / size), unit);
+  return format.format(seconds, 'second');
+}
 function fileIcon(name: string): string {
   const lower = name.toLowerCase(); const ext = lower.split('.').pop() ?? '';
   if (lower.endsWith('.excalidraw') || lower.endsWith('.excalidraw.json') || lower.endsWith('.excalidraw.md')) return ICONS.excalidraw;

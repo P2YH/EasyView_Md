@@ -2,7 +2,7 @@
   "name": "easyview-md",
   "displayName": "EasyView_Md",
   "description": "%extension.description%",
-  "version": "2.1.5",
+  "version": "2.1.6",
   "publisher": "zhangxy",
   "license": "MIT",
   "private": true,
@@ -341,6 +341,24 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "easyviewMd.versionGuard.refresh",
+        "title": "%command.versionGuard.refresh.title%",
+        "category": "EasyView_Md",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "easyviewMd.versionGuard.expandAll",
+        "title": "%command.versionGuard.expandAll.title%",
+        "category": "EasyView_Md",
+        "icon": "$(expand-all)"
+      },
+      {
+        "command": "easyviewMd.versionGuard.collapseAll",
+        "title": "%command.versionGuard.collapseAll.title%",
+        "category": "EasyView_Md",
+        "icon": "$(collapse-all)"
+      },
+      {
         "command": "easyviewMd.workspace.configureSort",
         "title": "%command.workspace.configureSort.title%",
         "category": "EasyView_Md",
@@ -492,27 +510,42 @@
         {
           "command": "easyviewMd.workspace.configureSort",
           "when": "view == easyviewMd.workspaceFiles",
-          "group": "navigation@1"
+          "group": "navigation@5"
         },
         {
           "command": "easyviewMd.workspace.newFile",
           "when": "view == easyviewMd.workspaceFiles",
-          "group": "navigation@2"
+          "group": "navigation@1"
         },
         {
           "command": "easyviewMd.workspace.newFolder",
           "when": "view == easyviewMd.workspaceFiles",
-          "group": "navigation@3"
+          "group": "navigation@2"
         },
         {
           "command": "easyviewMd.workspace.refresh",
           "when": "view == easyviewMd.workspaceFiles",
-          "group": "navigation@4"
+          "group": "navigation@3"
+        },
+        {
+          "command": "easyviewMd.versionGuard.refresh",
+          "when": "view == easyviewMd.versionGuard",
+          "group": "navigation@0"
+        },
+        {
+          "command": "easyviewMd.versionGuard.expandAll",
+          "when": "view == easyviewMd.versionGuard && !easyviewMd.versionGuard.allExpanded",
+          "group": "navigation@1"
+        },
+        {
+          "command": "easyviewMd.versionGuard.collapseAll",
+          "when": "view == easyviewMd.versionGuard && easyviewMd.versionGuard.allExpanded",
+          "group": "navigation@1"
         },
         {
           "command": "easyviewMd.workspace.collapseAll",
           "when": "view == easyviewMd.workspaceFiles",
-          "group": "navigation@5"
+          "group": "navigation@4"
         }
       ]
     },

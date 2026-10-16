@@ -19,7 +19,8 @@ it('releases selected-file subscriptions after 100 expand/collapse cycles and ig
 it('uses a fixed title and an initially fully selected source dropdown', async()=>{
   const client:TimelineClient={list:vi.fn(async()=>({entries:[],errors:[]})),open:vi.fn(async()=>{}),restore:vi.fn(async()=>{}),watch:()=>({dispose:()=>{}}),loadState:()=>undefined,saveState:vi.fn()};
   const panel=new TimelinePanel(client);document.body.append(panel.element);panel.setFile('/project/notes.md');
-  expect(panel.element.querySelector('.easyview-timeline-header')?.textContent?.trim()).toBe('⌄  时间线');
+  expect(panel.element.querySelector('.easyview-timeline-header')?.textContent?.trim()).toBe('时间线');
+  expect(panel.element.querySelector('.easyview-timeline-chevron')?.classList.contains('is-expanded')).toBe(true);
   expect(panel.element.querySelector('.easyview-timeline-tools')?.textContent).not.toContain('Cursor');
   const filter=panel.element.querySelector<HTMLButtonElement>('[aria-label="筛选来源"]')!;filter.click();
   const options=[...document.querySelectorAll<HTMLButtonElement>('.easyview-timeline-filter-menu [role="menuitemcheckbox"]')];

@@ -37,6 +37,31 @@ describe('VersionGuardPanel', () => {
     expect(panel.element.querySelector('.guard-history-head .guard-back')?.textContent).toBeTruthy();
     panel.dispose();
   });
+  it('expands and collapses every repository from one header toggle, without a close button', async () => {
+    const guard = client(); const base = guard.request;
+    guard.request = vi.fn(async (request: GuardRequest) => request.method === 'discover'
+      ? [{ id: '/repo', name: 'repo', rootPath: '/repo' }, { id: '/other', name: 'other', rootPath: '/other' }]
+      : base(request));
+    const states: boolean[] = [];
+    const panel = new VersionGuardPanel({ client: guard, onExpandStateChange: state => states.push(state) }); document.body.append(panel.element);
+    panel.setVisible(true); for (let i = 0; i < 5; i++) await flush();
+    const header = panel.element.querySelector('header')!;
+    expect(header.querySelector('.guard-panel-icon')?.getAttribute('title')).toBe('仓库版本管理');
+    expect(header.textContent).not.toContain('仓库版本管理');
+    const titles = () => [...header.querySelectorAll('button')].map(button => button.title);
+    expect(titles()).toEqual(['刷新仓库', '展开全部']);
+    const expanded = () => [...panel.element.querySelectorAll('.guard-repo-title')].map(row => row.getAttribute('aria-expanded'));
+    expect(expanded()).toEqual(['true', 'false']);
+    header.querySelector<HTMLButtonElement>('[title="展开全部"]')!.click(); for (let i = 0; i < 3; i++) await flush();
+    expect(expanded()).toEqual(['true', 'true']);
+    expect(titles()).toEqual(['刷新仓库', '收起全部']);
+    expect(guard.calls.some(call => call.method === 'status' && call.repository === '/other')).toBe(true);
+    header.querySelector<HTMLButtonElement>('[title="收起全部"]')!.click(); await flush();
+    expect(expanded()).toEqual(['false', 'false']);
+    expect(titles()).toEqual(['刷新仓库', '展开全部']);
+    expect(states).toEqual([false, true, false]);
+    panel.dispose();
+  });
   it('renders deleted files struck through, without the removed hint texts', async () => {
     const guard = client(); const panel = new VersionGuardPanel({ client: guard }); document.body.append(panel.element);
     panel.setVisible(true); for (let i = 0; i < 5; i++) await flush();
@@ -66,6 +91,65 @@ describe('VersionGuardPanel', () => {
     expect(panel.element.querySelector('.guard-commit')).not.toBeNull();
     panel.dispose();
   });
+  it('commits unstaged changes directly once a message is entered, staging them first', async () => {
+    const guard = client(); const panel = new VersionGuardPanel({ client: guard }); document.body.append(panel.element);
+    panel.setVisible(true); for (let i = 0; i < 5; i++) await flush();
+    const commitButton = () => panel.element.querySelector<HTMLButtonElement>('.guard-actions .is-primary')!;
+    expect(commitButton().disabled).toBe(true);
+    const input = panel.element.querySelector('textarea')!; input.value = 'Remove a'; input.dispatchEvent(new Event('input'));
+    expect(commitButton().disabled).toBe(false);
+    expect(commitButton().title).toMatch(/^(Stage all changes and commit|暂存全部更改并提交)$/);
+    commitButton().click(); for (let i = 0; i < 3; i++) await flush();
+    expect(guard.calls.find(call => call.method === 'commit')).toMatchObject({ message: 'Remove a', stageAll: true });
+    panel.dispose();
+  });
+  it('omits the built-in header for hosts that provide their own title and refresh action', async () => {
+    const guard = client(); const panel = new VersionGuardPanel({ client: guard, header: false }); document.body.append(panel.element);
+    panel.setVisible(true); for (let i = 0; i < 5; i++) await flush();
+    expect(panel.element.querySelector('header')).toBeNull();
+    const discovers = guard.calls.filter(call => call.method === 'discover').length;
+    panel.refreshRepositories(); for (let i = 0; i < 5; i++) await flush();
+    expect(guard.calls.filter(call => call.method === 'discover').length).toBe(discovers + 1);
+    panel.dispose();
+  });
+  it('opens a branch picker from the branch label and switches or creates branches', async () => {
+    const guard = client(); const base = guard.request;
+    guard.request = vi.fn(async (request: GuardRequest) => {
+      if (request.method !== 'branches') return base(request);
+      guard.calls.push(request);
+      return [
+        { name: 'main', remote: false, current: true, upstream: 'origin/main', ahead: 0, behind: 1, subject: 'Base', author: 'A', timestamp: Date.now() - 86400000 },
+        { name: 'product_design', remote: false, current: false, subject: 'Design', author: 'B', timestamp: Date.now() - 172800000 },
+        { name: 'origin/feature', remote: true, current: false, subject: 'Feature', author: 'C', timestamp: Date.now() },
+      ];
+    });
+    const panel = new VersionGuardPanel({ client: guard }); document.body.append(panel.element);
+    panel.setVisible(true); for (let i = 0; i < 5; i++) await flush();
+    const label = panel.element.querySelector<HTMLButtonElement>('.guard-branch-name')!;
+    expect(label.textContent).toBe('main');
+    const expanded = panel.element.querySelector('.guard-repo-title')!.getAttribute('aria-expanded');
+    label.click(); for (let i = 0; i < 3; i++) await flush();
+    expect(panel.element.querySelector('.guard-repo-title')!.getAttribute('aria-expanded')).toBe(expanded);
+    const picker = () => panel.element.querySelector<HTMLElement>('.guard-branch-picker');
+    const names = () => [...picker()!.querySelectorAll('.guard-branch-item-name')].map(node => node.textContent);
+    expect(names()).toEqual([expect.stringMatching(/…$/), 'main', 'product_design', 'origin/feature']);
+    expect(picker()!.textContent).toContain('A • Base');
+    const input = picker()!.querySelector('input')!;
+    input.value = 'feat'; input.dispatchEvent(new Event('input'));
+    expect(names()).toEqual([expect.stringContaining('feat'), 'origin/feature']);
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown' })); input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    for (let i = 0; i < 3; i++) await flush();
+    expect(picker()).toBeNull();
+    expect(guard.calls.find(call => call.method === 'checkout')).toMatchObject({ branch: 'origin/feature', create: false });
+    panel.element.querySelector<HTMLButtonElement>('.guard-branch-name')!.click(); for (let i = 0; i < 3; i++) await flush();
+    const second = picker()!.querySelector('input')!; second.value = 'topic/x'; second.dispatchEvent(new Event('input'));
+    second.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' })); for (let i = 0; i < 3; i++) await flush();
+    expect(guard.calls.filter(call => call.method === 'checkout').at(-1)).toMatchObject({ branch: 'topic/x', create: true });
+    panel.element.querySelector<HTMLButtonElement>('.guard-branch-name')!.click(); for (let i = 0; i < 3; i++) await flush();
+    picker()!.querySelector('input')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(picker()).toBeNull();
+    panel.dispose();
+  });
   it.each([
     { ahead: 0, behind: 0, method: 'none', label: /^(Up to date|已同步)$/, disabled: true },
     { ahead: 0, behind: 5, method: 'pull', label: /↓5$/, disabled: false },
@@ -82,10 +166,15 @@ describe('VersionGuardPanel', () => {
     const panel = new VersionGuardPanel({ client: guard }); document.body.append(panel.element);
     panel.setVisible(true); for (let i = 0; i < 5; i++) await flush();
     const actions = panel.element.querySelector('.guard-actions')!;
-    expect(actions.querySelectorAll('button')).toHaveLength(3);
+    expect(actions.querySelectorAll('button')).toHaveLength(2);
     const sync = actions.querySelector<HTMLButtonElement>('.guard-sync')!;
     expect(sync.dataset.method).toBe(method); expect(sync.textContent).toMatch(label); expect(sync.disabled).toBe(disabled);
-    expect(actions.querySelector<HTMLButtonElement>('.guard-fetch')!.disabled).toBe(false);
+    const fetch = panel.element.querySelector<HTMLButtonElement>('.guard-repo-title .guard-fetch')!;
+    expect(fetch.disabled).toBe(false);
+    const expanded = panel.element.querySelector('.guard-repo-title')!.getAttribute('aria-expanded');
+    fetch.click(); for (let i = 0; i < 3; i++) await flush();
+    expect(guard.calls.some(call => call.method === 'fetch')).toBe(true);
+    expect(panel.element.querySelector('.guard-repo-title')!.getAttribute('aria-expanded')).toBe(expanded);
     if (!disabled) { sync.click(); for (let i = 0; i < 3; i++) await flush(); expect(guard.calls.some(call => call.method === method)).toBe(true); }
     panel.dispose();
   });

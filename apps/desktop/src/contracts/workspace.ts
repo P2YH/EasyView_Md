@@ -104,6 +104,8 @@ export interface DesktopTabSnapshot {
   splitRenderingAvailable: boolean;
 }
 
+export type DesktopExplorerDisplayMode = 'list' | 'icons';
+
 export interface DesktopWorkspaceState {
   rootPath: string | null;
   openTabs: PersistedDesktopTab[];
@@ -112,12 +114,16 @@ export interface DesktopWorkspaceState {
   activeEditorGroupId?: string;
   editorGroupLayout?: DesktopEditorGroupLayout;
   expandedRelativePaths: string[];
+  explorerDisplayMode?: DesktopExplorerDisplayMode;
+  /** Folder shown by the icon view; '' is the workspace root. */
+  explorerIconDirectory?: string;
   explorerVisible: boolean;
   outlineVisible: boolean;
   explorerWidth: number;
   outlineWidth: number;
   panelLayout?: DesktopPanelLayout;
   versionGuardVisible?: boolean;
+  aiChatVisible?: boolean;
   versionGuardWidth?: number;
 }
 

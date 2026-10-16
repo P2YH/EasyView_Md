@@ -4,6 +4,10 @@ import { tTimeline } from './timeline.i18n';
 const SOURCES: TimelineSource[] = ['local', 'vscode', 'cursor', 'git'];
 const sourceLabel = (source: TimelineSource): string => tTimeline(`source.${source}`);
 const filterLabel = (source: TimelineSource): string => tTimeline(`filter.${source}`);
+const HEADER_HEIGHT = 24;
+/** Header plus the 1px top divider; the panel is border-box. */
+const COLLAPSED_HEIGHT = HEADER_HEIGHT + 1;
+const ROW_HEIGHT = 26;
 /** Owned DOM listeners, one active query and one selected-file subscription; no timers. */
 export class TimelinePanel {
   readonly element = document.createElement('section');
@@ -82,7 +86,15 @@ export class TimelinePanel {
     } finally { if (this.abort === abort) this.abort = undefined; }
   }
   private render(error?: string): void {
-    this.header.textContent = `${this.state.expanded ? '⌄' : '›'}  ${tTimeline('title')}`;
+    const chevron = document.createElement('span');
+    chevron.className = 'easyview-timeline-chevron';
+    chevron.classList.toggle('is-expanded', this.state.expanded);
+    chevron.setAttribute('aria-hidden', 'true');
+    chevron.innerHTML = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5 10.5 8 6 12.5"/></svg>';
+    const title = document.createElement('span');
+    title.className = 'easyview-timeline-title';
+    title.textContent = tTimeline('title');
+    this.header.replaceChildren(chevron, title);
     this.header.setAttribute('aria-expanded', String(this.state.expanded));
     this.header.title = this.filePath ?? tTimeline('selectMarkdown');
     this.body.hidden = !this.state.expanded;
@@ -105,12 +117,12 @@ export class TimelinePanel {
       const empty = document.createElement('div'); empty.className = 'easyview-timeline-notice';
       empty.textContent = !this.filePath || !isTimelineMarkdown(this.filePath) ? tTimeline('selectSavedMarkdown') : tTimeline('empty'); list.append(empty);
     }
-    const canvas = document.createElement('div'); canvas.style.position = 'relative'; canvas.style.height = `${this.entries.length * 32}px`;
+    const canvas = document.createElement('div'); canvas.style.position = 'relative'; canvas.style.height = `${this.entries.length * ROW_HEIGHT}px`;
     list.append(canvas);
     const renderRows = () => {
       canvas.replaceChildren();
-      const start = Math.max(0, Math.floor(list.scrollTop / 32) - 5);
-      const end = Math.min(this.entries.length, start + Math.max(20, Math.ceil((list.clientHeight || 220) / 32) + 10));
+      const start = Math.max(0, Math.floor(list.scrollTop / ROW_HEIGHT) - 5);
+      const end = Math.min(this.entries.length, start + Math.max(20, Math.ceil((list.clientHeight || 220) / ROW_HEIGHT) + 10));
       for (let index = start; index < end; index++) {
       const entry = this.entries[index];
       const row = document.createElement('button'); row.className = 'easyview-timeline-entry'; row.type = 'button';
@@ -124,7 +136,7 @@ export class TimelinePanel {
       row.append(marker, label, meta);
       row.onclick = () => { this.selectEntry(entry); void this.runAction(entry, false); };
       row.oncontextmenu = (event) => { event.preventDefault(); this.selectEntry(entry); this.showMenu(entry, event); };
-      row.style.position = 'absolute'; row.style.top = `${index * 32}px`; row.style.height = '32px'; row.style.boxSizing = 'border-box'; canvas.append(row);
+      row.style.position = 'absolute'; row.style.top = `${index * ROW_HEIGHT}px`; row.style.height = `${ROW_HEIGHT}px`; row.style.boxSizing = 'border-box'; canvas.append(row);
       }
     };
     list.addEventListener('scroll', renderRows, { passive: true });
@@ -189,7 +201,7 @@ export class TimelinePanel {
     const parent = this.element.parentElement;
     const available = parent?.clientHeight ?? 440;
     const headerHeight = parent?.querySelector<HTMLElement>('.workspace-header')?.offsetHeight ?? 0;
-    this.element.style.height = `${this.state.expanded ? Math.max(32, Math.min(this.state.height, available - headerHeight - Math.min(100, available / 2))) : 32}px`;
+    this.element.style.height = `${this.state.expanded ? Math.max(COLLAPSED_HEIGHT, Math.min(this.state.height, available - headerHeight - Math.min(100, available / 2))) : COLLAPSED_HEIGHT}px`;
   }
   private startY = 0;
   private startHeight = 0;
@@ -202,7 +214,7 @@ export class TimelinePanel {
   private ensureStyles(): void {
     if (document.getElementById('easyview-timeline-styles')) return;
     const style = document.createElement('style'); style.id = 'easyview-timeline-styles';
-    style.textContent = `.easyview-timeline{position:relative;flex:0 0 auto;display:flex;flex-direction:column;min-height:32px;overflow:hidden;border-top:1px solid var(--vscode-panel-border,#444);color:inherit;font:inherit}.easyview-timeline-sash{position:absolute;top:0;left:0;right:0;height:5px;cursor:ns-resize;z-index:2}.easyview-timeline-heading{height:32px;flex-shrink:0;display:flex;align-items:center;padding-right:6px}.easyview-timeline-header{height:32px;flex:1;min-width:0;text-align:left;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.easyview-timeline button{border:0;background:transparent;color:inherit;cursor:pointer;font:inherit}.easyview-timeline-body{min-height:0;flex:1;display:flex;flex-direction:column}.easyview-timeline-body[hidden]{display:none}.easyview-timeline-tools{display:flex;align-items:center;gap:3px;flex-shrink:0}.easyview-timeline-tools button{display:flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border-radius:4px;opacity:.75}.easyview-timeline-tools button:hover{opacity:1;background:var(--vscode-list-hoverBackground,#ffffff16)}.easyview-timeline-tools button.active{opacity:1;background:var(--vscode-list-hoverBackground,#ffffff16)}.easyview-timeline-list{overflow:auto;min-height:0;flex:1}.easyview-timeline-entry{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;text-align:left}.easyview-timeline-entry:hover{background:var(--vscode-list-hoverBackground,#ffffff16)}.easyview-timeline-entry.selected,.easyview-timeline-entry.selected:hover{background:var(--easyview-list-selection-background,var(--vscode-list-activeSelectionBackground,#094771));color:var(--vscode-list-activeSelectionForeground,#fff)}.easyview-timeline-label{min-width:0;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.easyview-timeline-meta{font-size:10px;opacity:.65;white-space:nowrap}.easyview-timeline-notice{padding:10px;font-size:12px;white-space:pre-wrap;opacity:.7}`;
+    style.textContent = `.easyview-timeline{position:relative;box-sizing:border-box;flex:0 0 auto;display:flex;flex-direction:column;min-height:25px;overflow:hidden;border-top:1px solid var(--vscode-panel-border,#444);color:inherit;font:inherit}.easyview-timeline-sash{position:absolute;top:0;left:0;right:0;height:5px;cursor:ns-resize;z-index:2}.easyview-timeline-heading{height:24px;flex-shrink:0;display:flex;align-items:center;padding:0 4px 0 0;background:color-mix(in srgb,currentColor 5%,transparent)}.easyview-timeline .easyview-timeline-header{height:24px;flex:1;min-width:0;display:flex;align-items:center;gap:4px;padding:0 0 0 4px;text-align:left;font-size:11px;font-weight:600;line-height:16px;letter-spacing:.02em;white-space:nowrap;overflow:hidden}.easyview-timeline-chevron{display:inline-flex;flex:none;align-items:center;justify-content:center;width:16px;height:16px;opacity:.7;transition:transform .12s}.easyview-timeline-chevron.is-expanded{transform:rotate(90deg)}.easyview-timeline-chevron svg{display:block}.easyview-timeline-title{min-width:0;overflow:hidden;text-overflow:ellipsis}.easyview-timeline button{border:0;background:transparent;color:inherit;cursor:pointer;font:inherit}.easyview-timeline-body{min-height:0;flex:1;display:flex;flex-direction:column}.easyview-timeline-body[hidden]{display:none}.easyview-timeline-tools{display:flex;align-items:center;gap:3px;flex-shrink:0}.easyview-timeline-heading:not(:hover):not(:focus-within) .easyview-timeline-tools button:not(.active){opacity:0}.easyview-timeline-tools button{display:flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border-radius:4px;font-size:13px;opacity:.75}.easyview-timeline-tools button:hover{opacity:1;background:var(--vscode-list-hoverBackground,#ffffff16)}.easyview-timeline-tools button.active{opacity:1;background:var(--vscode-list-hoverBackground,#ffffff16)}.easyview-timeline-list{overflow:auto;min-height:0;flex:1}.easyview-timeline .easyview-timeline-entry{display:flex;align-items:center;gap:8px;width:100%;min-height:24px;box-sizing:border-box;padding:3px 10px;font-size:13px;text-align:left}.easyview-timeline-entry:hover{background:var(--vscode-list-hoverBackground,#ffffff16)}.easyview-timeline-entry.selected,.easyview-timeline-entry.selected:hover{background:var(--easyview-list-selection-background,var(--vscode-list-activeSelectionBackground,#094771));color:var(--vscode-list-activeSelectionForeground,#fff)}.easyview-timeline-label{min-width:0;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.easyview-timeline-meta{font-size:11px;opacity:.6;white-space:nowrap}.easyview-timeline-notice{padding:10px;font-size:12px;white-space:pre-wrap;opacity:.7}`;
     document.head.append(style);
   }
 }

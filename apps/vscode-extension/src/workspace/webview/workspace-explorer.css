@@ -660,3 +660,16 @@ body {
 .workspace-icon-tile .workspace-entry-timestamps { max-width: 100%; overflow: hidden; font-size: 9px; }
 .workspace-icon-grid .workspace-create-row { min-width: 80px; padding: 4px; }
 .workspace-icon-empty { grid-column: 1 / -1; margin: 12px 4px; color: var(--vscode-descriptionForeground, #999); font-size: 12px; }
+
+/* Font size setting: --workspace-font-offset is set on :root by the settings dialog's 字号 row. */
+.workspace-tree { font-size: calc(var(--vscode-font-size, 13px) + var(--workspace-font-offset, 0px)); }
+.workspace-entry,
+.workspace-entry-name,
+.workspace-entry-create,
+.workspace-create-row { height: calc(26px + var(--workspace-font-offset, 0px) * 1.25); }
+.workspace-entry-name,
+.workspace-entry-name > span:not(.workspace-chevron):not(.workspace-entry-icon) { line-height: 1.4; }
+.workspace-icon-path { font-size: calc(var(--vscode-font-size, 13px) + var(--workspace-font-offset, 0px)); }
+.workspace-icon-label,
+.workspace-icon-tile .workspace-rename-input { font-size: calc(11px + var(--workspace-font-offset, 0px)); }
+.workspace-icon-tile .workspace-rename-input { height: 2em; }

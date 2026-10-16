@@ -13,7 +13,7 @@ const manifest = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.js
     };
     customEditors?: Array<{ viewType: string }>;
     keybindings?: Array<{ command: string; when?: string; key?: string }>;
-    menus?: Record<string, Array<{ command: string; when?: string }>>;
+    menus?: Record<string, Array<{ command: string; when?: string; group?: string }>>;
     views?: Record<string, Array<{ id: string; type?: string }>>;
     viewsContainers?: { activitybar?: Array<{ id: string }> };
   };
@@ -54,14 +54,17 @@ describe('workspace explorer contribution', () => {
     }
     expect(commandIds.has('easyviewMd.workspace.openWith')).toBe(false);
 
-    const titleMenus = manifest.contributes.menus?.['view/title'] ?? [];
-    expect(titleMenus.map(({ command }) => command)).toEqual([
+    const allTitleMenus = manifest.contributes.menus?.['view/title'] ?? [];
+    expect(allTitleMenus.filter(({ when }) => when?.includes('view == easyviewMd.versionGuard')).map(({ command }) => command)).toEqual(['easyviewMd.versionGuard.refresh', 'easyviewMd.versionGuard.expandAll', 'easyviewMd.versionGuard.collapseAll']);
+    const titleMenus = allTitleMenus.filter(({ command }) => command.startsWith('easyviewMd.workspace.'));
+    const order = (group?: string) => Number(group?.split('@')[1] ?? 0);
+    expect([...titleMenus].sort((a, b) => order(a.group) - order(b.group)).map(({ command }) => command)).toEqual([
       'easyviewMd.workspace.search',
-      'easyviewMd.workspace.configureSort',
       'easyviewMd.workspace.newFile',
       'easyviewMd.workspace.newFolder',
       'easyviewMd.workspace.refresh',
       'easyviewMd.workspace.collapseAll',
+      'easyviewMd.workspace.configureSort',
     ]);
     expect(titleMenus.every(({ when }) => when?.includes('view == easyviewMd.workspaceFiles'))).toBe(true);
 

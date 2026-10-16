@@ -78,6 +78,8 @@ describe('AiChatPanel host and document context', () => {
     const picker = host.querySelector('.ai-chat-mode-picker')!;
     expect(picker.previousElementSibling?.classList.contains('ai-chat-model-switcher')).toBe(true);
     expect(host.querySelector('.ai-chat-header .ai-chat-mode-btn')).toBeNull();
+    expect(host.querySelector('.ai-chat-header .ai-chat-panel-icon')?.getAttribute('title')).toBe('AI 对话');
+    expect(host.querySelector('.ai-chat-title')).toBeNull();
     expect(host.querySelector('.ai-chat-mode-label')?.textContent).toBe('Agent');
 
     host.querySelector<HTMLButtonElement>('.ai-chat-mode-current')!.click();
@@ -145,37 +147,70 @@ describe('AiChatPanel host and document context', () => {
         container: host, postMessage: (message) => messages.push(message),
         getDocumentContent: () => '', getFilePath: () => '', getFileName: () => '', applyDocumentEdit: () => undefined, copyText: () => undefined,
       });
-      const q = <T extends Element>(selector: string) => host.querySelector<T>(selector)!;
-      q<HTMLTextAreaElement>('.ai-chat-settings-models').value = 'deepseek-chat\ndeepseek-reasoner';
-      q<HTMLInputElement>('.ai-chat-settings-temperature').value = '0.7';
-      q<HTMLInputElement>('.ai-chat-settings-topp').value = '1';
-      q<HTMLInputElement>('.ai-chat-settings-maxtokens').value = '4096';
-      q<HTMLInputElement>('.ai-chat-settings-key').value = 'test-key';
-      q<HTMLInputElement>('.ai-chat-settings-web-search-key').value = '';
-      return { messages, panel, status: () => q<HTMLElement>('.ai-chat-settings-status'), save: q<HTMLButtonElement>('.ai-chat-settings-save') };
+      host.querySelector<HTMLButtonElement>('[data-action="settings"]')!.click();
+      const dialog = document.querySelector<HTMLElement>('.easyview-settings-dialog')!;
+      const [models] = dialog.querySelectorAll<HTMLTextAreaElement>('textarea');
+      const [temperature, topP, maxTokens] = dialog.querySelectorAll<HTMLInputElement>('input[type="number"]');
+      const [apiKey, webSearchKey] = dialog.querySelectorAll<HTMLInputElement>('input[type="password"]');
+      models.value = 'deepseek-chat\ndeepseek-reasoner';
+      temperature.value = '0.7'; topP.value = '1'; maxTokens.value = '4096';
+      apiKey.value = 'test-key'; webSearchKey.value = '';
+      return {
+        messages, panel, dialog,
+        error: () => dialog.querySelector<HTMLElement>('.easyview-settings-error')!,
+        save: dialog.querySelector<HTMLButtonElement>('.easyview-settings-footer .is-primary')!,
+      };
     };
-    it('waits for settings and key replies, skips an empty optional key, and reports key errors', () => {
-      const { messages, panel, status, save } = setup();
+    const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+    it('opens the shared settings dialog with short labels and the keychain note', () => {
+      const { panel, dialog } = setup();
+      expect([...dialog.querySelectorAll('.easyview-settings-label')].map((label) => label.textContent))
+        .toEqual(['API Key', 'Brave Search API Key', 'Base URL', '模型列表', 'Temperature', 'Top P', 'Max Tokens', '系统提示词', '输出']);
+      expect(dialog.querySelector('.easyview-settings-note')?.textContent).toContain('钥匙串');
+      panel.destroy();
+      document.querySelector('.easyview-settings-overlay')?.remove();
+    });
+    it('waits for settings and key replies, skips an empty optional key, and reports key errors', async () => {
+      const { messages, panel, error, save } = setup();
       save.click();
       const saves = messages.filter((m) => m.type === 'aiChat.saveSettings' || m.type === 'aiChat.saveApiKey' || m.type === 'aiChat.saveWebSearchApiKey');
       expect(saves.map((m) => m.type)).toEqual(['aiChat.saveSettings', 'aiChat.saveApiKey']);
-      expect(status().textContent).toBe('保存中…'); expect(save.disabled).toBe(true);
+      expect(save.disabled).toBe(true);
       const id = (m: EditorToHostMessage) => (m as { requestId: string }).requestId;
       panel.handleMessage({ type: 'aiChat.settingsSaved', requestId: 'someone-else', ok: true });
       panel.handleMessage({ type: 'aiChat.settingsSaved', requestId: id(saves[0]), ok: true });
-      expect(status().textContent).toBe('保存中…');
+      await flush();
+      expect(save.disabled).toBe(true);
       panel.handleMessage({ type: 'aiChat.settingsSaved', requestId: id(saves[1]), ok: false, message: 'Keychain denied' });
-      expect(status().textContent).toBe('Keychain denied'); expect(save.disabled).toBe(false);
+      await flush();
+      expect(error().textContent).toBe('Keychain denied'); expect(save.disabled).toBe(false);
+      panel.handleMessage({ type: 'aiChat.settingsSaved', requestId: 'x', ok: true });
+      save.click();
+      const retry = messages.filter((m) => m.type === 'aiChat.saveSettings' || m.type === 'aiChat.saveApiKey').slice(-2);
+      for (const message of retry) panel.handleMessage({ type: 'aiChat.settingsSaved', requestId: id(message), ok: true });
+      await flush();
+      expect(document.querySelector('.easyview-settings-overlay')).toBeNull();
       panel.destroy();
     });
-    it('times out instead of staying at "Saving…" forever', () => {
+    it('keeps the dialog open with an error for invalid values', () => {
+      const { messages, panel, dialog, error, save } = setup();
+      dialog.querySelector<HTMLTextAreaElement>('textarea')!.value = '  ';
+      save.click();
+      expect(error().textContent).toBe('模型列表不能为空');
+      expect(messages.some((m) => m.type === 'aiChat.saveSettings')).toBe(false);
+      panel.destroy();
+      document.querySelector('.easyview-settings-overlay')?.remove();
+    });
+    it('times out instead of staying at "Saving…" forever', async () => {
       vi.useFakeTimers();
-      const { panel, status, save } = setup();
+      const { panel, error, save } = setup();
       save.click();
       vi.advanceTimersByTime(SETTINGS_SAVE_TIMEOUT_MS + 1);
-      expect(status().textContent).toContain('保存超时');
-      expect(status().className).toContain('err'); expect(save.disabled).toBe(false);
+      await vi.runAllTimersAsync();
+      expect(error().textContent).toContain('保存超时');
+      expect(save.disabled).toBe(false);
       panel.destroy();
+      document.querySelector('.easyview-settings-overlay')?.remove();
     });
   });
 });

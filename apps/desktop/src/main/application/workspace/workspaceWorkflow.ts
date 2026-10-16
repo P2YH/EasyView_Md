@@ -121,7 +121,7 @@ export async function openWorkspaceFolder(folderPath?: string): Promise<Operatio
       setWorkspaceFileClipboard(null);
     }
     const rootPath = await workspaceCore.bindRoot(candidateRoot);
-    const next = setWorkspaceState({ rootPath, openTabs: [], activeTabId: null, expandedRelativePaths: [], explorerVisible: true });
+    const next = setWorkspaceState({ rootPath, openTabs: [], activeTabId: null, expandedRelativePaths: [], explorerIconDirectory: '', explorerVisible: true });
     startWorkspaceWatcher(rootPath);
     syncTabState();
     if (folderPath && folderPath !== rootPath) await recentFolderStore().forget(folderPath);

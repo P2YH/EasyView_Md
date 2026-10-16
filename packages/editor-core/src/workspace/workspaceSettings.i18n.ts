@@ -1,0 +1,38 @@
+import { defineMessages } from '@easyview/contracts/i18n';
+
+export const tWorkspaceSettings = defineMessages({
+  'zh-CN': {
+    'title': '文件面板设置',
+    'displayMode': '显示方式',
+    'displayList': '列表',
+    'displayIcons': '图标',
+    'sortMode': '排序方式',
+    'fontSize': '字号',
+    'fontSizeDecrease': '减小字号',
+    'fontSizeIncrease': '增大字号',
+    'fontSizeReset': '恢复默认',
+    'show': '显示内容',
+    'showTypes': '显示类型',
+    'showCreatedAt': '创建时间',
+    'showUpdatedAt': '修改时间',
+    'showTimestampHover': '悬停时显示时间',
+    'showDotEntries': '以点开头的文件和文件夹',
+  },
+  en: {
+    'title': 'File Panel Settings',
+    'displayMode': 'View',
+    'displayList': 'List',
+    'displayIcons': 'Icons',
+    'sortMode': 'Sort By',
+    'fontSize': 'Font Size',
+    'fontSizeDecrease': 'Decrease font size',
+    'fontSizeIncrease': 'Increase font size',
+    'fontSizeReset': 'Reset',
+    'show': 'Show',
+    'showTypes': 'Show Types',
+    'showCreatedAt': 'Created time',
+    'showUpdatedAt': 'Modified time',
+    'showTimestampHover': 'Times on hover',
+    'showDotEntries': 'Dotfiles and folders',
+  },
+});

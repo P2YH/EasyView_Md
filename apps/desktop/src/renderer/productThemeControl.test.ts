@@ -19,8 +19,8 @@ describe('Desktop product appearance', () => {
     const appearance = new EditorAppearanceStore(localStorage);
     const subscription = appearance.subscribe((state) => applyDesktopProductAppearance(state, document));
     appearance.setAccent('green');
-    appearance.setDepth(0.8);
     appearance.setMode('dark');
+    appearance.setDepth(0.8);
 
     expect(document.body.dataset.mdpreAccent).toBe('green');
     expect(document.body.classList.contains('mdpre-dark')).toBe(true);

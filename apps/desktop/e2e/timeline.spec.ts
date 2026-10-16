@@ -77,9 +77,18 @@ test('Timeline views and restores versions without changing Git, and releases 10
     const sash=timeline.locator('.easyview-timeline-sash');const box=await sash.boundingBox();
     await page.mouse.move(box!.x+20,box!.y+2);await page.mouse.down();await page.mouse.move(box!.x+20,box!.y-50);await page.mouse.up();
     expect(await timeline.evaluate(el=>el.getBoundingClientRect().height)).toBeGreaterThan(before);
-    for(let i=0;i<100;i++){await timeline.locator('.easyview-timeline-header').click();await expect(timeline.locator('.easyview-timeline-body')).toBeHidden();await timeline.locator('.easyview-timeline-header').click();}
+    const chevronBox=await timeline.locator('.easyview-timeline-chevron').boundingBox();const titleBox=await timeline.locator('.easyview-timeline-title').boundingBox();
+    expect(Math.abs((chevronBox!.y+chevronBox!.height/2)-(titleBox!.y+titleBox!.height/2))).toBeLessThanOrEqual(1);    for(let i=0;i<100;i++){await timeline.locator('.easyview-timeline-header').click();await expect(timeline.locator('.easyview-timeline-body')).toBeHidden();await timeline.locator('.easyview-timeline-header').click();}
     await expect(initial).toBeVisible();
     await timeline.locator('.easyview-timeline-header').click();
+    await timeline.locator('.easyview-timeline-tools button[title="设置"], .easyview-timeline-tools button:has-text("⚙")').first().click();
+    const historyDialog = page.locator('.easyview-settings-dialog');
+    await expect(historyDialog.locator('.easyview-settings-title')).toHaveText('本地历史设置');
+    const historyBox = (await historyDialog.boundingBox())!; const viewport = page.viewportSize() ?? await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+    expect(Math.abs(historyBox.x + historyBox.width / 2 - viewport.width / 2)).toBeLessThanOrEqual(2);
+    await page.screenshot({ path: 'test-results/timeline-settings-dialog.png' });
+    await historyDialog.getByRole('button', { name: '关闭', exact: true }).click();
+    await expect(page.locator('.easyview-settings-overlay')).toHaveCount(0);
     const diagnostics = () => page.evaluate(async () => { const result = await (window as any).easyViewDesktop.timeline.diagnostics(); if (!result.ok) throw new Error(result.message); return result.value; });
     await expect.poll(async () => (await diagnostics()).watchers).toBe(0);
     const idleBefore = await diagnostics();

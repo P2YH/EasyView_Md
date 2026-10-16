@@ -2,19 +2,66 @@ export const UPDATE_REPO = 'tiantianmanmanzou/EasyView_Md';
 export const LATEST_RELEASE_API = `https://api.github.com/repos/${UPDATE_REPO}/releases/latest`;
 export const WEBSITE_URL = 'https://easyview.wonderxy.art';
 
+/** The release workflow syncs the published files and a `release.json` manifest here. */
+export const MIRROR_DOWNLOADS_URL = `${WEBSITE_URL}/downloads`;
+export const MIRROR_RELEASE_MANIFEST = `${MIRROR_DOWNLOADS_URL}/release.json`;
+
 /**
- * `url` is the github.com download link; `apiUrl` is the REST asset endpoint, which redirects straight to the
+ * `url` is the primary download link; `apiUrl` is the REST asset endpoint, which redirects straight to the
  * asset CDN and so still works on networks where github.com itself is blocked but api.github.com is not.
+ * `mirrorUrl` is the same file on the website's download server.
  */
-export interface ReleaseAsset { name: string; url: string; apiUrl?: string; size: number }
+export interface ReleaseAsset { name: string; url: string; apiUrl?: string; mirrorUrl?: string; size: number }
 
 export interface AssetSource { url: string; accept: string }
 
 export function assetDownloadSources(asset: ReleaseAsset): AssetSource[] {
-  return [
+  const sources: AssetSource[] = [
     ...(asset.apiUrl ? [{ url: asset.apiUrl, accept: 'application/octet-stream' }] : []),
+    ...(asset.mirrorUrl ? [{ url: asset.mirrorUrl, accept: '*/*' }] : []),
     { url: asset.url, accept: '*/*' },
   ];
+  return sources.filter((source, index) => sources.findIndex((other) => other.url === source.url) === index);
+}
+
+/** Reads the website's `release.json`; SHA256SUMS is synced alongside but not listed in `files`. */
+export function parseMirrorRelease(payload: unknown): ReleaseInfo | undefined {
+  if (!payload || typeof payload !== 'object') return undefined;
+  const raw = payload as Record<string, unknown>;
+  const parsed = typeof raw.desktopVersion === 'string' ? parseVersion(raw.desktopVersion) : undefined;
+  if (!parsed || parsed.pre) return undefined;
+  const version = parsed.core.join('.');
+  const tag = typeof raw.tag === 'string' ? raw.tag : `v${version}`;
+  const mirrorAsset = (name: string, size: number): ReleaseAsset => {
+    const url = `${MIRROR_DOWNLOADS_URL}/${encodeURIComponent(name)}`;
+    return { name, url, mirrorUrl: url, size };
+  };
+  const files = Array.isArray(raw.files) ? raw.files : [];
+  return {
+    version,
+    tag,
+    notes: '',
+    htmlUrl: `https://github.com/${UPDATE_REPO}/releases/tag/${encodeURIComponent(tag)}`,
+    assets: [
+      ...files.flatMap((item) => {
+        const file = item as Record<string, unknown>;
+        return typeof file?.name === 'string' ? [mirrorAsset(file.name, typeof file.bytes === 'number' ? file.bytes : 0)] : [];
+      }),
+      mirrorAsset('SHA256SUMS', 0),
+    ],
+  };
+}
+
+/** Adds the mirror copy of each asset, but only when the mirror holds this very version. */
+export function withMirrorAssets(release: ReleaseInfo, mirror: ReleaseInfo | undefined): ReleaseInfo {
+  if (!mirror || compareVersions(mirror.version, release.version) !== 0) return release;
+  return {
+    ...release,
+    assets: release.assets.map((asset) => {
+      const copy = mirror.assets.find((candidate) => candidate.name === asset.name);
+      return copy?.mirrorUrl ? { ...asset, mirrorUrl: copy.mirrorUrl } : asset;
+    }),
+  };
 }
 export interface ReleaseInfo { version: string; tag: string; notes: string; htmlUrl: string; assets: ReleaseAsset[] }
 

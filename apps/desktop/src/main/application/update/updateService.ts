@@ -5,9 +5,9 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { log } from '../help/appLogger';
 import {
-  assetDownloadSources, compareVersions, DEFAULT_UPDATE_SETTINGS, isUpdateDisabled, LATEST_RELEASE_API, LATEST_RELEASE_PAGE, normalizeUpdateSettings,
-  parseGitHubRelease, parseReleaseFromTagUrl, parseSha256Sums, type ReleaseAsset, type ReleaseInfo, selectInstallerAsset, shouldPrompt,
-  trimNotes, type UpdateSettings, WEBSITE_URL,
+  assetDownloadSources, compareVersions, DEFAULT_UPDATE_SETTINGS, isUpdateDisabled, LATEST_RELEASE_API, LATEST_RELEASE_PAGE, MIRROR_RELEASE_MANIFEST,
+  normalizeUpdateSettings, parseGitHubRelease, parseMirrorRelease, parseReleaseFromTagUrl, parseSha256Sums, type ReleaseAsset, type ReleaseInfo,
+  selectInstallerAsset, shouldPrompt, trimNotes, type UpdateSettings, WEBSITE_URL, withMirrorAssets,
 } from './updateCore';
 import { cleanupUpdateDirectory, findVerifiedDownload } from './updateStorage';
 import { tUpdate } from './updateService.i18n';
@@ -88,7 +88,31 @@ async function fetchLatestRelease(): Promise<ReleaseInfo> {
     throw new Error(`unexpected release page url ${response.url}`);
   } catch (error) {
     ulog('warn', `release page fallback failed: ${String(error)}`);
+  }
+  try {
+    const release = await fetchMirrorRelease();
+    ulog('info', `using website mirror release ${release.version}`);
+    return release;
+  } catch (error) {
+    ulog('warn', `website mirror fallback failed: ${String(error)}`);
     throw apiError;
+  }
+}
+
+async function fetchMirrorRelease(): Promise<ReleaseInfo> {
+  const release = parseMirrorRelease(await (await fetchWithTimeout(MIRROR_RELEASE_MANIFEST, 'application/json')).json());
+  if (!release) throw new Error('website release.json is missing a valid desktopVersion');
+  return release;
+}
+
+async function attachMirror(release: ReleaseInfo): Promise<ReleaseInfo> {
+  try {
+    const mirror = await fetchMirrorRelease();
+    if (compareVersions(mirror.version, release.version) !== 0) ulog('info', `website mirror has ${mirror.version}, not ${release.version}; not using it`);
+    return withMirrorAssets(release, mirror);
+  } catch (error) {
+    ulog('warn', `website mirror unavailable: ${String(error)}`);
+    return release;
   }
 }
 
@@ -207,13 +231,14 @@ async function downloadUpdate(release: ReleaseInfo, asset: ReleaseAsset): Promis
   try {
     await cleanupUpdateDirectory({ root: updatesRoot(), currentVersion: app.getVersion(), keepVersion: release.version, maxRetained: 1, log: (m) => ulog('info', `cleanup: ${m}`) });
     await mkdir(dir, { recursive: true });
-    const expected = await fetchExpectedChecksum(release, asset.name);
+    const mirrored = await attachMirror(release);
+    const expected = await fetchExpectedChecksum(mirrored, asset.name);
     const reused = await findVerifiedDownload(finalPath, expected, (m) => ulog('warn', m));
     if (reused) {
       ulog('info', `reusing verified download ${asset.name}`);
     } else {
-      ulog('info', `downloading ${asset.name} (${asset.size} bytes) to ${dir}`);
-      const sources = assetDownloadSources(asset);
+      const sources = assetDownloadSources(mirrored.assets.find((candidate) => candidate.name === asset.name) ?? asset);
+      ulog('info', `downloading ${asset.name} (${asset.size} bytes) to ${dir} via ${sources.map((source) => new URL(source.url).host).join(', ')}`);
       const hash = createHash('sha256');
       const out = createWriteStream(partPath);
       const closed = new Promise<void>((resolve, reject) => { out.on('finish', resolve); out.on('error', reject); });

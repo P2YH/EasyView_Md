@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { assetDownloadSources, compareVersions, isUpdateDisabled, normalizeUpdateSettings, parseGitHubRelease, parseReleaseFromTagUrl, parseSha256Sums, selectInstallerAsset, shouldPrompt, trimNotes } from './updateCore';
+import { assetDownloadSources, compareVersions, isUpdateDisabled, normalizeUpdateSettings, parseGitHubRelease, parseMirrorRelease, withMirrorAssets, parseReleaseFromTagUrl, parseSha256Sums, selectInstallerAsset, shouldPrompt, trimNotes } from './updateCore';
 import { cleanupUpdateDirectory, findVerifiedDownload } from './updateStorage';
 
 const assets = ['EasyView_Md-mac-arm64.dmg', 'EasyView_Md-mac-arm64.zip', 'EasyView_Md-win-x64-setup.exe', 'EasyView_Md-win-x64.zip', 'EasyView_Md-win-x64-store.appx', 'SHA256SUMS']
@@ -37,6 +37,36 @@ describe('parseGitHubRelease', () => {
       { url: 'https://github.com/o/r/a', accept: '*/*' },
     ]);
     expect(assetDownloadSources({ name: 'a', url: 'https://github.com/o/r/a', size: 3 })).toEqual([{ url: 'https://github.com/o/r/a', accept: '*/*' }]);
+  });
+});
+
+describe('website mirror', () => {
+  const manifest = {
+    product: 'EasyView_Md', tag: 'v2.0.13', desktopVersion: '2.0.13',
+    files: [{ name: 'EasyView_Md-win-x64-setup.exe', bytes: 212049408, sha256: 'x' }],
+  };
+
+  it('parses release.json into mirror-only assets including SHA256SUMS', () => {
+    const release = parseMirrorRelease(manifest)!;
+    expect(release).toMatchObject({ version: '2.0.13', tag: 'v2.0.13' });
+    expect(release.assets.map((asset) => asset.url)).toEqual([
+      'https://easyview.wonderxy.art/downloads/EasyView_Md-win-x64-setup.exe',
+      'https://easyview.wonderxy.art/downloads/SHA256SUMS',
+    ]);
+    expect(assetDownloadSources(release.assets[0])).toEqual([{ url: release.assets[0].url, accept: '*/*' }]);
+    expect(parseMirrorRelease({ desktopVersion: 'x' })).toBeUndefined();
+  });
+
+  it('adds the mirror between the API endpoint and github.com only for the same version', () => {
+    const github = parseGitHubRelease({
+      tag_name: 'v2.0.13',
+      assets: [{ name: 'EasyView_Md-win-x64-setup.exe', browser_download_url: 'https://github.com/x', url: 'https://api.github.com/x', size: 1 }],
+    })!;
+    const mirror = parseMirrorRelease(manifest)!;
+    expect(assetDownloadSources(withMirrorAssets(github, mirror).assets[0]).map((source) => source.url)).toEqual([
+      'https://api.github.com/x', 'https://easyview.wonderxy.art/downloads/EasyView_Md-win-x64-setup.exe', 'https://github.com/x',
+    ]);
+    expect(withMirrorAssets(github, parseMirrorRelease({ ...manifest, desktopVersion: '2.0.12' }))).toBe(github);
   });
 });
 

@@ -17,6 +17,12 @@ export function clearHistoryComparisons(tabIds: string[]): void {
   const remaining = snapshots.flatMap((snapshot) => snapshot.groups.flatMap((group) => group.tabs)).filter((tab) => tab.kind === 'history' && !closing.has(tab.id));
   for (const key of comparisons.keys()) if (!remaining.some((tab) => tab.kind === 'history' && tab.comparisonKey === key)) comparisons.delete(key);
 }
+export function openReadOnlyComparison(comparison: TimelineComparison): void {
+  const tab = tabRegistry.openHistory(comparison);
+  if (tab.kind === 'history') comparisons.set(tab.comparisonKey, comparison);
+  syncTabState();
+}
+
 export async function handleDesktopTimeline(sender: Electron.WebContents, message: TimelineRequestMessage): Promise<void> {
   let channel = channels.get(sender.id);
   if (!channel) {

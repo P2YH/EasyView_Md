@@ -459,6 +459,20 @@ export class DocumentSessionService {
     return next;
   }
 
+  /** Reserve all affected saves before a confirmed Git discard; reject stale queued writes. */
+  mutateGitFiles<T>(files: string[], operation: () => Promise<T>): Promise<T> {
+    const affected = files.flatMap(file => this.findByFilePath(file));
+    const previous = affected.map(session => this.saveQueues.get(session.tabId) ?? Promise.resolve());
+    const lock = (index: number): Promise<T> => index === files.length ? operation() : this.enqueueFile(files[index], () => lock(index + 1));
+    const next = Promise.all(previous).then(() => lock(0)).then(result => {
+      for (const session of affected) session.restoreGeneration = (session.restoreGeneration ?? 0) + 1;
+      return result;
+    });
+    const settled = next.then(() => undefined, () => undefined);
+    for (const session of affected) this.saveQueues.set(session.tabId, settled);
+    return next;
+  }
+
   private writeBoundPath(session: DocumentSession, filePath: string, content: string, overwrite = false): Promise<DocumentSaveOutcome> {
     return this.enqueueFile(filePath, () => this.performWrite(session, filePath, content, { skipConflictCheck: overwrite }));
   }

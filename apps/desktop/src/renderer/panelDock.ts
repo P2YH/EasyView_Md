@@ -12,7 +12,7 @@ export const DOCK_GRIP_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><
 
 const DRAG_THRESHOLD_PX = 4;
 const SIDE_ZONE_MAX_PX = 220;
-const DOCK_PANEL_IDS: readonly DesktopDockPanelId[] = ['explorer', 'aiChat', 'outline'];
+const DOCK_PANEL_IDS: readonly DesktopDockPanelId[] = ['explorer', 'aiChat', 'versionGuard', 'outline'];
 
 export interface PanelDockElements {
   centerPane: HTMLElement;
@@ -54,9 +54,37 @@ export function applyWorkbenchPanelLayout({ centerPane, panels }: PanelDockEleme
   }
 }
 
+export interface TitleBarToggleElements {
+  left: HTMLElement;
+  right: HTMLElement;
+  toggles: Record<DesktopWorkbenchPanelId, HTMLElement>;
+}
+
+/**
+ * Each panel's title-bar toggle sits on the same side as the panel, in the panels' left-to-right order,
+ * ahead of any other buttons in that container.
+ */
+export function applyTitleBarToggles(layout: DesktopPanelLayout, { left, right, toggles }: TitleBarToggleElements): void {
+  for (const [container, ids] of [[left, layout.left], [right, layout.right]] as const) {
+    let previous: Element | null = null;
+    for (const toggle of ids.map((id) => toggles[id])) {
+      const current: Element | null = previous ? previous.nextElementSibling : container.firstElementChild;
+      if (current !== toggle) {
+        if (previous) previous.after(toggle);
+        else container.prepend(toggle);
+      }
+      previous = toggle;
+    }
+  }
+  for (const id of Object.keys(toggles) as DesktopWorkbenchPanelId[]) {
+    toggles[id].dataset.dockSide = desktopPanelSide(layout, id);
+  }
+}
+
 const PANEL_LABEL_KEYS = {
   explorer: 'dock.panel.explorer',
   aiChat: 'dock.panel.aiChat',
+  versionGuard: 'dock.panel.versionGuard',
   outline: 'dock.panel.outline',
 } as const;
 

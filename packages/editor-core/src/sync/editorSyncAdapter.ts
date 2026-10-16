@@ -19,6 +19,7 @@ export interface EditorSyncAdapterOptions {
 export class EditorSyncAdapter {
   private session: DocumentSyncSession | null = null;
   private readonly options: EditorSyncAdapterOptions;
+  private syncWaiters = new Set<() => void>();
   private outboundSource: LocalSource = 'local';
 
   constructor(options: EditorSyncAdapterOptions) {
@@ -36,6 +37,15 @@ export class EditorSyncAdapter {
   get documentId(): string | null { return this.session?.documentId ?? null; }
   get content(): string { return this.session?.snapshot.canonicalContent ?? ''; }
   get isReady(): boolean { return this.session !== null; }
+
+  whenSynced(): Promise<void> {
+    if (this.session?.snapshot.state === 'synced') return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const finish = () => { if (this.session?.snapshot.state === 'synced') { clearTimeout(timer); this.syncWaiters.delete(finish); resolve(); } };
+      const timer = setTimeout(() => { this.syncWaiters.delete(finish); reject(new Error('Editor has unsynchronized changes.')); }, 6000);
+      this.syncWaiters.add(finish);
+    });
+  }
 
   applyLocalContent(content: string, source: LocalSource = 'local'): void {
     if (!this.session) return;
@@ -62,11 +72,13 @@ export class EditorSyncAdapter {
           this.session.applySnapshot(message.content, message.revision);
         }
         this.options.onSnapshot(message.content, message.revision, message);
+        this.syncWaiters.forEach(waiter => waiter());
         this.options.postMessage({ type: 'snapshotApplied', documentId: message.documentId, revision: message.revision, contentHash: hashContent(message.content) });
         return true;
       }
       case 'editsApplied':
         this.session?.handleAck(message);
+        this.syncWaiters.forEach(waiter => waiter());
         return true;
       case 'documentPatched': {
         if (!this.session) return true;

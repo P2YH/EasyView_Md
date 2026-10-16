@@ -1,3 +1,4 @@
+import { flushGuardEditor } from '@easyview/node-runtime';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { type EditorSettings, extractSettings } from './providerUtils';
@@ -105,6 +106,13 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
     if (!panel) return false;
     void panel.webview.postMessage(message);
     return true;
+  }
+
+  public static async flushFiles(files: string[]): Promise<void> {
+    const provider = MarkdownEditorProvider.instance; if (!provider) return;
+    const panels = new Set<vscode.WebviewPanel>();
+    for (const [uri, entries] of provider.panelsByDocumentUri) if (files.includes(resolveMarkdownDiskUri(vscode.Uri.parse(uri)).fsPath)) entries.forEach(panel => panels.add(panel));
+    await Promise.all([...panels].map(panel => flushGuardEditor(undefined, message => { void panel.webview.postMessage(message); }, listener => panel.webview.onDidReceiveMessage(listener))));
   }
 
   public static getDiagnostics(): Record<string, unknown> {

@@ -2662,6 +2662,14 @@ function initEditor() {
     }
 
     switch (message.type) {
+      case 'flushDocument': {
+        editor.flushSync();
+        void (editorSync?.whenSynced() ?? Promise.resolve()).then(
+          () => host.postMessage({ type: 'documentFlushed', requestId: message.requestId }),
+          error => host.postMessage({ type: 'documentFlushed', requestId: message.requestId, error: String(error) }),
+        );
+        break;
+      }
       case 'documentSnapshot':
       case 'documentActivate':
       case 'documentPatched':

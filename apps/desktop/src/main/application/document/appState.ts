@@ -202,6 +202,8 @@ function normalizeWorkspaceState(value: unknown): DesktopWorkspaceState {
     expandedRelativePaths: Array.isArray(value.expandedRelativePaths)
       ? value.expandedRelativePaths.filter((item): item is string => typeof item === 'string')
       : [],
+    versionGuardVisible: value.versionGuardVisible === true,
+    versionGuardWidth: typeof value.versionGuardWidth === 'number' ? Math.max(280, Math.min(640, value.versionGuardWidth)) : 360,
     explorerVisible: typeof value.explorerVisible === 'boolean' ? value.explorerVisible : true,
     outlineVisible: typeof value.outlineVisible === 'boolean' ? value.outlineVisible : true,
     explorerWidth: width(value.explorerWidth),

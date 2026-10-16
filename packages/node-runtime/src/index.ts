@@ -22,3 +22,5 @@ export * from './timeline/timeline-channel';
 export * from './timeline/task-queue';
 export * from './timeline/read-history-text';
 export * from './timeline/migrate-history';
+export * from './git/version-guard';
+export * from './git/flush-editor';

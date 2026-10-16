@@ -81,16 +81,19 @@ body {
 .easyview-desktop .file-header-bar { display: none !important; }
 #desktop-root { height: 100%; display: flex; flex-direction: column; }
 /* Native traffic lights ignore page zoom, so the title bar cancels it to stay aligned with them. */
-#desktop-title-bar { zoom: calc(1 / var(--desktop-page-zoom, 1)); height: 32px; min-height: 32px; display: grid; grid-template-columns: 112px minmax(0, 1fr) 112px; align-items: center; border-bottom: 1px solid var(--vscode-panel-border); background: var(--vscode-editorWidget-background); -webkit-app-region: drag; }
+#desktop-title-bar { zoom: calc(1 / var(--desktop-page-zoom, 1)); height: 32px; min-height: 32px; display: grid; grid-template-columns: minmax(max-content, 1fr) minmax(0, auto) minmax(max-content, 1fr); align-items: center; border-bottom: 1px solid var(--vscode-panel-border); background: var(--vscode-editorWidget-background); -webkit-app-region: drag; }
 .desktop-title-button { width: 28px; height: 24px; justify-self: center; border: 0; border-radius: 6px; color: var(--vscode-icon-foreground, var(--vscode-editor-foreground)); background: transparent; cursor: pointer; -webkit-app-region: no-drag; }
 .desktop-title-button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; vertical-align: middle; }
 .desktop-title-button svg .panel-fill { fill: currentColor; stroke: none; }
 .desktop-title-button.active { background: var(--vscode-toolbar-hoverBackground, var(--easyview-hover-background)); color: var(--mdpre-accent, var(--easyview-focus-border)); }
-#workspace-toggle { justify-self: start; margin-left: 67px; }
+/* Panel toggles follow their panel's dock side (applyTitleBarToggles); the containers stay draggable, the buttons don't. */
+#desktop-title-left, #desktop-title-actions { min-width: 0; display: flex; align-items: center; gap: 2px; }
 /* The 67px leaves room for the macOS traffic lights; other platforms keep a native title bar above this row. */
-.desktop-platform-other #workspace-toggle { margin-left: 4px; }
+#desktop-title-left { justify-content: start; padding-left: 67px; }
+.desktop-platform-other #desktop-title-left { padding-left: 4px; }
+#desktop-title-actions { justify-content: end; padding-right: 8px; }
+#workspace-toggle[data-dock-side="right"] svg { transform: scaleX(-1); }
 #desktop-title-center { min-width: 0; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 8px; }
-#desktop-title-actions { display: flex; align-items: center; justify-content: end; gap: 2px; padding-right: 8px; -webkit-app-region: no-drag; }
 .desktop-title-button:hover, .desktop-title-button.active { background: var(--vscode-toolbar-hoverBackground); color: var(--vscode-focusBorder); }
 /* Read-only window title: plain text inside the drag region, like a native title bar. */
 #desktop-document-name {
@@ -217,10 +220,9 @@ body.desktop-welcome-full #workspace-toggle { visibility: hidden; }
 .workspace-header { flex: 0 0 30px; box-sizing: border-box; height: 30px; display: flex; align-items: center; gap: 4px; padding: 0 6px; border-bottom: 1px solid var(--vscode-panel-border); font-size: 12px; font-weight: 600; }
 .workspace-header span { min-width: 0; flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .workspace-action, .workspace-entry-toggle, .workspace-entry-create { border: 0; color: inherit; background: transparent; cursor: pointer; }
-.workspace-action { width: 24px; height: 24px; border-radius: 4px; font-size: 16px; }
-.workspace-search-toggle { display: inline-flex; align-items: center; justify-content: center; padding: 0; }
-.workspace-search-toggle svg { width: 15px; height: 15px; }
-.workspace-search-toggle.is-active { color: var(--mdpre-accent, var(--vscode-focusBorder)); background: var(--vscode-toolbar-hoverBackground); }.workspace-action:hover, .workspace-entry-create:hover { background: var(--vscode-toolbar-hoverBackground); }
+.workspace-action { flex: 0 0 24px; width: 24px; height: 24px; border-radius: 4px; font-size: 16px; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.workspace-action svg { width: 15px; height: 15px; display: block; }
+.workspace-search-toggle.is-active, .workspace-settings-toggle.is-active { color: var(--mdpre-accent, var(--vscode-focusBorder)); background: var(--vscode-toolbar-hoverBackground); }.workspace-action:hover, .workspace-entry-create:hover { background: var(--vscode-toolbar-hoverBackground); }
 .workspace-sort-menu {
   position: absolute;
   z-index: 1000;
@@ -582,3 +584,10 @@ body.dock-dragging, body.dock-dragging * { cursor: grabbing !important; user-sel
   position: fixed; top: 0; left: 0; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; white-space: nowrap;
   color: #fff; background: var(--mdpre-accent, var(--vscode-focusBorder, #4080d0)); box-shadow: 0 6px 18px rgba(0, 0, 0, .28);
 }
+
+#version-guard-host{position:relative;flex:0 0 auto;min-width:280px;max-width:640px;width:360px;min-height:0;border-right:1px solid var(--vscode-panel-border)}
+#version-guard-host[hidden]{display:none}
+#version-guard-host[data-dock-side="right"]{border-right:0;border-left:1px solid var(--vscode-panel-border)}
+.guard-width-resizer{position:absolute;right:-3px;top:0;bottom:0;width:6px;cursor:col-resize;z-index:5}
+#version-guard-host[data-dock-side="right"] .guard-width-resizer{right:auto;left:-3px}
+

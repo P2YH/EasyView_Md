@@ -2,7 +2,7 @@
   "name": "easyview-md",
   "displayName": "EasyView_Md",
   "description": "%extension.description%",
-  "version": "2.0.197",
+  "version": "2.0.199",
   "publisher": "zhangxy",
   "license": "MIT",
   "private": true,
@@ -67,7 +67,8 @@
     "onCommand:easyviewMd.workspace.paste",
     "onCommand:easyviewMd.workspace.rename",
     "onCommand:easyviewMd.workspace.delete",
-    "onCommand:easyviewMd.showEditorDiagnostics"
+    "onCommand:easyviewMd.showEditorDiagnostics",
+    "onView:easyviewMd.versionGuard"
   ],
   "contributes": {
     "customEditors": [
@@ -635,6 +636,11 @@
           "id": "easyviewMd-workspacePanel",
           "title": "IndexArea",
           "icon": "dist/brand/easyview-editor-dark.svg"
+        },
+        {
+          "id": "easyviewMd-versionGuard",
+          "title": "Version Guard",
+          "icon": "resources/version-guard.svg"
         }
       ]
     },
@@ -645,6 +651,13 @@
           "id": "easyviewMd.workspaceFiles",
           "name": "%view.files.name%",
           "contextualTitle": "IndexArea"
+        }
+      ],
+      "easyviewMd-versionGuard": [
+        {
+          "type": "webview",
+          "id": "easyviewMd.versionGuard",
+          "name": "Version Guard"
         }
       ]
     }

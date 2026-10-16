@@ -27,6 +27,11 @@ import {
 } from '@easyview/contracts';
 import { tExplorer } from './workspaceExplorer.i18n';
 
+const WORKSPACE_SETTINGS_ICON_SVG = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="2"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.13 1.13M11.47 11.47l1.13 1.13M3.4 12.6l1.13-1.13M11.47 4.53l1.13-1.13"/><circle cx="8" cy="8" r="4.6"/></svg>';
+const WORKSPACE_NEW_FILE_ICON_SVG = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M8 2.5v11M2.5 8h11"/></svg>';
+const WORKSPACE_NEW_FOLDER_ICON_SVG = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><rect x="5.5" y="5.5" width="5" height="5" fill="currentColor" stroke="none"/></svg>';
+const WORKSPACE_REFRESH_ICON_SVG = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.46-3.54"/><path d="M11.8 1.8v2.9H8.9"/></svg>';
+
 interface WorkspaceExplorerOptions {
   footer?: HTMLElement;
   onSelectionChanged?(filePath: string | null, visible: boolean): void;
@@ -154,6 +159,10 @@ export class WorkspaceExplorer {
   }
 
   /** Panel layout rides on the explorer's state so its whole-state saves never overwrite it. */
+  setVersionGuardState(visible: boolean, width: number): void {
+    this.updateState({ versionGuardVisible: visible, versionGuardWidth: width });
+  }
+
   setPanelLayout(layout: DesktopPanelLayout): void {
     this.updateState({ panelLayout: layout });
   }
@@ -370,15 +379,28 @@ export class WorkspaceExplorer {
       else this.openSearch();
     });
     header.appendChild(searchButton);
-    for (const [label, titleText, action] of [
-      ['⇅', tExplorer('sort'), () => { this.sortMenuOpen = !this.sortMenuOpen; this.render(); }],
-      ['＋', tExplorer('newFile'), () => this.beginCreate('', 'file')],
-      ['▣', tExplorer('newFolder'), () => this.beginCreate('', 'directory')],
-      ['↻', tExplorer('refresh'), () => { this.entriesByDirectory.clear(); void this.refreshExpanded(); }],
+    const settingsButton = document.createElement('button');
+    settingsButton.type = 'button';
+    settingsButton.className = 'workspace-action workspace-settings-toggle';
+    settingsButton.classList.toggle('is-active', this.sortMenuOpen);
+    settingsButton.title = tExplorer('settings');
+    settingsButton.setAttribute('aria-haspopup', 'menu');
+    settingsButton.setAttribute('aria-expanded', String(this.sortMenuOpen));
+    settingsButton.innerHTML = WORKSPACE_SETTINGS_ICON_SVG;
+    settingsButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.sortMenuOpen = !this.sortMenuOpen;
+      this.render();
+    });
+    header.appendChild(settingsButton);
+    for (const [iconSvg, titleText, action] of [
+      [WORKSPACE_NEW_FILE_ICON_SVG, tExplorer('newFile'), () => this.beginCreate('', 'file')],
+      [WORKSPACE_NEW_FOLDER_ICON_SVG, tExplorer('newFolder'), () => this.beginCreate('', 'directory')],
+      [WORKSPACE_REFRESH_ICON_SVG, tExplorer('refresh'), () => { this.entriesByDirectory.clear(); void this.refreshExpanded(); }],
     ] as const) {
       const button = document.createElement('button');
       button.type = 'button'; button.className = 'workspace-action';
-      button.textContent = label; button.title = titleText;
+      button.innerHTML = iconSvg; button.title = titleText;
       button.addEventListener('click', (event) => {
         event.stopPropagation();
         action();

@@ -117,11 +117,13 @@ export interface DesktopWorkspaceState {
   explorerWidth: number;
   outlineWidth: number;
   panelLayout?: DesktopPanelLayout;
+  versionGuardVisible?: boolean;
+  versionGuardWidth?: number;
 }
 
 export type DesktopDockSide = 'left' | 'right';
 /** Panels docked beside the editor area at window level. */
-export type DesktopWorkbenchPanelId = 'explorer' | 'aiChat';
+export type DesktopWorkbenchPanelId = 'explorer' | 'aiChat' | 'versionGuard';
 export type DesktopDockPanelId = DesktopWorkbenchPanelId | 'outline';
 
 /**
@@ -138,10 +140,10 @@ export type DesktopPanelDropTarget =
   | { kind: 'side'; side: DesktopDockSide }
   | { kind: 'swap'; panel: DesktopWorkbenchPanelId };
 
-const WORKBENCH_PANELS: readonly DesktopWorkbenchPanelId[] = ['explorer', 'aiChat'];
+const WORKBENCH_PANELS: readonly DesktopWorkbenchPanelId[] = ['explorer', 'aiChat', 'versionGuard'];
 
 export function defaultDesktopPanelLayout(): DesktopPanelLayout {
-  return { left: ['explorer'], right: ['aiChat'], outline: 'right' };
+  return { left: ['explorer', 'versionGuard'], right: ['aiChat'], outline: 'right' };
 }
 
 export function normalizeDesktopPanelLayout(value: unknown): DesktopPanelLayout {
@@ -162,7 +164,7 @@ export function normalizeDesktopPanelLayout(value: unknown): DesktopPanelLayout 
   const right = side(record.right);
   for (const panel of WORKBENCH_PANELS) {
     if (seen.has(panel)) continue;
-    if (fallback.left.includes(panel)) left.unshift(panel);
+    if (fallback.left.includes(panel)) left.push(panel);
     else right.push(panel);
   }
   return { left, right, outline: record.outline === 'left' ? 'left' : 'right' };

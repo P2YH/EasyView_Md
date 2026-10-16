@@ -23,6 +23,11 @@ export type DesktopDocumentResult = OperationResult<DocumentOpenResult | null>;
 export type DesktopSaveResult = OperationResult<SaveDocumentResult | null>;
 
 export interface EasyViewDesktopApi {
+  versionGuard: {
+    request(request: import('@easyview/contracts').GuardRequest): Promise<OperationResult<unknown>>;
+    subscribe(listener: (paths: string[] | null) => void): { dispose(): void };
+    onDiscovery(listener: (repositories: import('@easyview/contracts').GuardRepository[], warnings: string[]) => void): { dispose(): void };
+  };
   timeline: {
     post(message: TimelineRequestMessage): void;
     subscribe(listener: (message: TimelineResultMessage) => void): { dispose(): void };

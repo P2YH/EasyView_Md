@@ -1,3 +1,4 @@
+import { handleVersionGuard, acceptGuardFlush } from '../../application/version-guard/desktopVersionGuard';
 import { handleDesktopTimeline, getHistoryComparison, desktopTimelineDiagnostics } from '../../application/timeline/desktopTimeline';
 import { getHistorySettings, setHistorySettings } from '../../application/document/desktopHistory';
 import type { TimelineRequestMessage } from '@easyview/contracts';
@@ -120,6 +121,11 @@ function decodePreviewBytes(bytes: unknown, encoding: unknown): Buffer | null {
 }
 
 export function registerDesktopIpc(): void {
+  registerHandle('versionGuard.request', async (event, request: import('@easyview/contracts').GuardRequest) => {
+    const denied = assertTrustedRenderer(event); if (denied) return denied;
+    try { return success(await handleVersionGuard(event.sender, request)); }
+    catch (error) { return failure('UNKNOWN', error instanceof Error ? error.message : String(error)); }
+  });
   registerEvent('timeline.message', (event, message: TimelineRequestMessage) => {
     if (!trustedRenderer(event)) return;
     void handleDesktopTimeline(event.sender, message).catch((error) => { if (!event.sender.isDestroyed()) event.sender.send('timeline.message', { type: 'timeline.result', id: message && typeof message === 'object' && 'id' in message ? message.id : '', error: String(error) }); });
@@ -453,6 +459,8 @@ export function registerDesktopIpc(): void {
       expandedRelativePaths: Array.isArray(value.expandedRelativePaths)
         ? value.expandedRelativePaths.filter((item): item is string => typeof item === 'string')
         : getWorkspaceState().expandedRelativePaths,
+      versionGuardVisible: typeof value.versionGuardVisible === 'boolean' ? value.versionGuardVisible : getWorkspaceState().versionGuardVisible,
+      versionGuardWidth: typeof value.versionGuardWidth === 'number' ? Math.max(280, Math.min(640, value.versionGuardWidth)) : getWorkspaceState().versionGuardWidth,
       explorerVisible: typeof value.explorerVisible === 'boolean' ? value.explorerVisible : getWorkspaceState().explorerVisible,
       outlineVisible: typeof value.outlineVisible === 'boolean' ? value.outlineVisible : getWorkspaceState().outlineVisible,
       explorerWidth: typeof value.explorerWidth === 'number' ? value.explorerWidth : getWorkspaceState().explorerWidth,
@@ -689,6 +697,7 @@ export function registerDesktopIpc(): void {
 
   registerEvent('editor.message', (event, value: unknown) => {
     if (!trustedRenderer(event) || !isEditorToHostMessage(value)) return;
+    if (acceptGuardFlush(event.sender, value)) return;
     void handleEditorMessage(value).catch((error) => {
       console.error('[EasyView_Md] Failed to handle editor message:', error);
       void showOperationError(failure('UNKNOWN', error instanceof Error ? error.message : tIpc('editor.operationFailed')));

@@ -85,6 +85,7 @@ await Promise.all([
     ...common,
     entryPoints: {
       'workspace-webview': path.join(appDir, 'src/workspace/webview/workspaceWebviewEntry.ts'),
+      'version-guard': path.join(appDir, 'src/version-guard/guardWebview.ts'),
     },
     outdir: distDir,
     entryNames: '[name]',

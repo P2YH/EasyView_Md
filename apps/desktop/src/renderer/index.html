@@ -16,6 +16,7 @@
   <body class="easyview-desktop">
     <div id="desktop-root">
       <header id="desktop-title-bar">
+        <div id="desktop-title-left">
         <button id="workspace-toggle" class="desktop-title-button" type="button" title="IndexArea" aria-label="IndexArea">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <rect x="3.5" y="4.5" width="17" height="15" rx="2.2"></rect>
@@ -23,6 +24,8 @@
             <path class="panel-fill" d="M5.7 4.5h3.3v15H5.7c-1.2 0-2.2-1-2.2-2.2V6.7c0-1.2 1-2.2 2.2-2.2Z"></path>
           </svg>
         </button>
+        <button id="version-guard-toggle" class="desktop-title-button" type="button" title="Version Guard" aria-label="Version Guard" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="5" r="2"></circle><circle cx="6" cy="19" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M6 7v10M18 8v2a5 5 0 0 1-5 5H6"></path></svg></button>
+        </div>
         <div id="desktop-title-center">
           <span id="desktop-document-name">Untitled.md</span>
         </div>
@@ -34,6 +37,7 @@
       </header>
       <div id="desktop-workbench">
         <aside id="workspace-explorer" aria-label="IndexArea"></aside>
+        <aside id="version-guard-host" aria-label="Version Guard" hidden></aside>
         <main id="desktop-center-pane">
           <div id="desktop-split-root">
             <section class="desktop-editor-group" data-group-id="group-1">

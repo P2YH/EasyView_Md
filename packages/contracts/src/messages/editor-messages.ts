@@ -105,6 +105,7 @@ export interface DocumentPatchPayload {
 
 
 export type EditorToHostMessage =
+  | { type: 'documentFlushed'; requestId: string; error?: string }
   | ({ type: 'applyEdits'; documentId: string; clientEditId: string; baseRevision: number; edits: TextOffsetPatchPayload[]; resultHash: string; source: 'local' | 'undo' | 'redo' } & EditorSettingsPayload)
   | { type: 'snapshotApplied'; documentId: string; revision: number; contentHash: string }
   | { type: 'requestResync'; documentId: string; revision: number; reason: string }
@@ -147,6 +148,7 @@ export type EditorToHostMessage =
   | { type: 'productThemeChanged'; mode: 'light' | 'gray' | 'dark' };
 
 export type HostToEditorMessage =
+  | { type: 'flushDocument'; requestId: string; documentId?: string }
   | ({ type: 'documentSnapshot' } & DocumentSnapshotPayload)
   | ({ type: 'documentActivate' } & DocumentActivatePayload)
   | ({ type: 'documentPatched' } & DocumentPatchPayload)
@@ -192,6 +194,7 @@ export type EditorMessageHandler = (message: EditorToHostMessage) => void;
 
 
 const EDITOR_MESSAGE_TYPES = new Set<EditorToHostMessage['type']>([
+  'documentFlushed',
   'applyEdits',
   'snapshotApplied',
   'requestResync',

@@ -206,6 +206,10 @@ export class DesktopEditorInstanceRegistry {
   }
 
   private dispatch(message: HostToEditorMessage): void {
+    if (message.type === 'flushDocument' && ![...this.sessions.values()].some(session => session.documentId === message.documentId)) {
+      void this.options.postMessage({ type: 'documentFlushed', requestId: message.requestId });
+      return;
+    }
     const documentId = messageDocumentId(message);
     if (message.type === 'documentSnapshot' && documentId) {
       this.pendingSnapshots.set(documentId, message);

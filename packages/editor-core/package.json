@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./styles": "./src/webview.css",
     "./timeline": "./src/timeline/index.ts",
-    "./workspace": "./src/workspace/index.ts"
+    "./workspace": "./src/workspace/index.ts",
+    "./version-guard": "./src/version-guard/index.ts"
   },
   "dependencies": {
     "@easyview/contracts": "*",

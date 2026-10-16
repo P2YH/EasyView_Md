@@ -1,3 +1,5 @@
+import { VersionGuardPanel } from '@easyview/editor-core/version-guard';
+import type { GuardUiState } from '@easyview/contracts';
 import './bootLocale';
 import { TimelinePanel, RpcTimelineClient, showHistorySettingsDialog } from '@easyview/editor-core/timeline';
 import type { TimelineUiState } from '@easyview/contracts';
@@ -7,7 +9,7 @@ import { applyDesktopProductAppearance } from './productThemeControl';
 import { createEasyViewEditor, EditorAppearanceStore, type EasyViewEditorInstance } from '@easyview/editor-core';
 import { defaultDesktopPanelLayout, isDesktopAppearanceCommand, normalizeDesktopPanelLayout } from '../contracts';
 import type { DesktopAppearanceMode, DesktopEditorTab, DesktopPanelLayout, DesktopTab, DesktopTabSnapshot, DesktopThemeMode } from '../contracts';
-import { applyWorkbenchPanelLayout, installPanelDock, type PanelDockElements } from './panelDock';
+import { applyTitleBarToggles, applyWorkbenchPanelLayout, installPanelDock, type PanelDockElements, type TitleBarToggleElements } from './panelDock';
 import type { EasyViewDesktopApi } from '../preload/desktopApi';
 import type { EasyViewAccentTheme } from '@easyview/editor-core';
 import { createDesktopEditorHostTransport } from './desktopHostTransport';
@@ -91,7 +93,7 @@ let lastOutlineWidth = 280;
 let panelLayout: DesktopPanelLayout = defaultDesktopPanelLayout();
 const panelDockElements: PanelDockElements = {
   centerPane: document.getElementById('desktop-center-pane')!,
-  panels: { explorer: explorerElement, aiChat: document.getElementById('desktop-ai-chat-host')! },
+  panels: { explorer: explorerElement, aiChat: document.getElementById('desktop-ai-chat-host')!, versionGuard: document.getElementById('version-guard-host')! },
 };
 let editorStateSubscription: { unsubscribe(): void } | undefined;
 const previewApi = api;
@@ -115,9 +117,20 @@ function activeEditor(): EasyViewEditorInstance | null {
   return editors.active();
 }
 
+const titleBarToggleElements: TitleBarToggleElements = {
+  left: document.getElementById('desktop-title-left')!,
+  right: document.getElementById('desktop-title-actions')!,
+  toggles: {
+    explorer: document.getElementById('workspace-toggle')!,
+    aiChat: document.getElementById('ai-chat-toggle')!,
+    versionGuard: document.getElementById('version-guard-toggle')!,
+  },
+};
+
 function applyPanelLayout(layout: DesktopPanelLayout): void {
   panelLayout = layout;
   applyWorkbenchPanelLayout(panelDockElements, layout);
+  applyTitleBarToggles(layout, titleBarToggleElements);
   for (const editor of editors.all()) editor.setOutlinePosition(layout.outline);
 }
 applyPanelLayout(panelLayout);
@@ -172,6 +185,7 @@ let welcomeCoversWorkspace = false;
 function setWorkspaceRootPath(rootPath: string | null): void {
   if (workspaceRootPath === rootPath) return;
   workspaceRootPath = rootPath;
+  guardPanel.reset();
   welcomeRequested = false;
   if (lastTabSnapshot) syncWelcome(lastTabSnapshot);
 }
@@ -252,6 +266,34 @@ const workspaceExplorer = new WorkspaceExplorer({
   onOpenWithDefaultApp: (relativePath) => { void previewApi.system.openWithDefaultApp(relativePath); },
   onRevealInFolder: (relativePath) => { void previewApi.system.revealInFolder(relativePath); },
 });
+
+const guardHost = panelDockElements.panels.versionGuard;
+let guardVisible = false;
+let guardWidth = 360;
+const guardPanel = new VersionGuardPanel({
+  grip: 'versionGuard', close: () => setGuardVisible(false),
+  client: {
+    onDiscovery: listener => api.versionGuard.onDiscovery(listener),
+    request: async request => { const result = await api.versionGuard.request(request); if (!result.ok) throw new Error(result.message); return result.value; },
+    subscribe: listener => { const metadata = api.versionGuard.subscribe(listener); const files = api.workspace.onChanged(paths => listener(paths?.map(file => `${workspaceRootPath}/${file}`) ?? null)); return { dispose: () => { metadata.dispose(); files.unsubscribe(); } }; },
+    loadState: () => { try { return JSON.parse(localStorage.getItem('easyview.versionGuard.ui') ?? 'null') as GuardUiState | undefined; } catch { return undefined; } },
+    saveState: state => localStorage.setItem('easyview.versionGuard.ui', JSON.stringify(state)),
+  },
+});
+guardHost.append(guardPanel.element);
+const guardResizer = document.createElement('div'); guardResizer.className = 'guard-width-resizer'; guardHost.append(guardResizer);
+function setGuardVisible(visible: boolean, persist = true): void {
+  guardVisible = visible; guardHost.hidden = !visible; guardHost.style.width = `${guardWidth}px`; guardPanel.setVisible(visible);
+  const toggle = document.getElementById('version-guard-toggle')!; toggle.classList.toggle('active', visible); toggle.setAttribute('aria-pressed', String(visible));
+  if (persist) workspaceExplorer.setVersionGuardState(visible, guardWidth);
+}
+document.getElementById('version-guard-toggle')!.onclick = () => { dismissStartupWelcome(); setGuardVisible(!guardVisible); };
+guardResizer.onpointerdown = event => {
+  event.preventDefault(); const start = event.clientX; const width = guardWidth;
+  const move = (next: PointerEvent) => { guardWidth = Math.max(280, Math.min(640, width + (next.clientX - start) * (guardHost.dataset.dockSide === 'right' ? -1 : 1))); guardHost.style.width = `${guardWidth}px`; };
+  const end = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); workspaceExplorer.setVersionGuardState(guardVisible, guardWidth); };
+  window.addEventListener('pointermove', move); window.addEventListener('pointerup', end, { once: true });
+};
 
 const activeView = new ActiveViewController({
   api, splitRoot, editorBody: editorMount, previewBody, tabBar,
@@ -391,6 +433,8 @@ const disposePanelDock = installPanelDock({
 
 void workspaceExplorer.initialize().then(async (state) => {
   applyPanelLayout(normalizeDesktopPanelLayout(state.panelLayout));
+  guardWidth = state.versionGuardWidth ?? 360;
+  setGuardVisible(state.versionGuardVisible === true, false);
   setWorkspaceRootPath(state.rootPath);
   lastOutlineVisible = state.outlineVisible;
   lastOutlineWidth = state.outlineWidth;
@@ -411,6 +455,7 @@ window.addEventListener('unload', () => {
   appearanceSubscription.unsubscribe();
   editorStateSubscription?.unsubscribe();
   disposePanelDock();
+  guardPanel.dispose();
   tabController.dispose();
   workspaceExplorer.dispose();
   activeView.dispose();

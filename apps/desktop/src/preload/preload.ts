@@ -51,6 +51,11 @@ function subscription(unsubscribe: () => void): EditorHostSubscription {
 }
 
 const api: EasyViewDesktopApi = {
+  versionGuard: {
+    onDiscovery: listener => { const handler = (_event: Electron.IpcRendererEvent, repositories: import('@easyview/contracts').GuardRepository[], warnings: string[]) => listener(repositories, warnings); ipcRenderer.on('versionGuard.discovery', handler); return { dispose: () => ipcRenderer.removeListener('versionGuard.discovery', handler) }; },
+    request: request => ipcRenderer.invoke('versionGuard.request', request),
+    subscribe: listener => { const handler = (_event: Electron.IpcRendererEvent, paths: string[] | null) => listener(paths); ipcRenderer.on('versionGuard.changed', handler); return { dispose: () => ipcRenderer.removeListener('versionGuard.changed', handler) }; },
+  },
   timeline: {
     post: (message) => ipcRenderer.send('timeline.message', message),
     subscribe: (listener) => { const handle = (_event: Electron.IpcRendererEvent, message: import('@easyview/contracts').TimelineResultMessage) => listener(message); ipcRenderer.on('timeline.message', handle); return { dispose: () => ipcRenderer.removeListener('timeline.message', handle) }; },

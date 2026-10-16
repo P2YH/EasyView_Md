@@ -159,7 +159,7 @@ describe('AppStateStore', () => {
     }));
     const store = createAppStateStore(userDataPath);
     await store.load();
-    expect(store.getWorkspace().panelLayout).toEqual({ left: ['aiChat'], right: ['explorer'], outline: 'left' });
+    expect(store.getWorkspace().panelLayout).toEqual({ left: ['aiChat', 'versionGuard'], right: ['explorer'], outline: 'left' });
     store.dispose();
   });
 

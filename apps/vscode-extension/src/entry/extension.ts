@@ -1,3 +1,4 @@
+import { registerVersionGuard } from '../version-guard/guardHost';
 import * as vscode from 'vscode';
 import { stageFile as stageGitFile } from '@easyview/node-runtime';
 import * as path from 'path';
@@ -114,6 +115,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(registerWordToMarkdownCommand(context));
   context.subscriptions.push(registerPdfToMarkdownCommand(context));
   context.subscriptions.push(registerWorkspaceExplorer(context));
+  context.subscriptions.push(registerVersionGuard(context));
   void rematerializeFileSchemeEasyViewMarkdownTabs(context);
   context.subscriptions.push(
     vscode.commands.registerCommand('easyviewMd.showEditorDiagnostics', () => {

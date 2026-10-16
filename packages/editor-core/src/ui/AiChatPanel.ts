@@ -33,7 +33,7 @@ interface ChatUiMessage {
   role: 'user' | 'assistant';
   content: string;
   reasoning?: string;
-  toolActivities?: string[];
+  toolCalls?: Array<{ name: string; done: boolean }>;
   attachments?: AiChatAttachment[];
   badge?: MessageBadge;
   error?: string;
@@ -250,6 +250,14 @@ function ensureAiChatPanelStyles(): void {
       border: 1px solid var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.2));
       object-fit: cover;
     }
+    .ai-chat-tool-line {
+      overflow: hidden;
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground, #888);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .ai-chat-tool-line.running::after { content: ' …'; }
     .ai-chat-reasoning {
       font-size: 11px;
       color: var(--vscode-descriptionForeground, #888);
@@ -723,7 +731,9 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
   let openState = false;
   let disposed = false;
   let panelWidth = PANEL_DEFAULT_WIDTH;
-  let mode: ChatMode = 'chat';
+  /** Agent by default; falls back to chat only while no document is available, then returns to the chosen mode. */
+  let preferredMode: ChatMode = 'agent';
+  let mode: ChatMode = preferredMode;
   let documentContextAvailable = true;
   let messages: ChatUiMessage[] = [];
   let history: AiChatHistoryEntry[] = [];
@@ -842,7 +852,8 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
       if (raw) {
         const parsed = JSON.parse(raw) as StoredAiChatSession;
         if (parsed && parsed.version === 1 && Array.isArray(parsed.messages)) {
-          mode = parsed.mode === 'agent' ? 'agent' : 'chat';
+          preferredMode = parsed.mode === 'chat' ? 'chat' : 'agent';
+          mode = documentContextAvailable ? preferredMode : 'chat';
           messages = parsed.messages
             .filter((message) => message && (message.role === 'user' || message.role === 'assistant'))
             .map((message) => ({ ...message, id: createRequestId() }));
@@ -876,6 +887,14 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
     }
   };
 
+  /** One line for all tool calls of a reply, e.g. "list_files ×6 · read_file ×12", in first-call order. */
+  const toolCallSummary = (calls: Array<{ name: string }>): string => {
+    const counts = new Map<string, number>();
+    for (const call of calls) counts.set(call.name, (counts.get(call.name) ?? 0) + 1);
+    const tools = [...counts].map(([name, count]) => (count > 1 ? `${name} ×${count}` : name)).join(' · ');
+    return tAiChat('tool.summary', { count: String(calls.length), tools });
+  };
+
   const renderMessages = (): void => {
     messagesEl.innerHTML = '';
     if (messages.length === 0) {
@@ -905,24 +924,12 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         item.appendChild(attachments);
       }
 
-      const bubble = document.createElement('div');
-      bubble.className = 'ai-chat-bubble';
-      if (message.role === 'user') {
-        bubble.textContent = message.content;
-      } else if (message.streaming) {
-        bubble.classList.add('streaming-text');
-        bubble.textContent = message.content.length > 0 ? message.content : '…';
-      } else {
-        bubble.innerHTML = renderAssistantMarkdown(message.content || tAiChat('message.empty'));
-        decorateRenderedMarkdown(bubble, (code) => deps.copyText(code, tAiChat('code.copiedToast')));
-      }
-      item.appendChild(bubble);
-
-      if (message.toolActivities && message.toolActivities.length > 0) {
+      if (message.toolCalls && message.toolCalls.length > 0) {
         const tools = document.createElement('div');
-        tools.className = 'ai-chat-tool-activities';
-        tools.textContent = message.toolActivities.join('\n');
-        tools.style.whiteSpace = 'pre-wrap';
+        tools.className = 'ai-chat-tool-line';
+        tools.classList.toggle('running', message.toolCalls.some((call) => !call.done));
+        tools.textContent = toolCallSummary(message.toolCalls);
+        tools.title = message.toolCalls.map((call) => call.name).join(' → ');
         item.appendChild(tools);
       }
 
@@ -938,6 +945,19 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         details.appendChild(body);
         item.appendChild(details);
       }
+
+      const bubble = document.createElement('div');
+      bubble.className = 'ai-chat-bubble';
+      if (message.role === 'user') {
+        bubble.textContent = message.content;
+      } else if (message.streaming) {
+        bubble.classList.add('streaming-text');
+        bubble.textContent = message.content.length > 0 ? message.content : '…';
+      } else {
+        bubble.innerHTML = renderAssistantMarkdown(message.content || tAiChat('message.empty'));
+        decorateRenderedMarkdown(bubble, (code) => deps.copyText(code, tAiChat('code.copiedToast')));
+      }
+      item.appendChild(bubble);
 
       if (message.badge) {
         const badge = document.createElement('span');
@@ -1369,6 +1389,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
     button.addEventListener('click', () => {
       const requestedMode = button.dataset.mode === 'agent' ? 'agent' : 'chat';
       if (requestedMode === 'agent' && !documentContextAvailable) return;
+      preferredMode = requestedMode;
       mode = requestedMode;
       updateModeButtons();
       if (messages.length === 0) renderMessages();
@@ -1417,8 +1438,13 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         if (message.requestId !== activeRequestId) return true;
         const target = messages.find((item) => item.id === streamingMessageId);
         if (!target) return true;
-        const activity = tAiChat(message.phase === 'call' ? 'tool.call' : 'tool.done', { tool: message.toolName });
-        target.toolActivities = [...(target.toolActivities ?? []), activity];
+        const calls = target.toolCalls ?? [];
+        if (message.phase === 'call') {
+          target.toolCalls = [...calls, { name: message.toolName, done: false }];
+        } else {
+          const pending = calls.findIndex((call) => !call.done && call.name === message.toolName);
+          target.toolCalls = calls.map((call, index) => (index === pending ? { ...call, done: true } : call));
+        }
         renderMessages();
         return true;
       }
@@ -1542,7 +1568,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
   const setDocumentContextAvailable = (available: boolean): void => {
     if (documentContextAvailable === available) return;
     documentContextAvailable = available;
-    if (!available && mode === 'agent') mode = 'chat';
+    mode = available ? preferredMode : 'chat';
     updateModeButtons();
     renderMessages();
   };

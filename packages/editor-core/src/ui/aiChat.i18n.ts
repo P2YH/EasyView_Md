@@ -54,8 +54,7 @@ export const tAiChat = defineMessages({
     'model.current': '当前模型: {model}',
     'model.select': '选择模型',
     'attachment.remove': '移除',
-    'tool.call': '调用工具：{tool}',
-    'tool.done': '完成工具：{tool}',
+    'tool.summary': '工具调用 {count} 次：{tools}',
     'truncated': '注意：回复因长度限制被截断。',
   },
   en: {
@@ -111,8 +110,7 @@ export const tAiChat = defineMessages({
     'model.current': 'Current model: {model}',
     'model.select': 'Select Model',
     'attachment.remove': 'Remove',
-    'tool.call': 'Calling tool: {tool}',
-    'tool.done': 'Finished tool: {tool}',
+    'tool.summary': '{count} tool calls: {tools}',
     'truncated': 'Note: the reply was truncated due to the length limit.',
   },
 });

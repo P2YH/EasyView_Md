@@ -70,7 +70,8 @@ while (( elapsed < WAIT_SECONDS )); do
   sleep 5
   elapsed=$((elapsed + 5))
   # The main process is the one started from Contents/MacOS; helpers live under Contents/Frameworks.
-  app_pid="$(ps -axo pid=,comm= | awk -v b="$BINARY" '{ pid = $1; $1 = ""; sub(/^ /, ""); if ($0 == b) { print pid; exit } }')"
+  # awk reads all input: exiting early would SIGPIPE ps and fail the pipeline under pipefail.
+  app_pid="$(ps -axo pid=,comm= | awk -v b="$BINARY" '!found { pid = $1; $1 = ""; sub(/^ /, ""); if ($0 == b) { print pid; found = 1 } }')"
   [[ -n "$app_pid" ]] || fail "$APP_NAME exited ~${elapsed}s after launch"
   if count="$(swift "$WINDOW_COUNTER" "$app_pid" 2>>"$LOGS_DIR/window-counter.log")"; then windows="$count"; else windows=unknown; fi
   echo "t=${elapsed}s alive pid=$app_pid windows=$windows"

@@ -172,9 +172,12 @@ export function formatWorkspaceEntryTimestamps(
     .join(' · ');
 }
 
-/** Whether a workspace entry name is a "dot" (hidden) name like `.git`. */
+/**
+ * Whether a workspace entry is hidden while dot entries are hidden: dot names like `.git`, plus
+ * Office / WPS `~$` lock files written next to open documents.
+ */
 export function isWorkspaceDotEntryName(name: string): boolean {
-  return name.startsWith('.');
+  return name.startsWith('.') || name.startsWith('~$');
 }
 
 /** Filter sibling entries according to showDotEntries. */

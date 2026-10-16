@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createWorkspaceNodeId,
+  filterWorkspaceEntriesByDotVisibility,
   isWorkspaceOperationError,
   collectVisibleWorkspaceTreeRelativePaths,
   computeNextWorkspaceTreeSelection,
@@ -197,5 +198,11 @@ describe('workspace contracts', () => {
       expect([...next.selected]).toEqual(['c']);
       expect(next.anchor).toBe('c');
     });
+  });
+
+  it('hides dot entries and Office ~$ lock files together', () => {
+    const entries = [{ name: '.git' }, { name: '~$12.6日选品.xlsx' }, { name: '~$报告.docx' }, { name: '12.6日选品.xlsx' }, { name: 'a~$b.md' }];
+    expect(filterWorkspaceEntriesByDotVisibility(entries, false).map((entry) => entry.name)).toEqual(['12.6日选品.xlsx', 'a~$b.md']);
+    expect(filterWorkspaceEntriesByDotVisibility(entries, true)).toHaveLength(entries.length);
   });
 });

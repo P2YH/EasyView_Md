@@ -133,6 +133,19 @@ export function resetWindowZoom(): void {
   applyWindowZoomLevel(0);
 }
 
+/** Windows / Linux: a hidden menu bar auto-hides and reappears while Alt is pressed. macOS has no window menu bar. */
+function applyMenuBarVisibility(window: BrowserWindow | null | undefined = getMainWindow()): void {
+  if (process.platform === 'darwin' || !window || window.isDestroyed()) return;
+  const visible = getAppStateStore().getMenuBarVisible();
+  window.setAutoHideMenuBar(!visible);
+  window.setMenuBarVisibility(visible);
+}
+
+function setMenuBarVisible(visible: boolean): void {
+  getAppStateStore().setMenuBarVisible(visible);
+  applyMenuBarVisibility();
+}
+
 export async function restartApp(): Promise<void> {
   if (isWindowClosing()) return;
   await requestRestart({
@@ -304,6 +317,12 @@ export function createMenu(): void {
         command(tMenu('view.sourceMode'), 'toggleSourceMode', { type: 'checkbox', checked: menuState.sourceMode }),
         command(tMenu('view.fullWidth'), 'toggleFullWidth', { type: 'checkbox', checked: menuState.fullWidth }),
         command(tMenu('view.tableWrap'), 'toggleTableWrap', { type: 'checkbox', checked: menuState.tableWrap }),
+        ...(process.platform === 'darwin' ? [] : [{
+          label: tMenu('view.menuBar'),
+          type: 'checkbox' as const,
+          checked: getAppStateStore().getMenuBarVisible(),
+          click: (item: Electron.MenuItem) => runInWindowContext(context, () => setMenuBarVisible(item.checked)),
+        }]),
         { type: 'separator' },
         { label: tMenu('view.zoomIn'), accelerator: 'CmdOrCtrl+=', registerAccelerator: true, click: inContext(() => zoomWindowBy(1)) },
         { label: tMenu('view.zoomIn'), accelerator: 'CmdOrCtrl+Plus', visible: false, acceleratorWorksWhenHidden: true, click: inContext(() => zoomWindowBy(1)) },
@@ -370,6 +389,7 @@ export function createWindow(context: DesktopWindowContext = getWindowContext())
     },
   });
   setMainWindow(window);
+  applyMenuBarVisibility(window);
 
   const webContentsId = window.webContents.id;
   windowSessions.register(window.webContents, context);

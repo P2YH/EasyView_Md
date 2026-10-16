@@ -151,4 +151,20 @@ describe('AppStateStore', () => {
     expect(reloaded.getZoomLevel()).toBe(-5);
     reloaded.dispose();
   });
+
+  it('shows the menu bar by default and persists hiding it', async () => {
+    const userDataPath = await createTemporaryUserDataPath();
+    const store = createAppStateStore(userDataPath);
+    expect(store.getMenuBarVisible()).toBe(true);
+    store.setMenuBarVisible(false);
+    await store.save();
+    store.dispose();
+
+    const reloaded = createAppStateStore(userDataPath);
+    await reloaded.load();
+    expect(reloaded.getMenuBarVisible()).toBe(false);
+    reloaded.setMenuBarVisible(true);
+    expect(reloaded.getMenuBarVisible()).toBe(true);
+    reloaded.dispose();
+  });
 });

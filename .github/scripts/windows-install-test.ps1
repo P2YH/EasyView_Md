@@ -91,9 +91,10 @@ Write-Host "Installed $ExpectedVersion into $installRoot"
 
 Write-Host "=== 3. Launch the installed app ==="
 # Squirrel starts the app after a first install; the smoke test needs its own instance.
+# The stub only forwards to app-<version>\EasyView_Md.exe and exits, so watch the installed binary.
 Stop-InstallerProcesses
 Start-Sleep -Seconds 2
-& (Join-Path $PSScriptRoot "windows-smoke-launch.ps1") -ExePath $stubExe -TestFile $TestFile -LogsDir (Join-Path $LogsDir "launch") -WaitSeconds 25 -JobLabel "installed-app"
+& (Join-Path $PSScriptRoot "windows-smoke-launch.ps1") -ExePath (Join-Path $appDir "EasyView_Md.exe") -TestFile $TestFile -LogsDir (Join-Path $LogsDir "launch") -WaitSeconds 25 -JobLabel "installed-app"
 if ($LASTEXITCODE -ne 0) { throw "Installed app smoke test failed" }
 
 Write-Host "=== 4. Uninstall ==="

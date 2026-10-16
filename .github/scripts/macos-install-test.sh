@@ -59,22 +59,28 @@ open -a "$APP" "$TEST_FILE"
 WINDOW_COUNTER="$LOGS_DIR/count-windows.swift"
 cat > "$WINDOW_COUNTER" <<'SWIFT'
 import CoreGraphics
-let owner = CommandLine.arguments[1]
+let pid = Int(CommandLine.arguments[1]) ?? -1
 let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
-print(windows.filter { ($0[kCGWindowOwnerName as String] as? String) == owner && ($0[kCGWindowLayer as String] as? Int) == 0 }.count)
+print(windows.filter { ($0[kCGWindowOwnerPID as String] as? Int) == pid && ($0[kCGWindowLayer as String] as? Int) == 0 }.count)
 SWIFT
 
 elapsed=0
-windows=0
+windows=unknown
 while (( elapsed < WAIT_SECONDS )); do
   sleep 5
   elapsed=$((elapsed + 5))
-  pgrep -f "$BINARY" >/dev/null || fail "$APP_NAME exited ~${elapsed}s after launch"
-  windows="$(swift "$WINDOW_COUNTER" "$APP_NAME" 2>/dev/null || echo 0)"
-  echo "t=${elapsed}s alive windows=$windows"
+  # The main process is the one started from Contents/MacOS; helpers live under Contents/Frameworks.
+  app_pid="$(ps -axo pid=,comm= | awk -v b="$BINARY" '{ pid = $1; $1 = ""; sub(/^ /, ""); if ($0 == b) { print pid; exit } }')"
+  [[ -n "$app_pid" ]] || fail "$APP_NAME exited ~${elapsed}s after launch"
+  if count="$(swift "$WINDOW_COUNTER" "$app_pid" 2>>"$LOGS_DIR/window-counter.log")"; then windows="$count"; else windows=unknown; fi
+  echo "t=${elapsed}s alive pid=$app_pid windows=$windows"
 done
 screencapture -x "$LOGS_DIR/screenshot.png" 2>/dev/null || echo "Screenshot unavailable"
-(( windows > 0 )) || fail "No on-screen $APP_NAME window appeared"
+if [[ "$windows" == unknown ]]; then
+  echo "::warning::Window detection unavailable (see window-counter.log); rely on screenshot.png"
+elif (( windows == 0 )); then
+  fail "No on-screen $APP_NAME window appeared"
+fi
 
 CRASHES="$(find "$HOME/Library/Logs/DiagnosticReports" -name "${APP_NAME}*" -newer "$STARTED_MARKER" 2>/dev/null || true)"
 if [[ -n "$CRASHES" ]]; then

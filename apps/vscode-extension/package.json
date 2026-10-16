@@ -2,7 +2,7 @@
   "name": "easyview-md",
   "displayName": "EasyView_Md",
   "description": "%extension.description%",
-  "version": "2.0.195",
+  "version": "2.0.196",
   "publisher": "zhangxy",
   "license": "MIT",
   "private": true,

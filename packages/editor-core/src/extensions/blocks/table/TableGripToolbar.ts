@@ -423,6 +423,7 @@ export class TableGripToolbar {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'grip-toolbar-btn';
+    btn.title = label;
     btn.setAttribute('aria-label', label);
 
     if (text) {
@@ -464,6 +465,7 @@ export class TableGripToolbar {
   }): HTMLElement {
     const wrap = document.createElement('div');
     wrap.className = 'grip-toolbar-size';
+    wrap.title = label;
     wrap.setAttribute('aria-label', label);
 
     const input = document.createElement('input');
@@ -521,6 +523,7 @@ export class TableGripToolbar {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = `grip-toolbar-btn${active ? ' active' : ''}`;
+    btn.title = label;
     btn.setAttribute('aria-label', label);
     btn.setAttribute('aria-pressed', String(active));
     btn.innerHTML = icon;

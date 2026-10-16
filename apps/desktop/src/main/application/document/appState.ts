@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { writeFileAtomically } from '@easyview/node-runtime';
-import type { DesktopWorkspaceState } from '../../../contracts/workspace';
+import { normalizeDesktopPanelLayout, type DesktopWorkspaceState } from '../../../contracts/workspace';
 
 export interface WindowBounds {
   x?: number;
@@ -206,6 +206,7 @@ function normalizeWorkspaceState(value: unknown): DesktopWorkspaceState {
     outlineVisible: typeof value.outlineVisible === 'boolean' ? value.outlineVisible : true,
     explorerWidth: width(value.explorerWidth),
     outlineWidth: width(value.outlineWidth),
+    ...(value.panelLayout !== undefined ? { panelLayout: normalizeDesktopPanelLayout(value.panelLayout) } : {}),
   };
 }
 

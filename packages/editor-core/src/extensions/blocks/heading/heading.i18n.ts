@@ -11,6 +11,7 @@ export const tHeading = defineMessages({
     'toc.showHeadings': '显示文档标题目录',
     'toc.showFirstTable': '显示文档第一个表格目录树',
     'toc.collapseToMiniMap': '收起为迷你目录',
+    'toc.dragToDock': '拖动以停靠到文档左侧或右侧',
     'toc.showLevel1': '仅显示 1 级标题',
     'toc.showLevels': '显示 1-{level} 级标题',
     'toc.resize': '拖动调整目录宽度',
@@ -34,7 +35,7 @@ export const tHeading = defineMessages({
     'toc.status.selected': '选中 {count}',
     'miniMap.label': '文档目录',
     'miniMap.title': '目录',
-    'miniMap.pin': '固定目录到右侧',
+    'miniMap.pin': '固定目录',
   },
   en: {
     'pathAction.clipboard': 'Copy outline path to clipboard',
@@ -46,6 +47,7 @@ export const tHeading = defineMessages({
     'toc.showHeadings': 'Show document heading outline',
     'toc.showFirstTable': 'Show outline tree of the first table',
     'toc.collapseToMiniMap': 'Collapse to mini outline',
+    'toc.dragToDock': 'Drag to dock on the left or right of the document',
     'toc.showLevel1': 'Show level 1 headings only',
     'toc.showLevels': 'Show level 1-{level} headings',
     'toc.resize': 'Drag to resize outline',
@@ -69,6 +71,6 @@ export const tHeading = defineMessages({
     'toc.status.selected': 'Sel {count}',
     'miniMap.label': 'Document outline',
     'miniMap.title': 'Outline',
-    'miniMap.pin': 'Pin outline to the right',
+    'miniMap.pin': 'Pin outline',
   },
 });

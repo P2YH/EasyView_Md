@@ -90,6 +90,10 @@ export class DesktopEditorInstanceRegistry {
     return this.sessions.values().next().value?.editor ?? null;
   }
 
+  all(): EasyViewEditorInstance[] {
+    return Array.from(this.sessions.values(), (session) => session.editor);
+  }
+
   has(tabId: string): boolean {
     return this.sessions.has(tabId);
   }

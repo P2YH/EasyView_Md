@@ -4,7 +4,7 @@ import type { TimelineRequestMessage } from '@easyview/contracts';
 import { clipboard, dialog, ipcMain, nativeTheme, shell } from 'electron';
 import path from 'node:path';
 import { isEditorToHostMessage } from '@easyview/contracts';
-import { DESKTOP_ACCENTS, DESKTOP_APPEARANCE_MODES } from '../../../contracts';
+import { DESKTOP_ACCENTS, DESKTOP_APPEARANCE_MODES, normalizeDesktopPanelLayout } from '../../../contracts';
 import type {
   DesktopAccent,
   DesktopAppearanceMode,
@@ -457,6 +457,7 @@ export function registerDesktopIpc(): void {
       outlineVisible: typeof value.outlineVisible === 'boolean' ? value.outlineVisible : getWorkspaceState().outlineVisible,
       explorerWidth: typeof value.explorerWidth === 'number' ? value.explorerWidth : getWorkspaceState().explorerWidth,
       outlineWidth: typeof value.outlineWidth === 'number' ? value.outlineWidth : getWorkspaceState().outlineWidth,
+      ...(value.panelLayout !== undefined ? { panelLayout: normalizeDesktopPanelLayout(value.panelLayout) } : {}),
     });
     createMenu();
     return success(next);

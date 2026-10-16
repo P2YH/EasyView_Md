@@ -3,6 +3,7 @@ import { defineMessages } from '@easyview/contracts/i18n';
 export const tExplorer = defineMessages({
   'zh-CN': {
     'openFolder': '打开文件夹',
+    'dragToDock': '拖动以停靠到窗口左侧或右侧，或与其他面板交换位置',
     'search': '搜索文件或文件夹 (⌘F)',
     'sort': '排序',
     'newFile': '新建文件',
@@ -16,6 +17,7 @@ export const tExplorer = defineMessages({
   },
   en: {
     'openFolder': 'Open Folder',
+    'dragToDock': 'Drag to dock on the left or right of the window, or swap with another panel',
     'search': 'Search Files or Folders (⌘F)',
     'sort': 'Sort',
     'newFile': 'New File',

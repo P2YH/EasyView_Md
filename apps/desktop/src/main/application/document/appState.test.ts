@@ -152,6 +152,17 @@ describe('AppStateStore', () => {
     reloaded.dispose();
   });
 
+  it('persists the panel layout and normalizes it on load', async () => {
+    const userDataPath = await createTemporaryUserDataPath();
+    await fs.writeFile(path.join(userDataPath, 'desktop-state.json'), JSON.stringify({
+      workspace: { rootPath: null, openTabs: [], activeTabId: null, panelLayout: { left: ['aiChat', 'nope'], right: ['explorer'], outline: 'left' } },
+    }));
+    const store = createAppStateStore(userDataPath);
+    await store.load();
+    expect(store.getWorkspace().panelLayout).toEqual({ left: ['aiChat'], right: ['explorer'], outline: 'left' });
+    store.dispose();
+  });
+
   it('shows the menu bar by default and persists hiding it', async () => {
     const userDataPath = await createTemporaryUserDataPath();
     const store = createAppStateStore(userDataPath);

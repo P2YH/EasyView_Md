@@ -1,5 +1,6 @@
 import { WorkspaceSearchPanel, WORKSPACE_SEARCH_ICON_SVG } from '@easyview/editor-core/workspace';
-import type { DesktopWorkspaceState, WorkspaceEntry, WorkspaceTreeSortMode } from '../../contracts';
+import type { DesktopPanelLayout, DesktopWorkspaceState, WorkspaceEntry, WorkspaceTreeSortMode } from '../../contracts';
+import { DOCK_GRIP_ICON_SVG } from '../panelDock';
 import type { EasyViewDesktopApi } from '../../preload/desktopApi';
 import {
   describeWorkspaceEntryTimestamps,
@@ -150,6 +151,11 @@ export class WorkspaceExplorer {
 
   setOutlineVisible(visible: boolean): void {
     if (this.state?.outlineVisible !== visible) this.updateState({ outlineVisible: visible });
+  }
+
+  /** Panel layout rides on the explorer's state so its whole-state saves never overwrite it. */
+  setPanelLayout(layout: DesktopPanelLayout): void {
+    this.updateState({ panelLayout: layout });
   }
 
   setActiveDocument(filePath: string | null): void { this.setActiveRelativePath(this.relativePathFor(filePath)); }
@@ -342,6 +348,12 @@ export class WorkspaceExplorer {
 
     const header = document.createElement('div');
     header.className = 'workspace-header';
+    const grip = document.createElement('span');
+    grip.className = 'workspace-dock-grip';
+    grip.dataset.dockGrip = 'explorer';
+    grip.title = tExplorer('dragToDock');
+    grip.innerHTML = DOCK_GRIP_ICON_SVG;
+    header.appendChild(grip);
     const title = document.createElement('span');
     title.textContent = state.rootPath.split(/[\\/]/).at(-1) || state.rootPath;
     header.appendChild(title);
@@ -736,9 +748,12 @@ export class WorkspaceExplorer {
   private beginResize(event: PointerEvent): void {
     if (!this.state) return;
     event.preventDefault(); this.resizing = true;
+    const startX = event.clientX;
+    const startWidth = this.state.explorerWidth;
+    const direction = this.options.container.dataset.dockSide === 'right' ? -1 : 1;
     const onMove = (moveEvent: PointerEvent) => {
       if (!this.resizing) return;
-      this.updateState({ explorerWidth: Math.max(220, Math.min(520, Math.round(moveEvent.clientX))) });
+      this.updateState({ explorerWidth: Math.max(220, Math.min(520, Math.round(startWidth + direction * (moveEvent.clientX - startX)))) });
     };
     const onEnd = () => { this.resizing = false; window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onEnd); };
     window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onEnd);

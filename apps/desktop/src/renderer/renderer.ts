@@ -5,8 +5,9 @@ import type { HostToEditorMessage, EditorToHostMessage } from '@easyview/contrac
 import { readLocalProductTheme } from '@easyview/contracts';
 import { applyDesktopProductAppearance } from './productThemeControl';
 import { createEasyViewEditor, EditorAppearanceStore, type EasyViewEditorInstance } from '@easyview/editor-core';
-import { isDesktopAppearanceCommand } from '../contracts';
-import type { DesktopAppearanceMode, DesktopEditorTab, DesktopTab, DesktopTabSnapshot, DesktopThemeMode } from '../contracts';
+import { defaultDesktopPanelLayout, isDesktopAppearanceCommand, normalizeDesktopPanelLayout } from '../contracts';
+import type { DesktopAppearanceMode, DesktopEditorTab, DesktopPanelLayout, DesktopTab, DesktopTabSnapshot, DesktopThemeMode } from '../contracts';
+import { applyWorkbenchPanelLayout, installPanelDock, type PanelDockElements } from './panelDock';
 import type { EasyViewDesktopApi } from '../preload/desktopApi';
 import type { EasyViewAccentTheme } from '@easyview/editor-core';
 import { createDesktopEditorHostTransport } from './desktopHostTransport';
@@ -87,6 +88,11 @@ let currentTab: DesktopTab | null = null;
 let tabController: TabController;
 let lastOutlineVisible = true;
 let lastOutlineWidth = 280;
+let panelLayout: DesktopPanelLayout = defaultDesktopPanelLayout();
+const panelDockElements: PanelDockElements = {
+  centerPane: document.getElementById('desktop-center-pane')!,
+  panels: { explorer: explorerElement, aiChat: document.getElementById('desktop-ai-chat-host')! },
+};
 let editorStateSubscription: { unsubscribe(): void } | undefined;
 const previewApi = api;
 const editors = new DesktopEditorInstanceRegistry({
@@ -99,8 +105,8 @@ const editors = new DesktopEditorInstanceRegistry({
     initialMessage,
     uiMode: 'desktop',
     appearance: productAppearance,
-    outlinePosition: 'right',
-    aiChatContainer: document.getElementById('desktop-ai-chat-host'),
+    outlinePosition: panelLayout.outline,
+    aiChatContainer: panelDockElements.panels.aiChat,
     root,
   }),
 });
@@ -108,6 +114,13 @@ const editors = new DesktopEditorInstanceRegistry({
 function activeEditor(): EasyViewEditorInstance | null {
   return editors.active();
 }
+
+function applyPanelLayout(layout: DesktopPanelLayout): void {
+  panelLayout = layout;
+  applyWorkbenchPanelLayout(panelDockElements, layout);
+  for (const editor of editors.all()) editor.setOutlinePosition(layout.outline);
+}
+applyPanelLayout(panelLayout);
 
 function commandEditor(): EasyViewEditorInstance | null {
   return activeEditor() ?? editors.lastFocused() ?? editors.first();
@@ -367,7 +380,17 @@ const appearanceSubscription = productAppearance.subscribe((state) => {
   publishMenuState();
 });
 
+const disposePanelDock = installPanelDock({
+  ...panelDockElements,
+  getLayout: () => panelLayout,
+  onLayoutChange: (layout) => {
+    applyPanelLayout(layout);
+    workspaceExplorer.setPanelLayout(layout);
+  },
+});
+
 void workspaceExplorer.initialize().then(async (state) => {
+  applyPanelLayout(normalizeDesktopPanelLayout(state.panelLayout));
   setWorkspaceRootPath(state.rootPath);
   lastOutlineVisible = state.outlineVisible;
   lastOutlineWidth = state.outlineWidth;
@@ -387,6 +410,7 @@ window.addEventListener('unload', () => {
   themeSubscription.unsubscribe();
   appearanceSubscription.unsubscribe();
   editorStateSubscription?.unsubscribe();
+  disposePanelDock();
   tabController.dispose();
   workspaceExplorer.dispose();
   activeView.dispose();

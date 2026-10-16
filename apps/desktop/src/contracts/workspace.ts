@@ -116,6 +116,78 @@ export interface DesktopWorkspaceState {
   outlineVisible: boolean;
   explorerWidth: number;
   outlineWidth: number;
+  panelLayout?: DesktopPanelLayout;
+}
+
+export type DesktopDockSide = 'left' | 'right';
+/** Panels docked beside the editor area at window level. */
+export type DesktopWorkbenchPanelId = 'explorer' | 'aiChat';
+export type DesktopDockPanelId = DesktopWorkbenchPanelId | 'outline';
+
+/**
+ * Where each panel is docked. `left` / `right` list window-level panels from the window edge
+ * inwards; the outline belongs to every document and only chooses which side of it to sit on.
+ */
+export interface DesktopPanelLayout {
+  left: DesktopWorkbenchPanelId[];
+  right: DesktopWorkbenchPanelId[];
+  outline: DesktopDockSide;
+}
+
+export type DesktopPanelDropTarget =
+  | { kind: 'side'; side: DesktopDockSide }
+  | { kind: 'swap'; panel: DesktopWorkbenchPanelId };
+
+const WORKBENCH_PANELS: readonly DesktopWorkbenchPanelId[] = ['explorer', 'aiChat'];
+
+export function defaultDesktopPanelLayout(): DesktopPanelLayout {
+  return { left: ['explorer'], right: ['aiChat'], outline: 'right' };
+}
+
+export function normalizeDesktopPanelLayout(value: unknown): DesktopPanelLayout {
+  const fallback = defaultDesktopPanelLayout();
+  if (typeof value !== 'object' || value === null) return fallback;
+  const record = value as Record<string, unknown>;
+  const seen = new Set<DesktopWorkbenchPanelId>();
+  const side = (candidate: unknown): DesktopWorkbenchPanelId[] => {
+    const panels: DesktopWorkbenchPanelId[] = [];
+    for (const item of Array.isArray(candidate) ? candidate : []) {
+      if (!WORKBENCH_PANELS.includes(item) || seen.has(item)) continue;
+      seen.add(item);
+      panels.push(item);
+    }
+    return panels;
+  };
+  const left = side(record.left);
+  const right = side(record.right);
+  for (const panel of WORKBENCH_PANELS) {
+    if (seen.has(panel)) continue;
+    if (fallback.left.includes(panel)) left.unshift(panel);
+    else right.push(panel);
+  }
+  return { left, right, outline: record.outline === 'left' ? 'left' : 'right' };
+}
+
+export function desktopPanelSide(layout: DesktopPanelLayout, panel: DesktopDockPanelId): DesktopDockSide {
+  if (panel === 'outline') return layout.outline;
+  return layout.left.includes(panel) ? 'left' : 'right';
+}
+
+/** Docking onto a side places a window-level panel at that window edge; swapping exchanges two panels' slots. */
+export function moveDesktopPanel(layout: DesktopPanelLayout, panel: DesktopDockPanelId, target: DesktopPanelDropTarget): DesktopPanelLayout {
+  if (panel === 'outline') {
+    return target.kind === 'side' ? { ...layout, outline: target.side } : layout;
+  }
+  if (target.kind === 'swap') {
+    if (target.panel === panel) return layout;
+    const swap = (list: DesktopWorkbenchPanelId[]) => list.map((item) => (item === panel ? target.panel : item === target.panel ? panel : item));
+    return { ...layout, left: swap(layout.left), right: swap(layout.right) };
+  }
+  const left = layout.left.filter((item) => item !== panel);
+  const right = layout.right.filter((item) => item !== panel);
+  return target.side === 'left'
+    ? { ...layout, left: [panel, ...left], right }
+    : { ...layout, left, right: [...right, panel] };
 }
 
 export interface RecentFolder {

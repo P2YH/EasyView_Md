@@ -31,6 +31,8 @@ interface TableOfContentsOptions {
   onInsertIntoITerm?: (headingPos: number) => void;
   /** When set, a heading rail replaces the closed sidebar; hovering it shows the full outline. */
   miniMap?: { onPin: () => void; onUnpin: () => void };
+  /** Shows a `[data-dock-grip="outline"]` handle the host's panel docking can drag. */
+  dockGrip?: boolean;
 }
 
 const MINI_MAP_MAX_DASHES = 48;
@@ -663,6 +665,14 @@ export class TableOfContents {
       this.setOutlineSource('table');
     });
     modeGroup.append(detailModeBtn, this.tableModeToggleBtn);
+    if (this.options.dockGrip) {
+      const grip = this.dom.document.createElement('span');
+      grip.className = 'toc-dock-grip';
+      grip.dataset.dockGrip = 'outline';
+      grip.title = tHeading('toc.dragToDock');
+      grip.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/></svg>';
+      tableControls.append(grip);
+    }
     tableControls.append(modeGroup);
     const miniMapOptions = this.options.miniMap;
     if (miniMapOptions) {
@@ -745,14 +755,28 @@ export class TableOfContents {
     this.sidebar.appendChild(this.resizer);
     this.applySidebarWidth();
 
-    // Insert beside the editor scroll area in the configured host position.
-    const editorBody = this.dom.getById('editor-body');
-    if (editorBody && this.scrollAreaEl) {
-      if (this.options.position === 'right') editorBody.appendChild(this.sidebar);
-      else editorBody.insertBefore(this.sidebar, this.scrollAreaEl);
-    }
-
+    this.placeSidebar();
     this.attachSidebarTransitionListener();
+  }
+
+  /** Inserts the sidebar beside the editor scroll area in the configured position. */
+  private placeSidebar(): void {
+    const editorBody = this.dom.getById('editor-body');
+    if (!this.sidebar || !editorBody || !this.scrollAreaEl) return;
+    if (this.options.position === 'right') editorBody.appendChild(this.sidebar);
+    else editorBody.insertBefore(this.sidebar, this.scrollAreaEl);
+  }
+
+  public setPosition(position: 'left' | 'right'): void {
+    if ((this.options.position ?? 'left') === position) return;
+    this.options.position = position;
+    if (this.sidebar) {
+      this.sidebar.classList.remove('toc-sidebar-left', 'toc-sidebar-right');
+      this.sidebar.classList.add(`toc-sidebar-${position}`);
+      this.placeSidebar();
+    }
+    this.miniMap?.classList.toggle('outline-minimap-left', position === 'left');
+    this.scheduleLayoutChangeNotifications();
   }
 
   private beginSidebarResize(event: PointerEvent): void {
@@ -832,6 +856,7 @@ export class TableOfContents {
 
     const root = this.dom.document.createElement('div');
     root.className = 'outline-minimap';
+    root.classList.toggle('outline-minimap-left', this.options.position === 'left');
     root.hidden = true;
 
     const rail = this.dom.document.createElement('div');

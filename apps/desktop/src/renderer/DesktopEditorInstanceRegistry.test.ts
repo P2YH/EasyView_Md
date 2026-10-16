@@ -25,6 +25,7 @@ function createFakeEditor(label: string, disposed: string[]): EasyViewEditorInst
     getUiState: () => ({ sourceMode: false, outlineVisible: false, fullWidth: true, tableWrap: false, viewChanges: false }),
     subscribeUiState: () => ({ unsubscribe: vi.fn() }),
     setOutlineWidth: vi.fn(),
+    setOutlinePosition: vi.fn(),
     getThemeState: () => ({ mode: 'light', depth: 0.5 }),
     setThemeMode: vi.fn(),
     setThemeDepth: vi.fn(),

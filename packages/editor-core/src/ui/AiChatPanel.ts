@@ -682,7 +682,15 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
 
   const panelContainer = deps.container ?? document.getElementById('editor-body');
   panelContainer?.appendChild(root);
-  if (deps.container) root.classList.add('ai-chat-panel-docked');
+  if (deps.container) {
+    root.classList.add('ai-chat-panel-docked');
+    const grip = document.createElement('span');
+    grip.className = 'ai-chat-dock-grip';
+    grip.dataset.dockGrip = 'aiChat';
+    grip.title = tAiChat('dragToDock');
+    grip.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/></svg>';
+    root.querySelector('.ai-chat-header')?.prepend(grip);
+  }
 
   const messagesEl = root.querySelector('.ai-chat-messages') as HTMLElement;
   const inputEl = root.querySelector('.ai-chat-input') as HTMLTextAreaElement;
@@ -772,11 +780,13 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
     const resizer = root.querySelector('.ai-chat-resizer') as HTMLElement;
     const startX = event.clientX;
     const startWidth = root.getBoundingClientRect().width;
+    // A host docking the panel on the left marks an ancestor with data-dock-side="left".
+    const direction = root.closest('[data-dock-side="left"]') ? 1 : -1;
     root.classList.add('resizing');
     resizer.setPointerCapture(event.pointerId);
 
     const onMove = (moveEvent: PointerEvent): void => {
-      applyPanelWidth(startWidth - (moveEvent.clientX - startX));
+      applyPanelWidth(startWidth + direction * (moveEvent.clientX - startX));
       notifyLayoutChange();
     };
     const onUp = (upEvent: PointerEvent): void => {

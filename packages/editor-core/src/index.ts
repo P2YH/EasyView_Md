@@ -135,6 +135,7 @@ export interface EasyViewEditorInstance {
   getUiState(): EasyViewEditorUiState;
   subscribeUiState(listener: (state: EasyViewEditorUiState) => void): { unsubscribe(): void };
   setOutlineWidth(width: number): void;
+  setOutlinePosition(position: 'left' | 'right'): void;
   getThemeState(): EasyViewEditorThemeState;
   setThemeMode(mode: EasyViewThemeMode): void;
   setThemeDepth(depth: number): void;
@@ -186,6 +187,8 @@ let getAccentThemeImpl: () => EasyViewAccentTheme = () => 'default';
 let setAccentThemeImpl: (theme: EasyViewAccentTheme) => void = () => undefined;
 let setDocumentActiveImpl: (active: boolean) => void = (active) => { documentActive = active; };
 let setOutlineVisibleImpl: (visible: boolean) => void = (visible) => { isTocVisible = visible; };
+let currentOutlinePosition = outlinePosition;
+let setOutlinePositionImpl: (position: 'left' | 'right') => void = (position) => { currentOutlinePosition = position; };
 const uiStateListeners = new Set<(state: EasyViewEditorUiState) => void>();
 let executeCommandImpl: (command: EasyViewEditorCommand) => void = () => undefined;
   const getUiState = (): EasyViewEditorUiState => ({
@@ -2044,7 +2047,7 @@ function initEditor() {
 
   // Create Table of Contents sidebar
   const toc = new TableOfContents(view, {
-    position: outlinePosition,
+    position: currentOutlinePosition,
     dom,
     ...headingPathActions,
     ...(uiMode === 'desktop' ? {
@@ -2052,9 +2055,14 @@ function initEditor() {
         onPin: () => setOutlineVisibleImpl(true),
         onUnpin: () => setOutlineVisibleImpl(false),
       },
+      dockGrip: true,
     } : {}),
   });
   toc.setFilePath(currentFilePath);
+  setOutlinePositionImpl = (position) => {
+    currentOutlinePosition = position;
+    toc.setPosition(position);
+  };
   setOutlineVisibleImpl = (visible) => {
     if (visible === toc.visible && visible === isTocVisible) return;
     if (visible) toc.open();
@@ -2768,6 +2776,7 @@ function initEditor() {
       return { unsubscribe: () => uiStateListeners.delete(listener) };
     },
     setOutlineWidth: (width: number) => toc.setWidth(width),
+    setOutlinePosition: setOutlinePositionImpl,
     getThemeState: getThemeStateImpl,
     setThemeDepth: setThemeDepthImpl,
     getAccentTheme: getAccentThemeImpl,
@@ -2866,6 +2875,7 @@ function initEditor() {
         sidebar.style.minWidth = `${safeWidth}px`;
       }
     },
+    setOutlinePosition: (position: 'left' | 'right') => setOutlinePositionImpl(position),
     getThemeState: () => getThemeStateImpl(),
     setThemeMode: (mode: EasyViewThemeMode) => setThemeModeImpl(mode),
     setThemeDepth: (depth: number) => setThemeDepthImpl(depth),

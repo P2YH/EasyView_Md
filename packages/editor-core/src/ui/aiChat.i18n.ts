@@ -3,6 +3,7 @@ import { defineMessages } from '@easyview/contracts/i18n';
 export const tAiChat = defineMessages({
   'zh-CN': {
     'resize': '拖拽调整宽度',
+    'dragToDock': '拖动以停靠到窗口左侧或右侧，或与其他面板交换位置',
     'title': 'AI 对话',
     'mode.chatTitle': '仅对话，不修改文件',
     'mode.agentTitle': 'AI 可直接修改当前文件',
@@ -59,6 +60,7 @@ export const tAiChat = defineMessages({
   },
   en: {
     'resize': 'Drag to resize',
+    'dragToDock': 'Drag to dock on the left or right of the window, or swap with another panel',
     'title': 'AI Chat',
     'mode.chatTitle': 'Chat only; does not modify the file',
     'mode.agentTitle': 'AI can modify the current file directly',

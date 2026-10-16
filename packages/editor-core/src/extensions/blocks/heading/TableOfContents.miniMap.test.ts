@@ -10,7 +10,7 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-function setup(miniMap?: { onPin: () => void; onUnpin: () => void }) {
+function setup(miniMap?: { onPin: () => void; onUnpin: () => void }, dockGrip = false) {
   document.body.innerHTML = '<div id="editor-body"><div id="editor-scroll-area"><div id="editor"></div></div></div>';
   const doc = schema.node('doc', null, [
     schema.node('heading', { level: 1 }, schema.text('Root')),
@@ -19,9 +19,35 @@ function setup(miniMap?: { onPin: () => void; onUnpin: () => void }) {
     schema.node('heading', { level: 3 }, schema.text('Leaf')),
   ]);
   const view = new EditorView(document.getElementById('editor')!, { state: EditorState.create({ schema, doc }) });
-  const toc = new TableOfContents(view, { position: 'right', miniMap });
+  const toc = new TableOfContents(view, { position: 'right', miniMap, dockGrip });
   return { view, toc };
 }
+
+it('moves the sidebar and mini map to the other side of the document', () => {
+  const { view, toc } = setup({ onPin: vi.fn(), onUnpin: vi.fn() }, true);
+  try {
+    toc.update(view);
+    const scrollArea = document.getElementById('editor-scroll-area')!;
+    const sidebar = document.querySelector<HTMLElement>('.toc-sidebar')!;
+    const miniMap = document.querySelector<HTMLElement>('.outline-minimap')!;
+    const sidebarFollowsDocument = () => Boolean(scrollArea.compareDocumentPosition(sidebar) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(sidebar.querySelector('[data-dock-grip="outline"]')).not.toBeNull();
+    expect(sidebarFollowsDocument()).toBe(true);
+
+    toc.setPosition('left');
+    expect(sidebarFollowsDocument()).toBe(false);
+    expect(sidebar.classList.contains('toc-sidebar-left')).toBe(true);
+    expect(sidebar.classList.contains('toc-sidebar-right')).toBe(false);
+    expect(miniMap.classList.contains('outline-minimap-left')).toBe(true);
+
+    toc.setPosition('right');
+    expect(sidebarFollowsDocument()).toBe(true);
+    expect(miniMap.classList.contains('outline-minimap-left')).toBe(false);
+  } finally {
+    toc.destroy();
+    view.destroy();
+  }
+});
 
 it('renders no mini map unless the host opts in', () => {
   const { view, toc } = setup();

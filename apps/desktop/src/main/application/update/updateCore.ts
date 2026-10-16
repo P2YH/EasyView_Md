@@ -144,6 +144,21 @@ export function parseReleaseFromTagUrl(url: string): ReleaseInfo | undefined {
 export interface PlatformInfo { platform: string; arch: string; windowsInstalled: boolean }
 
 /** Picks the installer asset for this platform; undefined means "open the website instead". */
+export const NSIS_UNINSTALLER = 'Uninstall EasyView_Md.exe';
+
+export type WindowsInstallKind = 'nsis' | 'squirrel' | 'portable';
+
+/**
+ * NSIS installs keep the uninstaller next to EasyView_Md.exe; Squirrel installs (up to 2.0.14) put Update.exe
+ * one level above app-x.y.z\EasyView_Md.exe; the zip build has neither.
+ */
+export function windowsInstallKind(execPath: string, exists: (file: string) => boolean): WindowsInstallKind {
+  const dir = execPath.replace(/[\\/][^\\/]*$/, '');
+  if (exists(`${dir}\\${NSIS_UNINSTALLER}`)) return 'nsis';
+  if (exists(`${dir.replace(/[\\/][^\\/]*$/, '')}\\Update.exe`)) return 'squirrel';
+  return 'portable';
+}
+
 export function selectInstallerAsset(assets: ReleaseAsset[], info: PlatformInfo): ReleaseAsset | undefined {
   let name: string | undefined;
   if (info.platform === 'darwin' && info.arch === 'arm64') name = 'EasyView_Md-mac-arm64.dmg';

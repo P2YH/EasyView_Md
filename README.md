@@ -78,7 +78,7 @@ npm run package:desktop
 Build platform installers with:
 
 ```bash
-npm run make:desktop        # macOS ZIP or Windows ZIP/Squirrel
+npm run make:desktop        # macOS ZIP or Windows ZIP (Windows installer: npm run make:nsis --workspace @easyview/desktop)
 npm run make:desktop:mac    # macOS ZIP and DMG
 ```
 

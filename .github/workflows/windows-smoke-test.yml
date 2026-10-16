@@ -13,6 +13,7 @@ on:
       - '.github/scripts/windows-install-test.ps1'
       - '.github/scripts/resolve-latest-win-zip.ps1'
       - '.github/test-sample.md'
+      - 'tooling/release/desktop-artifacts.mjs'
 
 jobs:
   test-source-build:
@@ -59,7 +60,7 @@ jobs:
           if-no-files-found: warn
 
   test-installer:
-    name: Setup.exe install smoke
+    name: NSIS setup install smoke
     runs-on: windows-latest
     timeout-minutes: 40
     steps:
@@ -75,17 +76,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Make Windows installers
-        run: npm run make --workspace @easyview/desktop -- --arch=x64
+      - name: Make Windows installer
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          npm run make --workspace @easyview/desktop -- --arch=x64
+          npm run make:nsis --workspace @easyview/desktop
 
-      - name: Install, launch and uninstall Setup.exe
+      - name: Install, launch and uninstall setup (only me + all users)
         shell: pwsh
         run: |
           $version = (Get-Content apps/desktop/package.json -Raw | ConvertFrom-Json).version
           .\.github\scripts\windows-install-test.ps1 `
-            -SetupPath "apps/desktop/out/make/squirrel.windows/x64/EasyView_Md-$version Setup.exe" `
+            -SetupPath apps/desktop/out/nsis/EasyView_Md-win-x64-setup.exe `
             -ExpectedVersion $version `
-            -SetupIconPath apps/desktop/assets/icon.ico `
             -TestFile .github/test-sample.md `
             -LogsDir logs-install
 

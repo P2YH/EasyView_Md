@@ -34,10 +34,9 @@ import {
 } from '../../application/window/windowService';
 import { registerDesktopIpc } from './registerDesktopIpc';
 import { registerPreviewProtocol, registerPreviewScheme } from './previewProtocol';
-import { handleSquirrelEvent } from './squirrelEvents';
+import { ensureOpenWithRegistration } from './fileAssociations';
 
-const squirrelStartup = handleSquirrelEvent();
-if (!squirrelStartup) registerPreviewScheme();
+registerPreviewScheme();
 
 const languagePreference = loadLanguagePreference(app.getPath('userData'));
 if (languagePreference !== 'system') app.commandLine.appendSwitch('lang', languagePreference);
@@ -97,7 +96,7 @@ function openDocumentFromSystem(filePath: string): void {
   });
 }
 
-const hasSingleInstanceLock = !squirrelStartup && app.requestSingleInstanceLock();
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {
   app.quit();
 } else {
@@ -150,6 +149,7 @@ if (!hasSingleInstanceLock) {
     const lateFile = getPendingOpenPath();
     setPendingOpenPath(undefined);
     if (lateFile) openDocumentFromSystem(lateFile);
+    void ensureOpenWithRegistration();
     nativeTheme.on('updated', () => {
       sendToWindow(
         'app.themeChanged',

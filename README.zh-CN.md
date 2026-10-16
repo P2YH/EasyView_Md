@@ -64,7 +64,7 @@ npm run package:desktop
 生成平台安装产物：
 
 ```bash
-npm run make:desktop        # macOS ZIP 或 Windows ZIP/Squirrel
+npm run make:desktop        # macOS ZIP 或 Windows ZIP（Windows 安装包：npm run make:nsis --workspace @easyview/desktop）
 npm run make:desktop:mac    # macOS ZIP 和 DMG
 ```
 

@@ -136,17 +136,22 @@ jobs:
           $exe = 'apps/desktop/out/EasyView_Md-win32-x64/EasyView_Md.exe'
           $version = (Get-Item $exe).VersionInfo.ProductVersion
           if ($version -ne $env:RELEASE_VERSION) { throw "Unexpected application version: $version" }
-      # Runs the Setup.exe users download; a failure here blocks publish.
-      - name: Install, launch and uninstall Windows Setup.exe
+      # Website installer (NSIS wizard). Re-packages the Forge output with electron-builder.
+      - name: Make Windows installer (NSIS)
+        if: matrix.platform == 'win32'
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run make:nsis --workspace @easyview/desktop
+      # Runs the setup users download, for both "only me" and "all users"; a failure here blocks publish.
+      - name: Install, launch and uninstall Windows setup
         if: matrix.platform == 'win32'
         shell: pwsh
         env:
           RELEASE_VERSION: ${{ needs.version.outputs.version }}
         run: |
           .\.github\scripts\windows-install-test.ps1 `
-            -SetupPath "apps/desktop/out/make/squirrel.windows/x64/EasyView_Md-$env:RELEASE_VERSION Setup.exe" `
+            -SetupPath apps/desktop/out/nsis/EasyView_Md-win-x64-setup.exe `
             -ExpectedVersion $env:RELEASE_VERSION `
-            -SetupIconPath apps/desktop/assets/icon.ico `
             -TestFile .github/test-sample.md `
             -LogsDir logs-install
       - name: Upload Windows installer test logs

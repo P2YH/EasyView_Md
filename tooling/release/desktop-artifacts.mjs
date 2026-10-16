@@ -27,20 +27,21 @@ if (command === 'validate') {
     throw new Error('Usage: desktop-artifacts.mjs stage <darwin arm64|win32 x64> <destination>');
   }
   if (process.platform !== platform || process.arch !== arch) throw new Error('Runner architecture does not match release target');
-  const make = path.join(root, 'apps/desktop/out/make');
+  // Sources are relative to apps/desktop/out (Forge makers write to make/, the NSIS installer to nsis/).
+  const out = path.join(root, 'apps/desktop/out');
   const files = platform === 'darwin' ? [
-    [`dmg/arm64/EasyView_Md-${version}-arm64.dmg`, 'EasyView_Md-mac-arm64.dmg'],
-    [`zip/darwin/arm64/EasyView_Md-darwin-arm64-${version}.zip`, 'EasyView_Md-mac-arm64.zip'],
+    [`make/dmg/arm64/EasyView_Md-${version}-arm64.dmg`, 'EasyView_Md-mac-arm64.dmg'],
+    [`make/zip/darwin/arm64/EasyView_Md-darwin-arm64-${version}.zip`, 'EasyView_Md-mac-arm64.zip'],
   ] : [
-    [`squirrel.windows/x64/EasyView_Md-${version} Setup.exe`, 'EasyView_Md-win-x64-setup.exe'],
-    [`zip/win32/x64/EasyView_Md-win32-x64-${version}.zip`, 'EasyView_Md-win-x64.zip'],
+    ['nsis/EasyView_Md-win-x64-setup.exe', 'EasyView_Md-win-x64-setup.exe'],
+    [`make/zip/win32/x64/EasyView_Md-win32-x64-${version}.zip`, 'EasyView_Md-win-x64.zip'],
   ];
   for (const [source] of files) {
-    const info = statSync(path.join(make, source));
+    const info = statSync(path.join(out, source));
     if (!info.isFile() || !info.size) throw new Error(`Missing or empty installer: ${source}`);
   }
   mkdirSync(destination, { recursive: true });
-  for (const [source, target] of files) copyFileSync(path.join(make, source), path.join(destination, target));
+  for (const [source, target] of files) copyFileSync(path.join(out, source), path.join(destination, target));
 } else if (command === 'stage-vsix') {
   const [destination] = args;
   if (!destination) throw new Error('Usage: desktop-artifacts.mjs stage-vsix <destination>');

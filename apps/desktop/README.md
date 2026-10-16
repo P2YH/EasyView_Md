@@ -31,7 +31,13 @@ macOS 额外生成 DMG：
 npm run make:dmg --workspace @easyview/desktop
 ```
 
-Windows 由 Electron Forge 生成 Squirrel 安装包；macOS 生成 ZIP，并通过系统 `hdiutil` 生成 DMG。
+Windows 安装包（NSIS 安装向导）在 Forge `make` 之后生成，只能在 Windows 上打：
+
+```bash
+npm run make:nsis --workspace @easyview/desktop
+```
+
+`scripts/make-nsis.mjs` 用 electron-builder（配置 `electron-builder.nsis.cjs`）把 Forge 产物 `out/EasyView_Md-win32-x64` 打成 `out/nsis/EasyView_Md-win-x64-setup.exe`。向导可选“仅为我安装”（无需管理员）或“为所有用户安装”（需管理员），并可修改安装目录。安装时把 EasyView_Md 加入 `.md` / `.markdown` / `.mdx` 的“打开方式”列表（`build/installer.nsh`），不改默认打开程序。macOS 生成 ZIP，并通过系统 `hdiutil` 生成 DMG。
 
 ## 安全边界
 

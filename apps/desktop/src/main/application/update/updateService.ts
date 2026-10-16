@@ -7,7 +7,7 @@ import { log } from '../help/appLogger';
 import {
   assetDownloadSources, compareVersions, DEFAULT_UPDATE_SETTINGS, isUpdateDisabled, LATEST_RELEASE_API, LATEST_RELEASE_PAGE, MIRROR_RELEASE_MANIFEST,
   normalizeUpdateSettings, parseGitHubRelease, parseMirrorRelease, parseReleaseFromTagUrl, parseSha256Sums, type ReleaseAsset, type ReleaseInfo,
-  selectInstallerAsset, shouldPrompt, trimNotes, type UpdateSettings, WEBSITE_URL, withMirrorAssets,
+  selectInstallerAsset, shouldPrompt, trimNotes, type UpdateSettings, WEBSITE_URL, windowsInstallKind, withMirrorAssets,
 } from './updateCore';
 import { cleanupUpdateDirectory, findVerifiedDownload } from './updateStorage';
 import { tUpdate } from './updateService.i18n';
@@ -117,8 +117,7 @@ async function attachMirror(release: ReleaseInfo): Promise<ReleaseInfo> {
 }
 
 function windowsInstalled(): boolean {
-  // Squirrel installs put Update.exe one level above app-x.y.z\EasyView_Md.exe; the zip build has none.
-  return process.platform === 'win32' && existsSync(path.resolve(path.dirname(process.execPath), '..', 'Update.exe'));
+  return process.platform === 'win32' && windowsInstallKind(process.execPath, existsSync) !== 'portable';
 }
 
 function focusedWindow(): BrowserWindow | undefined {

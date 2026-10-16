@@ -1,5 +1,4 @@
 const path = require('node:path');
-const { MakerSquirrel } = require('@electron-forge/maker-squirrel');
 const { MakerZIP } = require('@electron-forge/maker-zip');
 
 const appDir = __dirname;
@@ -38,7 +37,7 @@ module.exports = {
     name: 'EasyView_Md',
     appBundleId: 'com.easyview.md',
     icon: path.resolve(appDir, 'assets/icon'),
-    // Squirrel names the Start Menu folder after CompanyName; Electron's default is "GitHub, Inc.".
+    // Shown in Windows file properties and Task Manager; Electron's default CompanyName is "GitHub, Inc.".
     win32metadata: {
       CompanyName: 'EasyView_Md',
       ProductName: 'EasyView_Md',
@@ -62,15 +61,5 @@ module.exports = {
   },
   makers: [
     new MakerZIP({}, ['darwin', 'win32']),
-    new MakerSquirrel(
-      {
-        name: 'easyview_md',
-        authors: 'EasyView_Md',
-        description: 'EasyView_Md Markdown Editor',
-        setupIcon: path.resolve(appDir, 'assets/icon.ico'),
-        iconUrl: 'https://easyview.wonderxy.art/assets/icon.ico',
-      },
-      ['win32'],
-    ),
   ],
 };

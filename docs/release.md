@@ -21,6 +21,8 @@ Release 先创建为草稿，上传完成后公开。失败重跑时，草稿继
 
 所有桌面发布共用一个 concurrency 队列，避免同时写固定下载文件名。GitHub 不保证排队顺序，也可能替换尚未开始的 pending run；应等上一版完成再发下一版。手动重跑历史 tag 会把官网下载切回该版本，应只重跑准备对外提供的版本。固定下载路径逐文件替换，整组文件不是原子切换；同步失败时官网 HTML 不更新，但部分安装包可能已经替换，应及时重跑同步。
 
+Windows 官网安装包 `EasyView_Md-win-x64-setup.exe` 是 NSIS 安装向导：Windows job 在 Forge `make` 之后运行 `npm run make:nsis --workspace @easyview/desktop`，用 electron-builder 把 Forge 产物重新打包，程序文件与 ZIP、商店版一致。随后 `.github/scripts/windows-install-test.ps1` 分别以“仅为我”（`/currentuser`）和“所有用户”（`/allusers`）静默安装到含空格的自定义目录，校验版本、卸载项、“打开方式”注册和快捷方式，启动冒烟测试后静默卸载并检查清理，失败则阻止发布。2.0.14 及以前的 Squirrel 安装不会被自动卸载，用户可在“应用和功能”中自行移除。
+
 VSIX 随同一 tag 构建与发布，但扩展版本号独立维护。现有 Desktop Build 仅保留应用打包与运行验证，不制作发布安装包；旧 `desktop-release.yml` 已由新流程替代。
 
 ## VS Code 扩展（VSIX）
@@ -52,7 +54,7 @@ VSIX 与桌面端走同一条 Desktop Release 流程，但版本独立：tag 只
   - 官方说明：[GitHub Actions 发布](https://learn.microsoft.com/windows/apps/publish/msstore-dev-cli/github-actions)、[关联 Entra 应用](https://learn.microsoft.com/windows/apps/publish/partner-center/add-users-groups-and-azure-ad-applications)、[提交 API 前置条件](https://learn.microsoft.com/windows/uwp/monetize/create-and-manage-submissions-using-windows-store-services)、[msstore 命令](https://learn.microsoft.com/windows/apps/publish/msstore-dev-cli/commands)。
 - **手动提交（备用）：** 发版后在 Release 下载 `EasyView_Md-win-x64-store.appx`（或 Actions 运行里的 `store-win32-x64` artifact），打开 [Partner Center](https://partner.microsoft.com/dashboard/apps-and-games/overview) → EasyView_Md（9MTQTBP489CN）→ 新建提交 → 程序包，上传后补齐商店信息（描述、截图、分类、年龄分级）再提交审核。每次提交的版本号必须比上一次大（`X.Y.Z` 会成为 `X.Y.Z.0`）。
 - **隐私政策：** 商店要求填写隐私政策链接，需先在官网放一页（例如 `https://easyview.wonderxy.art/privacy.html`）再提交。
-- **不自动更新：** 应用目前没有内置自动更新（不使用 electron-updater，Squirrel 只负责官网 setup.exe 的安装）。商店版的更新只由微软商店完成，以后若加入应用内更新，需在 `process.windowsStore === true` 时跳过。
+- **不自动更新：** 应用没有静默自动更新（不使用 electron-updater），只会提示并下载官网安装包。商店版的更新只由微软商店完成，以后若加入应用内更新，需在 `process.windowsStore === true` 时跳过。
 
 ## GitHub Secrets
 

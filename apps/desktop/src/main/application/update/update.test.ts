@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { assetDownloadSources, compareVersions, isUpdateDisabled, normalizeUpdateSettings, parseGitHubRelease, parseMirrorRelease, withMirrorAssets, parseReleaseFromTagUrl, parseSha256Sums, selectInstallerAsset, shouldPrompt, trimNotes } from './updateCore';
+import { assetDownloadSources, compareVersions, isUpdateDisabled, normalizeUpdateSettings, parseGitHubRelease, parseMirrorRelease, withMirrorAssets, parseReleaseFromTagUrl, parseSha256Sums, selectInstallerAsset, shouldPrompt, trimNotes, windowsInstallKind } from './updateCore';
 import { cleanupUpdateDirectory, findVerifiedDownload } from './updateStorage';
 
 const assets = ['EasyView_Md-mac-arm64.dmg', 'EasyView_Md-mac-arm64.zip', 'EasyView_Md-win-x64-setup.exe', 'EasyView_Md-win-x64.zip', 'EasyView_Md-win-x64-store.appx', 'SHA256SUMS']
@@ -89,6 +89,16 @@ describe('selectInstallerAsset', () => {
     expect(selectInstallerAsset(assets, { platform: 'win32', arch: 'x64', windowsInstalled: false })).toBeUndefined();
     expect(selectInstallerAsset(assets, { platform: 'darwin', arch: 'x64', windowsInstalled: false })).toBeUndefined();
     expect(selectInstallerAsset(assets, { platform: 'linux', arch: 'x64', windowsInstalled: false })).toBeUndefined();
+  });
+});
+
+describe('windowsInstallKind', () => {
+  const kind = (execPath: string, files: string[]) => windowsInstallKind(execPath, (file) => files.includes(file));
+
+  it('recognizes NSIS, Squirrel and portable copies', () => {
+    expect(kind('D:\\Apps\\EasyView_Md\\EasyView_Md.exe', ['D:\\Apps\\EasyView_Md\\Uninstall EasyView_Md.exe'])).toBe('nsis');
+    expect(kind('C:\\Users\\me\\AppData\\Local\\easyview_md\\app-2.0.14\\EasyView_Md.exe', ['C:\\Users\\me\\AppData\\Local\\easyview_md\\Update.exe'])).toBe('squirrel');
+    expect(kind('D:\\tools\\EasyView_Md-win32-x64\\EasyView_Md.exe', [])).toBe('portable');
   });
 });
 

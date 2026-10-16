@@ -491,7 +491,7 @@ body.desktop-welcome-full #workspace-toggle { visibility: hidden; }
 .workspace-entry-create-spacer { display: none; }
 .workspace-create-row { height: 26px; display: flex; align-items: center; }.workspace-create-row input { width: calc(100% - 12px); box-sizing: border-box; color: var(--easyview-preview-text-color); background: var(--vscode-input-background); border: 1px solid var(--vscode-focusBorder); border-radius: 3px; }
 .workspace-empty { margin: 16px; padding: 8px 10px; border: 1px solid var(--vscode-panel-border); border-radius: 4px; color: inherit; background: transparent; cursor: pointer; }
-.workspace-resizer { position: absolute; z-index: 8; top: 0; right: -3px; width: 6px; height: 100%; cursor: col-resize; }.workspace-resizer:hover { background: var(--vscode-focusBorder); }
+.workspace-resizer { position: absolute; z-index: 8; top: 0; right: -3px; width: 6px; height: 100%; cursor: col-resize; }
 .toc-sidebar-right { border-right: 0 !important; border-left: 1px solid var(--vscode-panel-border); }
 
 #file-preview-root { --easyview-preview-text-color: var(--vscode-editor-foreground); background: var(--file-viewer-bg, var(--vscode-editor-background)); color: var(--easyview-preview-text-color); }
@@ -565,6 +565,32 @@ body:not([data-mdpre-accent='default'])[data-mdpre-accent] #file-preview-root { 
 }
 .workspace-dock-grip:hover, .ai-chat-dock-grip:hover, .toc-dock-grip:hover { opacity: 1; background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, .18)); }
 .workspace-dock-grip svg, .ai-chat-dock-grip svg, .toc-dock-grip svg { width: 14px; height: 14px; fill: currentColor; stroke: none; }
+/* Window-level panels share the explorer's look: panel background, 30px header, 12px/600 title, 24px icon buttons.
+   The AI chat and Version Guard styles live in editor-core and also serve the VS Code extension, so they are aligned here. */
+#desktop-ai-chat-host .ai-chat-panel, #version-guard-host .version-guard { color: var(--vscode-editorWidget-foreground); background: var(--vscode-editorWidget-background); }
+#desktop-ai-chat-host .ai-chat-header, #version-guard-host .version-guard header { flex: 0 0 30px; box-sizing: border-box; height: 30px; min-height: 30px; gap: 4px; padding: 0 6px; border-bottom: 1px solid var(--vscode-panel-border); font-size: 12px; font-weight: 600; }
+#desktop-ai-chat-host .ai-chat-title, #version-guard-host .version-guard header strong { color: inherit; font-size: 12px; font-weight: 600; }
+#desktop-ai-chat-host .ai-chat-icon-btn, #version-guard-host .version-guard header button { flex: 0 0 24px; width: 24px; height: 24px; padding: 0; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; line-height: 1; }
+#desktop-ai-chat-host .ai-chat-icon-btn svg { width: 15px; height: 15px; }
+/* Replies read as plain text on the panel, so the bubble's padding doesn't add a blank strip on the left. */
+#desktop-ai-chat-host .ai-chat-messages { padding: 8px 8px 8px 10px; }
+#desktop-ai-chat-host .ai-chat-msg.assistant .ai-chat-bubble { padding: 0; border-radius: 0; background: transparent; }
+/* Slim scrollbars everywhere on desktop (editor-core defaults to 10px for the extension webview). */
+body.easyview-desktop ::-webkit-scrollbar { width: 6px; height: 6px; }
+body.easyview-desktop ::-webkit-scrollbar-thumb { border-radius: 3px; }
+/* Content runs up to the slim scrollbar instead of leaving an 8px strip beside it
+   (editor-core injects `padding-right: 8px !important`, so this needs !important and a stronger selector). */
+body.easyview-desktop #editor, body.easyview-desktop #editor.full-width { padding-right: 2px !important; }
+/* Every panel splitter: a 6px hit area on the border that shows a 2px focus-colored line on hover and while dragging
+   (the panel carries .resizing during a drag), matching the outline's splitter. */
+.workspace-resizer, .guard-width-resizer, #desktop-ai-chat-host .ai-chat-resizer { width: 6px; touch-action: none; background: transparent !important; opacity: 1 !important; }
+.workspace-resizer::after, .guard-width-resizer::after, #desktop-ai-chat-host .ai-chat-resizer::after { content: ''; position: absolute; top: 0; bottom: 0; left: 2px; width: 2px; border-radius: 999px; background: transparent; transition: background 120ms ease; }
+#desktop-ai-chat-host .ai-chat-resizer::after { left: 0; }
+#desktop-ai-chat-host[data-dock-side="left"] .ai-chat-resizer::after { left: auto; right: 0; }
+.workspace-resizer:hover::after, #workspace-explorer.resizing .workspace-resizer::after,
+.guard-width-resizer:hover::after, #version-guard-host.resizing .guard-width-resizer::after,
+#desktop-ai-chat-host .ai-chat-resizer:hover::after, #desktop-ai-chat-host .ai-chat-panel.resizing .ai-chat-resizer::after,
+body .toc-sidebar-resizer:hover::after, body .toc-sidebar.resizing .toc-sidebar-resizer::after { background: var(--vscode-focusBorder); }
 .toc-table-controls:has(.toc-dock-grip) { gap: 6px; padding-left: 8px; }
 body.dock-dragging, body.dock-dragging * { cursor: grabbing !important; user-select: none !important; }
 .dock-overlay { position: fixed; inset: 0; z-index: 100000; pointer-events: none; }

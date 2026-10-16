@@ -304,9 +304,9 @@ function setGuardVisible(visible: boolean, persist = true): void {
 }
 document.getElementById('version-guard-toggle')!.onclick = () => { dismissStartupWelcome(); setGuardVisible(!guardVisible); };
 guardResizer.onpointerdown = event => {
-  event.preventDefault(); const start = event.clientX; const width = guardWidth; const max = maxPanelWidth(guardHost, 280);
+  event.preventDefault(); guardHost.classList.add('resizing'); const start = event.clientX; const width = guardWidth; const max = maxPanelWidth(guardHost, 280);
   const move = (next: PointerEvent) => { guardWidth = Math.max(280, Math.min(max, width + (next.clientX - start) * (guardHost.dataset.dockSide === 'right' ? -1 : 1))); guardHost.style.width = `${guardWidth}px`; };
-  const end = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); workspaceExplorer.setVersionGuardState(guardVisible, guardWidth); };
+  const end = () => { guardHost.classList.remove('resizing'); window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); workspaceExplorer.setVersionGuardState(guardVisible, guardWidth); };
   window.addEventListener('pointermove', move); window.addEventListener('pointerup', end, { once: true });
 };
 

@@ -57,6 +57,38 @@ it('fetches and pushes the configured upstream and never performs a background n
   expect((await service.status(await service.repository(repo))).ahead).toBe(0); await service.handle({ method: 'fetch', repository: repo }); expect((await service.status(await service.repository(repo))).checkedAt).toBeTypeOf('number');
   const commands = guardDiagnostics.commands; await new Promise(resolve => setTimeout(resolve, 100)); expect(guardDiagnostics.commands).toBe(commands); expect(guardDiagnostics.peak).toBeLessThanOrEqual(2);
 });
+async function diverged() {
+  const { root, repo, service } = await fixture(); const remote = path.join(root, 'remote.git'); git(root, 'init', '--bare', '-q', remote);
+  await writeFile(path.join(repo, 'file'), 'base\n'); git(repo, 'add', '.'); git(repo, 'commit', '-qm', 'base'); git(repo, 'remote', 'add', 'origin', remote); git(repo, 'push', '-qu', 'origin', 'HEAD');
+  const other = path.join(root, 'other'); execFileSync('git', ['clone', '-q', remote, other]); init(other);
+  const commitIn = async (dir: string, file: string, text: string) => { await writeFile(path.join(dir, file), text); git(dir, 'add', '.'); git(dir, 'commit', '-qm', text.trim()); };
+  await service.discover();
+  return { repo, other, service, commitIn, status: async () => service.status(await service.repository(repo)) };
+}
+const isolatedConfig = () => { const previous = process.env.GIT_CONFIG_GLOBAL; process.env.GIT_CONFIG_GLOBAL = '/dev/null'; return () => { if (previous === undefined) delete process.env.GIT_CONFIG_GLOBAL; else process.env.GIT_CONFIG_GLOBAL = previous; }; };
+it('pulls remote commits and syncs diverged branches by merging, like VS Code', async () => {
+  const restore = isolatedConfig();
+  try {
+    const { repo, other, service, commitIn, status } = await diverged();
+    await commitIn(other, 'remote.md', 'remote one\n'); git(other, 'push', '-q');
+    await service.handle({ method: 'fetch', repository: repo }); expect(await status()).toMatchObject({ ahead: 0, behind: 1 });
+    await service.handle({ method: 'pull', repository: repo }); expect(await status()).toMatchObject({ ahead: 0, behind: 0 });
+    await commitIn(other, 'remote.md', 'remote two\n'); git(other, 'push', '-q'); await commitIn(repo, 'local.md', 'local\n');
+    await service.handle({ method: 'fetch', repository: repo }); expect(await status()).toMatchObject({ ahead: 1, behind: 1 });
+    await service.handle({ method: 'sync', repository: repo });
+    expect(await status()).toMatchObject({ ahead: 0, behind: 0 });
+    expect(git(repo, 'log', '-1', '--format=%P').split(' ')).toHaveLength(2);
+    git(other, 'pull', '-q', '--no-rebase'); expect(await readFile(path.join(other, 'local.md'), 'utf8')).toBe('local\n');
+  } finally { restore(); }
+});
+it('restores the branch when a configured rebase pull stops on a conflict', async () => {
+  const { repo, other, service, commitIn, status } = await diverged(); git(repo, 'config', 'pull.rebase', 'true');
+  await commitIn(other, 'file', 'remote\n'); git(other, 'push', '-q'); await commitIn(repo, 'file', 'local\n');
+  const head = git(repo, 'rev-parse', 'HEAD');
+  await expect(service.handle({ method: 'sync', repository: repo })).rejects.toThrow();
+  expect(git(repo, 'rev-parse', 'HEAD')).toBe(head); expect(git(repo, 'status', '--porcelain')).toBe('');
+  expect(await status()).toMatchObject({ ahead: 1, behind: 1 });
+});
 it('rejects workspace escapes, nested file ownership and Git metadata paths', async () => {
   const { root, repo, service } = await fixture(); const nested = path.join(repo, 'child'); await mkdir(nested); init(nested); await service.discover();
   await expect(service.handle({ method: 'stage', repository: repo, paths: ['../external'] })).rejects.toThrow('Invalid');

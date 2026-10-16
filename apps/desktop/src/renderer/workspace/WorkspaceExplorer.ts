@@ -769,7 +769,7 @@ export class WorkspaceExplorer {
 
   private beginResize(event: PointerEvent): void {
     if (!this.state) return;
-    event.preventDefault(); this.resizing = true;
+    event.preventDefault(); this.resizing = true; this.options.container.classList.add('resizing');
     const startX = event.clientX;
     const startWidth = this.state.explorerWidth;
     const maxWidth = maxPanelWidth(this.options.container, 220);
@@ -778,7 +778,7 @@ export class WorkspaceExplorer {
       if (!this.resizing) return;
       this.updateState({ explorerWidth: Math.max(220, Math.min(maxWidth, Math.round(startWidth + direction * (moveEvent.clientX - startX)))) });
     };
-    const onEnd = () => { this.resizing = false; window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onEnd); };
+    const onEnd = () => { this.resizing = false; this.options.container.classList.remove('resizing'); window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onEnd); };
     window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onEnd);
   }
 

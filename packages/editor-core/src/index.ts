@@ -108,7 +108,7 @@ export interface EasyViewEditorOptions {
 
 export type EasyViewEditorCommand =
   | 'toggleOutline' | 'toggleSourceMode' | 'toggleFullWidth' | 'toggleTableWrap'
-  | 'toggleTheme'
+  | 'toggleViewChanges' | 'toggleTheme'
   | 'zoomIn' | 'zoomOut' | 'resetZoom' | 'scrollTop' | 'scrollBottom'
   | 'toggleHeadingCollapse' | 'toggleHistory' | 'toggleStickyNote' | 'toggleAiChat' | 'openTerminal'
   | 'stageFile' | 'openCommit' | 'syncGit' | 'exportHtmlLight' | 'exportHtmlDark'
@@ -2503,6 +2503,9 @@ function initEditor() {
         fileHeader.syncTableWrapState(isTableWrap);
         dom.eventTarget.dispatchEvent(new CustomEvent('easyview-table-wrap-layout-change'));
         notifyUiState();
+        return;
+      case 'toggleViewChanges':
+        if (host.capabilities.git) fileHeader.triggerViewChanges();
         return;
       case 'toggleTheme': fileHeader.cycleTheme(); return;
       case 'zoomIn': applyDesktopZoom(zoomLevel + 10); return;

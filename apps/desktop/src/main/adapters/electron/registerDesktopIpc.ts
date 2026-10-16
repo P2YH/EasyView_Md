@@ -677,6 +677,7 @@ export function registerDesktopIpc(): void {
       || typeof value.outlineVisible !== 'boolean'
       || typeof value.fullWidth !== 'boolean'
       || typeof value.tableWrap !== 'boolean'
+      || typeof value.viewChanges !== 'boolean'
       || typeof value.hasActiveDocument !== 'boolean'
       || !DESKTOP_APPEARANCE_MODES.includes(value.themeMode as DesktopAppearanceMode)
       || typeof value.themeDepth !== 'number' || !Number.isFinite(value.themeDepth)
@@ -687,6 +688,7 @@ export function registerDesktopIpc(): void {
       outlineVisible: value.outlineVisible,
       fullWidth: value.fullWidth,
       tableWrap: value.tableWrap,
+      viewChanges: value.viewChanges,
       hasActiveDocument: value.hasActiveDocument,
       themeMode: value.themeMode as DesktopAppearanceMode,
       themeDepth: Math.max(0, Math.min(100, value.themeDepth)),

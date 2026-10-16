@@ -160,6 +160,7 @@ export type DesktopMenuCommand =
   | 'toggleSourceMode'
   | 'toggleFullWidth'
   | 'toggleTableWrap'
+  | 'toggleViewChanges'
   | 'zoomIn'
   | 'zoomOut'
   | 'resetZoom'
@@ -185,6 +186,7 @@ export interface DesktopMenuState {
   outlineVisible: boolean;
   fullWidth: boolean;
   tableWrap: boolean;
+  viewChanges: boolean;
   hasActiveDocument: boolean;
   themeMode: DesktopAppearanceMode;
   /** 0–100; the menu checks the nearest depth preset. */

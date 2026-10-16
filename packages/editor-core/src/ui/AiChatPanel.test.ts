@@ -62,6 +62,36 @@ describe('AiChatPanel host and document context', () => {
     panel.destroy();
   });
 
+  it('picks the mode from a dropdown beside the model, defaulting to Agent over older per-file sessions', () => {
+    window.localStorage.setItem('easyview-ai-chat-history:/workspace/document.md', JSON.stringify({ version: 1, mode: 'chat', messages: [] }));
+    const host = document.getElementById('global-ai-host')!;
+    const create = () => createAiChatPanel({
+      container: host,
+      postMessage: () => undefined,
+      getDocumentContent: () => '# Document',
+      getFilePath: () => '/workspace/document.md',
+      getFileName: () => 'document.md',
+      applyDocumentEdit: () => undefined,
+      copyText: () => undefined,
+    });
+    let panel = create();
+    const picker = host.querySelector('.ai-chat-mode-picker')!;
+    expect(picker.previousElementSibling?.classList.contains('ai-chat-model-switcher')).toBe(true);
+    expect(host.querySelector('.ai-chat-header .ai-chat-mode-btn')).toBeNull();
+    expect(host.querySelector('.ai-chat-mode-label')?.textContent).toBe('Agent');
+
+    host.querySelector<HTMLButtonElement>('.ai-chat-mode-current')!.click();
+    expect(host.querySelector('.ai-chat-mode-menu')?.classList.contains('open')).toBe(true);
+    host.querySelector<HTMLButtonElement>('.ai-chat-mode-option[data-mode="chat"]')!.click();
+    expect(host.querySelector('.ai-chat-mode-menu')?.classList.contains('open')).toBe(false);
+    expect(host.querySelector('.ai-chat-mode-label')?.textContent).toBe('Chat');
+    panel.destroy();
+
+    panel = create();
+    expect(host.querySelector('.ai-chat-mode-label')?.textContent).toBe('Chat');
+    panel.destroy();
+  });
+
   it('shows all tool calls of a reply on one line above the answer', () => {
     const messages: EditorToHostMessage[] = [];
     const host = document.getElementById('global-ai-host')!;

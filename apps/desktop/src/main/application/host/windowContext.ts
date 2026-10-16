@@ -55,6 +55,7 @@ export function createDesktopWindowContext(id: string, trash?: (absolutePath: st
       outlineVisible: true,
       fullWidth: true,
       tableWrap: false,
+      viewChanges: false,
       hasActiveDocument: false,
       themeMode: 'light',
       themeDepth: 50,

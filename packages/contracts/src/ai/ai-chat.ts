@@ -26,8 +26,8 @@ export interface AiChatHistoryEntry {
 
 export const DEFAULT_AI_CHAT_SETTINGS: AiChatSettings = {
   baseUrl: 'https://api.deepseek.com',
-  models: ['deepseek-chat', 'deepseek-reasoner'],
-  defaultModel: 'deepseek-chat',
+  models: ['deepseek-flash', 'deepseek-v4-pro'],
+  defaultModel: 'deepseek-flash',
   temperature: 1.0,
   topP: 1.0,
   maxTokens: 4096,
@@ -56,13 +56,17 @@ function normalizeBaseUrl(value: unknown): string {
   }
 }
 
+/** The shipped default before DeepSeek renamed its API models; an untouched copy is upgraded to the current default. */
+const LEGACY_DEFAULT_MODELS = ['deepseek-chat', 'deepseek-reasoner'];
+
 function normalizeModels(value: unknown): string[] {
   if (!Array.isArray(value)) return [...DEFAULT_AI_CHAT_SETTINGS.models];
   const models = value
     .filter((item): item is string => typeof item === 'string')
     .map((item) => item.trim())
     .filter((item) => item.length > 0);
-  return models.length > 0 ? models : [...DEFAULT_AI_CHAT_SETTINGS.models];
+  if (models.length === 0 || models.join('\n') === LEGACY_DEFAULT_MODELS.join('\n')) return [...DEFAULT_AI_CHAT_SETTINGS.models];
+  return models;
 }
 
 function normalizeSystemPrompt(value: unknown): string {

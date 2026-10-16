@@ -317,6 +317,7 @@ export function createMenu(): void {
         command(tMenu('view.sourceMode'), 'toggleSourceMode', { type: 'checkbox', checked: menuState.sourceMode }),
         command(tMenu('view.fullWidth'), 'toggleFullWidth', { type: 'checkbox', checked: menuState.fullWidth }),
         command(tMenu('view.tableWrap'), 'toggleTableWrap', { type: 'checkbox', checked: menuState.tableWrap }),
+        command(tMenu('view.viewChanges'), 'toggleViewChanges', { type: 'checkbox', checked: menuState.viewChanges, accelerator: 'Alt+V' }),
         ...(process.platform === 'darwin' ? [] : [{
           label: tMenu('view.menuBar'),
           type: 'checkbox' as const,

@@ -18,6 +18,7 @@ import { maxPanelWidth, PANEL_WIDTH_SANITY_MAX } from '../runtime/panelWidth';
 
 const PANEL_WIDTH_STORAGE_KEY = 'easyview-ai-chat-width';
 const MODEL_STORAGE_KEY = 'easyview-ai-chat-model';
+const MODE_STORAGE_KEY = 'easyview-ai-chat-mode';
 const HISTORY_KEY_PREFIX = 'easyview-ai-chat-history:';
 const PANEL_MIN_WIDTH = 280;
 const PANEL_DEFAULT_WIDTH = 360;
@@ -147,30 +148,6 @@ function ensureAiChatPanelStyles(): void {
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .ai-chat-mode-switch {
-      display: inline-flex;
-      border: 1px solid var(--vscode-input-border, rgba(128, 128, 128, 0.35));
-      border-radius: 6px;
-      overflow: hidden;
-      flex-shrink: 0;
-    }
-    .ai-chat-mode-btn {
-      padding: 3px 10px;
-      font-size: 11px;
-      border: none;
-      background: transparent;
-      color: var(--vscode-descriptionForeground, #888);
-      cursor: pointer;
-      font-family: inherit;
-    }
-    .ai-chat-mode-btn.active {
-      background: var(--mdpre-accent, #4080d0);
-      color: #fff;
-    }
-    .ai-chat-mode-btn:disabled {
-      opacity: 0.45;
-      cursor: not-allowed;
-    }
     .ai-chat-icon-btn {
       width: 24px;
       height: 24px;
@@ -217,9 +194,10 @@ function ensureAiChatPanelStyles(): void {
       align-items: flex-end;
     }
     .ai-chat-msg.assistant {
-      align-self: flex-start;
-      align-items: flex-start;
-      width: 92%;
+      align-self: stretch;
+      align-items: stretch;
+      max-width: none;
+      min-width: 0;
     }
     .ai-chat-bubble {
       padding: 8px 10px;
@@ -297,7 +275,7 @@ function ensureAiChatPanelStyles(): void {
     .ai-chat-bubble h1, .ai-chat-bubble h2, .ai-chat-bubble h3 { font-size: 13px; margin: 8px 0 4px; }
     .ai-chat-bubble ul, .ai-chat-bubble ol { padding-left: 18px; margin: 4px 0; }
     .ai-chat-bubble a { color: var(--mdpre-accent, #4080d0); }
-    .ai-chat-bubble table { border-collapse: collapse; }
+    .ai-chat-bubble table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
     .ai-chat-bubble th, .ai-chat-bubble td { border: 1px solid var(--vscode-editorWidget-border, rgba(128,128,128,.2)); padding: 2px 6px; }
     .ai-chat-code-copy {
       position: absolute;
@@ -397,10 +375,15 @@ function ensureAiChatPanelStyles(): void {
     }
     .ai-chat-model-switcher {
       position: relative;
-      flex: 1;
+      flex: 0 1 auto;
       min-width: 0;
     }
-    .ai-chat-model-btn {
+    .ai-chat-mode-picker {
+      position: relative;
+      flex: none;
+      margin-right: auto;
+    }
+    .ai-chat-model-btn, .ai-chat-mode-current {
       display: inline-flex;
       align-items: center;
       gap: 4px;
@@ -415,13 +398,13 @@ function ensureAiChatPanelStyles(): void {
       max-width: 100%;
       overflow: hidden;
     }
-    .ai-chat-model-btn:hover { background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.15)); }
+    .ai-chat-model-btn:hover, .ai-chat-mode-current:hover { background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.15)); }
     .ai-chat-model-btn .ai-chat-model-name {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .ai-chat-model-menu {
+    .ai-chat-model-menu, .ai-chat-mode-menu {
       display: none;
       position: absolute;
       bottom: calc(100% + 4px);
@@ -434,8 +417,9 @@ function ensureAiChatPanelStyles(): void {
       z-index: 120;
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
     }
-    .ai-chat-model-menu.open { display: block; }
-    .ai-chat-model-option {
+    .ai-chat-model-menu.open, .ai-chat-mode-menu.open { display: block; }
+    .ai-chat-mode-menu { min-width: 200px; }
+    .ai-chat-model-option, .ai-chat-mode-option {
       display: block;
       width: 100%;
       text-align: left;
@@ -451,7 +435,10 @@ function ensureAiChatPanelStyles(): void {
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .ai-chat-model-option:hover { background: var(--vscode-menu-selectionBackground, rgba(128, 128, 128, 0.2)); }
+    .ai-chat-model-option:hover, .ai-chat-mode-option:hover:not(:disabled) { background: var(--vscode-menu-selectionBackground, rgba(128, 128, 128, 0.2)); }
+    .ai-chat-mode-option span { margin-left: 8px; color: var(--vscode-descriptionForeground, #888); font-weight: 400; }
+    .ai-chat-mode-option.active { color: var(--mdpre-accent, #4080d0); font-weight: 600; }
+    .ai-chat-mode-option:disabled { opacity: 0.45; cursor: default; }
     .ai-chat-model-option.selected { color: var(--mdpre-accent, #4080d0); font-weight: 600; }
     .ai-chat-model-menu-separator {
       height: 1px;
@@ -579,6 +566,15 @@ function ensureAiChatPanelStyles(): void {
   document.head.appendChild(style);
 }
 
+/** Agent unless the user last picked Chat; one choice for every document. */
+function readStoredMode(): ChatMode {
+  try {
+    return window.localStorage.getItem(MODE_STORAGE_KEY) === 'chat' ? 'chat' : 'agent';
+  } catch {
+    return 'agent';
+  }
+}
+
 export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
   ensureAiChatPanelStyles();
 
@@ -589,10 +585,6 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
     <div class="ai-chat-resizer" title="${tHtml('resize')}"></div>
     <div class="ai-chat-header">
       <span class="ai-chat-title">${tHtml('title')}</span>
-      <div class="ai-chat-mode-switch">
-        <button class="ai-chat-mode-btn" data-mode="chat" type="button" title="${tHtml('mode.chatTitle')}">Chat</button>
-        <button class="ai-chat-mode-btn" data-mode="agent" type="button" title="${tHtml('mode.agentTitle')}">Agent</button>
-      </div>
       <button class="ai-chat-icon-btn" data-action="settings" type="button" title="${tHtml('settings')}">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
@@ -623,6 +615,16 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
             <div class="ai-chat-model-options"></div>
             <div class="ai-chat-model-menu-separator"></div>
             <button class="ai-chat-model-option" data-action="open-settings" type="button">${tHtml('model.settings')}</button>
+          </div>
+        </div>
+        <div class="ai-chat-mode-picker">
+          <button class="ai-chat-mode-current" type="button" aria-haspopup="menu">
+            <span class="ai-chat-mode-label">Agent</span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 15 6-6 6 6"/></svg>
+          </button>
+          <div class="ai-chat-mode-menu" role="menu">
+            <button class="ai-chat-mode-option ai-chat-mode-btn" data-mode="agent" type="button" role="menuitemradio" title="${tHtml('mode.agentTitle')}">Agent<span>${tHtml('mode.agentTitle')}</span></button>
+            <button class="ai-chat-mode-option ai-chat-mode-btn" data-mode="chat" type="button" role="menuitemradio" title="${tHtml('mode.chatTitle')}">Chat<span>${tHtml('mode.chatTitle')}</span></button>
           </div>
         </div>
         <button class="ai-chat-attach-btn" data-action="attach" type="button" title="${tHtml('attach.local')}">
@@ -657,7 +659,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
       </div>
       <div class="ai-chat-field">
         <label>${tHtml('settings.models')}</label>
-        <textarea class="ai-chat-settings-models" rows="3" placeholder="deepseek-chat&#10;deepseek-reasoner"></textarea>
+        <textarea class="ai-chat-settings-models" rows="3" placeholder="deepseek-flash&#10;deepseek-v4-pro"></textarea>
       </div>
       <div class="ai-chat-field-row">
         <div class="ai-chat-field">
@@ -707,6 +709,9 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
   const modelBtn = root.querySelector('.ai-chat-model-btn') as HTMLButtonElement;
   const modelNameEl = root.querySelector('.ai-chat-model-name') as HTMLElement;
   const modelMenu = root.querySelector('.ai-chat-model-menu') as HTMLElement;
+  const modeCurrent = root.querySelector('.ai-chat-mode-current') as HTMLButtonElement;
+  const modeLabel = root.querySelector('.ai-chat-mode-label') as HTMLElement;
+  const modeMenu = root.querySelector('.ai-chat-mode-menu') as HTMLElement;
   const modelOptionsEl = root.querySelector('.ai-chat-model-options') as HTMLElement;
   const pendingAttachmentsEl = root.querySelector('.ai-chat-pending-attachments') as HTMLElement;
   const urlRow = root.querySelector('.ai-chat-url-row') as HTMLElement;
@@ -733,7 +738,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
   let disposed = false;
   let panelWidth = PANEL_DEFAULT_WIDTH;
   /** Agent by default; falls back to chat only while no document is available, then returns to the chosen mode. */
-  let preferredMode: ChatMode = 'agent';
+  let preferredMode: ChatMode = readStoredMode();
   let mode: ChatMode = preferredMode;
   let documentContextAvailable = true;
   let messages: ChatUiMessage[] = [];
@@ -854,8 +859,6 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
       if (raw) {
         const parsed = JSON.parse(raw) as StoredAiChatSession;
         if (parsed && parsed.version === 1 && Array.isArray(parsed.messages)) {
-          preferredMode = parsed.mode === 'chat' ? 'chat' : 'agent';
-          mode = documentContextAvailable ? preferredMode : 'chat';
           messages = parsed.messages
             .filter((message) => message && (message.role === 'user' || message.role === 'assistant'))
             .map((message) => ({ ...message, id: createRequestId() }));
@@ -865,6 +868,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         }
       }
     } catch { /* corrupt entry — start fresh */ }
+    mode = documentContextAvailable ? preferredMode : 'chat';
     updateModeButtons();
     renderMessages();
   };
@@ -1040,17 +1044,23 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
 
   const closeModelMenu = (): void => {
     modelMenu.classList.remove('open');
+    modeMenu.classList.remove('open');
   };
 
+  modeCurrent.addEventListener('click', () => {
+    modelMenu.classList.remove('open');
+    modeMenu.classList.toggle('open');
+  });
+
   modelBtn.addEventListener('click', () => {
+    modeMenu.classList.remove('open');
     modelMenu.classList.toggle('open');
   });
   document.addEventListener('click', (event) => {
     if (disposed) return;
-    if (!modelMenu.classList.contains('open')) return;
-    if (!(event.target as HTMLElement).closest('.ai-chat-model-switcher')) {
-      closeModelMenu();
-    }
+    const target = event.target as HTMLElement;
+    if (modelMenu.classList.contains('open') && !target.closest('.ai-chat-model-switcher')) modelMenu.classList.remove('open');
+    if (modeMenu.classList.contains('open') && !target.closest('.ai-chat-mode-picker')) modeMenu.classList.remove('open');
   });
 
   // ------------------------------------------------------------- settings
@@ -1372,6 +1382,8 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
   // ------------------------------------------------------------- actions
 
   const updateModeButtons = (): void => {
+    modeLabel.textContent = mode === 'agent' ? 'Agent' : 'Chat';
+    modeCurrent.title = tAiChat(mode === 'agent' ? 'mode.agentTitle' : 'mode.chatTitle');
     for (const button of root.querySelectorAll<HTMLButtonElement>('.ai-chat-mode-btn')) {
       const buttonMode = button.dataset.mode;
       button.classList.toggle('active', buttonMode === mode);
@@ -1426,6 +1438,10 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
       if (requestedMode === 'agent' && !documentContextAvailable) return;
       preferredMode = requestedMode;
       mode = requestedMode;
+      try {
+        window.localStorage.setItem(MODE_STORAGE_KEY, requestedMode);
+      } catch { /* storage unavailable */ }
+      modeMenu.classList.remove('open');
       updateModeButtons();
       if (messages.length === 0) renderMessages();
     });

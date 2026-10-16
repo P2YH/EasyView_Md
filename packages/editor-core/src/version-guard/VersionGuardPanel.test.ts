@@ -66,4 +66,27 @@ describe('VersionGuardPanel', () => {
     expect(panel.element.querySelector('.guard-commit')).not.toBeNull();
     panel.dispose();
   });
+  it.each([
+    { ahead: 0, behind: 0, method: 'none', label: /^(Up to date|已同步)$/, disabled: true },
+    { ahead: 0, behind: 5, method: 'pull', label: /↓5$/, disabled: false },
+    { ahead: 2, behind: 0, method: 'push', label: /↑2$/, disabled: false },
+    { ahead: 1, behind: 5, method: 'sync', label: /↓5 ↑1$/, disabled: false },
+  ])('shows one sync button for ahead $ahead / behind $behind', async ({ ahead, behind, method, label, disabled }) => {
+    const guard = client();
+    const base = guard.request;
+    guard.request = vi.fn(async (request: GuardRequest) => {
+      if (request.method !== 'status') return base(request);
+      guard.calls.push(request);
+      return { files: [], branch: 'main', head: 'h', upstream: 'origin/main', ahead, behind };
+    });
+    const panel = new VersionGuardPanel({ client: guard }); document.body.append(panel.element);
+    panel.setVisible(true); for (let i = 0; i < 5; i++) await flush();
+    const actions = panel.element.querySelector('.guard-actions')!;
+    expect(actions.querySelectorAll('button')).toHaveLength(3);
+    const sync = actions.querySelector<HTMLButtonElement>('.guard-sync')!;
+    expect(sync.dataset.method).toBe(method); expect(sync.textContent).toMatch(label); expect(sync.disabled).toBe(disabled);
+    expect(actions.querySelector<HTMLButtonElement>('.guard-fetch')!.disabled).toBe(false);
+    if (!disabled) { sync.click(); for (let i = 0; i < 3; i++) await flush(); expect(guard.calls.some(call => call.method === method)).toBe(true); }
+    panel.dispose();
+  });
 });

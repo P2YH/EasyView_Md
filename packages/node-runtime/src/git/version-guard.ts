@@ -189,14 +189,19 @@ export class VersionGuardService {
         if (!status.files.some(file => file.index !== '.' && file.index !== '?')) throw new Error('No staged changes.');
         return guardGit(root, ['commit', '-m', request.message]);
       }
-      if (request.method === 'fetch' || request.method === 'push') {
+      if (request.method === 'fetch' || request.method === 'pull' || request.method === 'push' || request.method === 'sync') {
         const status = await this.status(repository);
         if (!status.upstream) throw new Error('No upstream configured for the current branch.');
         const remote = (await guardGit(root, ['config', '--get', `branch.${status.branch}.remote`])).trim();
         const merge = (await guardGit(root, ['config', '--get', `branch.${status.branch}.merge`])).trim();
         if (!remote || !merge) throw new Error('No upstream configured for the current branch.');
-        const result = request.method === 'fetch' ? await guardGit(root, ['fetch', '--', remote]) : await guardGit(root, ['push', '--', remote, `HEAD:${merge}`]);
-        if (request.method === 'fetch') this.checked.set(repository.id, Date.now());
+        const push = () => guardGit(root, ['push', '--', remote, `HEAD:${merge}`]);
+        if (request.method === 'push') return push();
+        if (request.method === 'fetch') { const result = await guardGit(root, ['fetch', '--', remote]); this.checked.set(repository.id, Date.now()); return result; }
+        if (status.files.some(file => file.index === 'U')) throw new Error('Resolve conflicts before pulling.');
+        const result = await this.pull(root);
+        this.checked.set(repository.id, Date.now());
+        if (request.method === 'sync' && (await this.status(repository)).ahead > 0) return push();
         return result;
       }
       const paths = await this.files(repository, request.paths);
@@ -220,6 +225,21 @@ export class VersionGuardService {
       }
       throw new Error('Unsupported Version Guard operation.');
     });
+  }
+  private async pull(root: string): Promise<string> {
+    const config = async (key: string) => (await guardGit(root, ['config', '--get', key]).catch(() => '')).trim();
+    // Without pull.rebase/pull.ff, Git refuses divergent pulls; merge like VS Code does by default.
+    const strategy = await config('pull.rebase') || await config('pull.ff') ? [] : ['--no-rebase'];
+    try { return await guardGit(root, ['pull', ...strategy]); }
+    catch (error) {
+      const rebasing = await Promise.all(['rebase-merge', 'rebase-apply'].map(async name => {
+        const dir = (await guardGit(root, ['rev-parse', '--git-path', name])).trim();
+        return fs.access(path.resolve(root, dir)).then(() => true, () => false);
+      }));
+      // A half-finished rebase cannot be continued from the panel, so restore the pre-pull state.
+      if (rebasing.some(Boolean)) await guardGit(root, ['rebase', '--abort']).catch(() => undefined);
+      throw error;
+    }
   }
   private revision(value: unknown): string { if (typeof value !== 'string' || !/^[a-f0-9]{40,64}$/.test(value)) throw new Error('Invalid commit.'); return value; }
   private async parent(root: string, revision: string): Promise<string | undefined> { return (await guardGit(root, ['rev-list', '--parents', '-n', '1', revision])).trim().split(' ')[1]; }

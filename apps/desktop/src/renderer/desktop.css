@@ -87,6 +87,8 @@ body {
 .desktop-title-button svg .panel-fill { fill: currentColor; stroke: none; }
 .desktop-title-button.active { background: var(--vscode-toolbar-hoverBackground, var(--easyview-hover-background)); color: var(--mdpre-accent, var(--easyview-focus-border)); }
 #workspace-toggle { justify-self: start; margin-left: 67px; }
+/* The 67px leaves room for the macOS traffic lights; other platforms keep a native title bar above this row. */
+.desktop-platform-other #workspace-toggle { margin-left: 4px; }
 #desktop-title-center { min-width: 0; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 8px; }
 #desktop-title-actions { display: flex; align-items: center; justify-content: end; gap: 2px; padding-right: 8px; -webkit-app-region: no-drag; }
 .desktop-title-button:hover, .desktop-title-button.active { background: var(--vscode-toolbar-hoverBackground); color: var(--vscode-focusBorder); }

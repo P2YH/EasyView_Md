@@ -35,6 +35,7 @@ if (!api?.editor || !api.app || !api.document) {
   document.body.innerHTML = '<main style="padding:24px;font-family:system-ui">EasyView_Md 宿主接口加载失败。Failed to load the EasyView_Md host API.</main>'; // i18n-ignore
   throw new Error('EasyView_Md preload API is unavailable');
 }
+document.body.classList.toggle('desktop-platform-other', !navigator.platform.toLowerCase().includes('mac'));
 
 const sharedEditorHost = createDesktopEditorHostTransport({
   postMessage: (message: EditorToHostMessage) => api.editor.postMessage(message),

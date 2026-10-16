@@ -21,6 +21,27 @@ export function renderAssistantMarkdown(text: string): string {
   return markdown.render(text);
 }
 
+/**
+ * Renders a partial (still streaming) reply. An unterminated code fence is closed so the code
+ * block renders as code instead of swallowing the text as a paragraph; everything else in
+ * markdown-it already degrades gracefully on incomplete input. Raw HTML stays disabled.
+ */
+export function renderStreamingMarkdown(text: string): string {
+  return markdown.render(closeOpenFence(text));
+}
+
+export function closeOpenFence(text: string): string {
+  let fence: string | null = null;
+  for (const line of text.split('\n')) {
+    const match = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+    if (!match) continue;
+    const marker = match[1];
+    if (fence === null) fence = marker;
+    else if (marker[0] === fence[0] && marker.length >= fence.length && line.trim() === marker) fence = null;
+  }
+  return fence === null ? text : `${text}${text.endsWith('\n') ? '' : '\n'}${fence}`;
+}
+
 /** Adds a heading id so in-panel anchor links work. Called post-render. */
 export function decorateRenderedMarkdown(container: HTMLElement, onCopyCode: (code: string) => void): void {
   for (const heading of container.querySelectorAll('h1, h2, h3, h4, h5, h6')) {

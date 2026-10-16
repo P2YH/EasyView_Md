@@ -2878,7 +2878,7 @@ function initEditor() {
       // during host initialization because it only changes the TOC shell.
       const sidebar = dom.query<HTMLElement>('.toc-sidebar');
       if (sidebar) {
-        const safeWidth = Math.max(220, Math.min(520, Math.round(width)));
+        const safeWidth = Math.max(220, Math.min(8000, Math.round(width)));
         sidebar.style.width = `${safeWidth}px`;
         sidebar.style.minWidth = `${safeWidth}px`;
       }

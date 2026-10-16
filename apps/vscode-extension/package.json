@@ -639,7 +639,7 @@
         },
         {
           "id": "easyviewMd-versionGuard",
-          "title": "Version Guard",
+          "title": "%view.versionGuard.name%",
           "icon": "resources/version-guard.svg"
         }
       ]
@@ -657,7 +657,7 @@
         {
           "type": "webview",
           "id": "easyviewMd.versionGuard",
-          "name": "Version Guard"
+          "name": "%view.versionGuard.name%"
         }
       ]
     }

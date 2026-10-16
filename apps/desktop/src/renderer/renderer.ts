@@ -1,4 +1,5 @@
 import { VersionGuardPanel } from '@easyview/editor-core/version-guard';
+import { maxPanelWidth } from '@easyview/editor-core/workspace';
 import type { GuardUiState } from '@easyview/contracts';
 import './bootLocale';
 import { TimelinePanel, RpcTimelineClient, showHistorySettingsDialog } from '@easyview/editor-core/timeline';
@@ -71,6 +72,10 @@ function localizeShell(): void {
   document.getElementById('desktop-tab-bar')?.setAttribute('aria-label', tDesktop('shell.openTabs'));
   document.getElementById('desktop-welcome')?.setAttribute('aria-label', tDesktop('shell.welcome'));
   document.getElementById('desktop-ai-chat-host')?.setAttribute('aria-label', tDesktop('shell.aiChat'));
+  const guardToggle = document.getElementById('version-guard-toggle');
+  guardToggle?.setAttribute('title', tDesktop('dock.panel.versionGuard'));
+  guardToggle?.setAttribute('aria-label', tDesktop('dock.panel.versionGuard'));
+  document.getElementById('version-guard-host')?.setAttribute('aria-label', tDesktop('dock.panel.versionGuard'));
 }
 localizeShell();
 
@@ -188,6 +193,7 @@ function setWorkspaceRootPath(rootPath: string | null): void {
   guardPanel.reset();
   welcomeRequested = false;
   if (lastTabSnapshot) syncWelcome(lastTabSnapshot);
+  else applyGuardVisibility();
 }
 let startupTabsKey: string | null = null;
 let lastTabSnapshot: DesktopTabSnapshot | null = null;
@@ -215,6 +221,7 @@ function syncWelcome(snapshot: DesktopTabSnapshot): void {
   document.body.classList.toggle('desktop-welcome-active', showWelcome);
   document.body.classList.toggle('desktop-welcome-full', welcomeCoversWorkspace);
   welcomePage.setVisible(showWelcome);
+  applyGuardVisibility();
   renderTitle();
 }
 
@@ -282,15 +289,23 @@ const guardPanel = new VersionGuardPanel({
 });
 guardHost.append(guardPanel.element);
 const guardResizer = document.createElement('div'); guardResizer.className = 'guard-width-resizer'; guardHost.append(guardResizer);
+/**
+ * The panel only shows for an open workspace that the full welcome page is not covering, so the
+ * welcome page never lists repositories of a previously opened folder.
+ */
+function applyGuardVisibility(): void {
+  const shown = guardVisible && workspaceRootPath !== null && !welcomeCoversWorkspace;
+  guardHost.hidden = !shown; guardHost.style.width = `${guardWidth}px`; guardPanel.setVisible(shown);
+}
 function setGuardVisible(visible: boolean, persist = true): void {
-  guardVisible = visible; guardHost.hidden = !visible; guardHost.style.width = `${guardWidth}px`; guardPanel.setVisible(visible);
+  guardVisible = visible; applyGuardVisibility();
   const toggle = document.getElementById('version-guard-toggle')!; toggle.classList.toggle('active', visible); toggle.setAttribute('aria-pressed', String(visible));
   if (persist) workspaceExplorer.setVersionGuardState(visible, guardWidth);
 }
 document.getElementById('version-guard-toggle')!.onclick = () => { dismissStartupWelcome(); setGuardVisible(!guardVisible); };
 guardResizer.onpointerdown = event => {
-  event.preventDefault(); const start = event.clientX; const width = guardWidth;
-  const move = (next: PointerEvent) => { guardWidth = Math.max(280, Math.min(640, width + (next.clientX - start) * (guardHost.dataset.dockSide === 'right' ? -1 : 1))); guardHost.style.width = `${guardWidth}px`; };
+  event.preventDefault(); const start = event.clientX; const width = guardWidth; const max = maxPanelWidth(guardHost, 280);
+  const move = (next: PointerEvent) => { guardWidth = Math.max(280, Math.min(max, width + (next.clientX - start) * (guardHost.dataset.dockSide === 'right' ? -1 : 1))); guardHost.style.width = `${guardWidth}px`; };
   const end = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); workspaceExplorer.setVersionGuardState(guardVisible, guardWidth); };
   window.addEventListener('pointermove', move); window.addEventListener('pointerup', end, { once: true });
 };

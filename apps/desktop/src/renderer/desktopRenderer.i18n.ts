@@ -29,7 +29,7 @@ export const tDesktop = defineMessages({
     'welcome.removeRecentNamed': '从最近列表中移除 {name}',
     'dock.panel.explorer': '文件目录树',
     'dock.panel.aiChat': 'AI 对话',
-    'dock.panel.versionGuard': 'Version Guard',
+    'dock.panel.versionGuard': '仓库版本管理',
     'dock.panel.outline': '文档目录',
     'dock.windowLeft': '停靠到窗口左侧',
     'dock.windowRight': '停靠到窗口右侧',

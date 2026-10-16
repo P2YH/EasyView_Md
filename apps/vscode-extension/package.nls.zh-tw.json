@@ -40,5 +40,6 @@
   "config.nativeDecorations.tables.enabled.description": "在 VS Code 原生编辑器中为 Markdown 表格启用保守的样式，不替换表格源文本。",
   "config.nativeEditor.forceMonospaceFont.description": "从 EasyView_Md 打开原生 Markdown 源码编辑器时，强制使用支持中日韩字符的等宽字体。",
   "config.workspace.focusFilesOnStartup.description": "窗口启动或重新加载后，若已打开工作区则显示 EasyView_Md 文件侧边栏，空白欢迎窗口则隐藏侧边栏。关闭此项以保留宿主编辑器自身的侧边栏恢复行为。",
-  "view.files.name": "文件"
+  "view.files.name": "文件",
+  "view.versionGuard.name": "倉庫版本管理"
 }

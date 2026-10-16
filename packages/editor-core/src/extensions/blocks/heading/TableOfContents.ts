@@ -13,6 +13,7 @@ import { TextSelection } from 'prosemirror-state';
 import scrollIntoView from 'scroll-into-view-if-needed';
 import { headingPathActionIcons } from './HeadingPathActionIcons';
 import { tHeading } from './heading.i18n';
+import { maxPanelWidth, PANEL_WIDTH_SANITY_MAX } from '../../../runtime/panelWidth';
 
 // Outline: HEADING_OFFSET = 20
 const HEADING_OFFSET = 20;
@@ -175,7 +176,7 @@ export class TableOfContents {
   }
 
   private static readonly TOC_WIDTH_MIN = 180;
-  private static readonly TOC_WIDTH_MAX = 560;
+  private static readonly TOC_WIDTH_MAX = PANEL_WIDTH_SANITY_MAX;
   private static readonly TOC_WIDTH_DEFAULT = 256;
 
   private loadSidebarWidth(): number {
@@ -295,10 +296,10 @@ export class TableOfContents {
     return key !== null && this.expandedHeadingKeys.has(key);
   }
 
-  private applySidebarWidth(width = this.sidebarWidth): void {
+  private applySidebarWidth(width = this.sidebarWidth, max: number = TableOfContents.TOC_WIDTH_MAX): void {
     this.sidebarWidth = Math.max(
       TableOfContents.TOC_WIDTH_MIN,
-      Math.min(TableOfContents.TOC_WIDTH_MAX, Math.round(width)),
+      Math.min(max, Math.round(width)),
     );
     if (!this.sidebar || this.sidebar.classList.contains('hidden')) return;
     this.sidebar.style.width = `${this.sidebarWidth}px`;
@@ -786,6 +787,7 @@ export class TableOfContents {
 
     const startX = event.clientX;
     const startWidth = this.sidebar.getBoundingClientRect().width;
+    const maxWidth = maxPanelWidth(this.sidebar, TableOfContents.TOC_WIDTH_MIN, this.dom.document);
     this.isResizingSidebar = true;
     this.sidebar.classList.add('resizing');
     this.resizer.setPointerCapture(event.pointerId);
@@ -793,7 +795,7 @@ export class TableOfContents {
     const onMove = (moveEvent: PointerEvent) => {
       const direction = this.options.position === 'right' ? -1 : 1;
       const nextWidth = startWidth + direction * (moveEvent.clientX - startX);
-      this.applySidebarWidth(nextWidth);
+      this.applySidebarWidth(nextWidth, maxWidth);
       this.notifyLayoutChange();
     };
 

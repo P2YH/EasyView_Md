@@ -460,7 +460,7 @@ export function registerDesktopIpc(): void {
         ? value.expandedRelativePaths.filter((item): item is string => typeof item === 'string')
         : getWorkspaceState().expandedRelativePaths,
       versionGuardVisible: typeof value.versionGuardVisible === 'boolean' ? value.versionGuardVisible : getWorkspaceState().versionGuardVisible,
-      versionGuardWidth: typeof value.versionGuardWidth === 'number' ? Math.max(280, Math.min(640, value.versionGuardWidth)) : getWorkspaceState().versionGuardWidth,
+      versionGuardWidth: typeof value.versionGuardWidth === 'number' ? Math.max(280, Math.min(8000, value.versionGuardWidth)) : getWorkspaceState().versionGuardWidth,
       explorerVisible: typeof value.explorerVisible === 'boolean' ? value.explorerVisible : getWorkspaceState().explorerVisible,
       outlineVisible: typeof value.outlineVisible === 'boolean' ? value.outlineVisible : getWorkspaceState().outlineVisible,
       explorerWidth: typeof value.explorerWidth === 'number' ? value.explorerWidth : getWorkspaceState().explorerWidth,

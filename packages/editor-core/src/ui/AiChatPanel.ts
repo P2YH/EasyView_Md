@@ -11,15 +11,15 @@ import type {
   HostToEditorMessage,
 } from '@easyview/contracts';
 import { applyAiTextPatches, DEFAULT_AI_CHAT_SETTINGS } from '@easyview/contracts';
-import { decorateRenderedMarkdown, renderAssistantMarkdown } from './aiChatMarkdown';
+import { decorateRenderedMarkdown, renderAssistantMarkdown, renderStreamingMarkdown } from './aiChatMarkdown';
 import { tAiChat } from './aiChat.i18n';
 import { escapeHtml } from './escapeHtml';
+import { maxPanelWidth, PANEL_WIDTH_SANITY_MAX } from '../runtime/panelWidth';
 
 const PANEL_WIDTH_STORAGE_KEY = 'easyview-ai-chat-width';
 const MODEL_STORAGE_KEY = 'easyview-ai-chat-model';
 const HISTORY_KEY_PREFIX = 'easyview-ai-chat-history:';
 const PANEL_MIN_WIDTH = 280;
-const PANEL_MAX_WIDTH = 560;
 const PANEL_DEFAULT_WIDTH = 360;
 const MAX_STORED_MESSAGES = 200;
 const MAX_STORED_MESSAGE_CHARS = 32_000;
@@ -90,7 +90,6 @@ function ensureAiChatPanelStyles(): void {
       flex-direction: column;
       width: 360px;
       min-width: 280px;
-      max-width: 560px;
       flex-shrink: 0;
       position: relative;
       overflow: hidden;
@@ -752,9 +751,9 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
 
   // ---------------------------------------------------------------- layout
 
-  const applyPanelWidth = (width?: number): void => {
+  const applyPanelWidth = (width?: number, max = PANEL_WIDTH_SANITY_MAX): void => {
     if (typeof width === 'number') {
-      panelWidth = Math.max(PANEL_MIN_WIDTH, Math.min(PANEL_MAX_WIDTH, Math.round(width)));
+      panelWidth = Math.max(PANEL_MIN_WIDTH, Math.min(max, Math.round(width)));
     }
     root.style.setProperty('--easyview-ai-chat-width', `${panelWidth}px`);
     if (openState || !root.classList.contains('ai-chat-panel-docked')) {
@@ -774,7 +773,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
       const stored = window.localStorage.getItem(PANEL_WIDTH_STORAGE_KEY);
       const parsed = stored ? Number(stored) : NaN;
       if (Number.isFinite(parsed)) {
-        panelWidth = Math.max(PANEL_MIN_WIDTH, Math.min(PANEL_MAX_WIDTH, parsed));
+        panelWidth = Math.max(PANEL_MIN_WIDTH, Math.min(PANEL_WIDTH_SANITY_MAX, parsed));
       }
     } catch { /* storage unavailable */ }
   };
@@ -790,13 +789,14 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
     const resizer = root.querySelector('.ai-chat-resizer') as HTMLElement;
     const startX = event.clientX;
     const startWidth = root.getBoundingClientRect().width;
+    const maxWidth = maxPanelWidth(root, PANEL_MIN_WIDTH);
     // A host docking the panel on the left marks an ancestor with data-dock-side="left".
     const direction = root.closest('[data-dock-side="left"]') ? 1 : -1;
     root.classList.add('resizing');
     resizer.setPointerCapture(event.pointerId);
 
     const onMove = (moveEvent: PointerEvent): void => {
-      applyPanelWidth(startWidth + direction * (moveEvent.clientX - startX));
+      applyPanelWidth(startWidth + direction * (moveEvent.clientX - startX), maxWidth);
       notifyLayoutChange();
     };
     const onUp = (upEvent: PointerEvent): void => {
@@ -951,8 +951,8 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
       if (message.role === 'user') {
         bubble.textContent = message.content;
       } else if (message.streaming) {
-        bubble.classList.add('streaming-text');
-        bubble.textContent = message.content.length > 0 ? message.content : '…';
+        bubble.classList.add('streaming-markdown');
+        renderStreamingBubble(bubble, message.content);
       } else {
         bubble.innerHTML = renderAssistantMarkdown(message.content || tAiChat('message.empty'));
         decorateRenderedMarkdown(bubble, (code) => deps.copyText(code, tAiChat('code.copiedToast')));
@@ -978,6 +978,13 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
     scheduleScroll();
   };
 
+  /** Streaming replies render as Markdown on each animation frame (calls are rAF-throttled). */
+  const renderStreamingBubble = (bubble: HTMLElement, content: string): void => {
+    if (!content) { bubble.textContent = '…'; return; }
+    bubble.innerHTML = renderStreamingMarkdown(content);
+    decorateRenderedMarkdown(bubble, (code) => deps.copyText(code, tAiChat('code.copiedToast')));
+  };
+
   const renderStreamingMessage = (): void => {
     if (renderScheduled) return;
     renderScheduled = true;
@@ -987,7 +994,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
       if (streamingMessageId) {
         const item = messagesEl.querySelector(`[data-message-id="${streamingMessageId}"] .ai-chat-bubble`);
         if (item) {
-          item.textContent = messages.find((message) => message.id === streamingMessageId)?.content || '…';
+          renderStreamingBubble(item as HTMLElement, messages.find((message) => message.id === streamingMessageId)?.content ?? '');
           scheduleScroll();
           return;
         }

@@ -40,5 +40,6 @@
   "config.nativeDecorations.tables.enabled.description": "Enable conservative Markdown table styling in the native VS Code editor without replacing table source text.",
   "config.nativeEditor.forceMonospaceFont.description": "Force Markdown native source editors to use a CJK-aware monospace font family when opened from EasyView_Md.",
   "config.workspace.focusFilesOnStartup.description": "After window startup or reload, show the EasyView_Md Files sidebar for an open workspace and hide the sidebar in an empty welcome window. Disable to keep the host editor's sidebar restore behavior.",
-  "view.files.name": "Files"
+  "view.files.name": "Files",
+  "view.versionGuard.name": "Version Guard"
 }

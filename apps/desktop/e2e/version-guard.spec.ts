@@ -17,7 +17,7 @@ test('Version Guard discovers nested repositories, commits index only, pushes, d
   let app = await electron.launch({ args: [process.cwd(), `--user-data-dir=${profile}`] });
   try {
     const page = await app.firstWindow(); const errors: string[] = []; page.on('pageerror', error => errors.push(error.message)); await resumeRestoredSession(page);
-    await page.getByRole('button', { name: 'Version Guard', exact: true }).click();
+    await page.getByRole('button', { name: '仓库版本管理', exact: true }).click();
     const panel = page.locator('.version-guard'); await expect(panel.locator('.guard-repository')).toHaveCount(3);
     const main = panel.locator('.guard-repository').filter({ has: page.locator('.guard-repo-name', { hasText: /^main$/ }) });
     await main.locator('.guard-repo-name').click();
@@ -53,9 +53,9 @@ test('Version Guard discovers nested repositories, commits index only, pushes, d
     await page.waitForTimeout(4000); const before = await api({ method: 'diagnostics' }) as any;
     await page.waitForTimeout(4000); const after = await api({ method: 'diagnostics' }) as any;
     expect(after.commands).toBe(before.commands); expect(after.peak).toBeLessThanOrEqual(2);
-    await page.getByRole('button', { name: 'Version Guard', exact: true }).click();
+    await page.getByRole('button', { name: '仓库版本管理', exact: true }).click();
     await expect.poll(async () => (await api({ method: 'diagnostics' }) as any).watchers).toBe(0);
-    await page.getByRole('button', { name: 'Version Guard', exact: true }).click();
+    await page.getByRole('button', { name: '仓库版本管理', exact: true }).click();
     // Exercise the real drag docking path.
     const grip = panel.locator('[data-dock-grip]'); const center = await page.locator('#desktop-center-pane').boundingBox();
     await grip.hover(); await page.mouse.down(); await page.mouse.move(center!.x + center!.width - 15, center!.y + center!.height / 2, { steps: 8 }); await page.mouse.up();
@@ -63,6 +63,9 @@ test('Version Guard discovers nested repositories, commits index only, pushes, d
     await page.waitForTimeout(600); expect(errors).toEqual([]);
     await terminateElectron(app);
     app = await electron.launch({ args: [process.cwd(), `--user-data-dir=${profile}`] });
-    const restored = await app.firstWindow(); await expect(restored.locator('#version-guard-host')).toBeVisible(); await expect(restored.locator('#version-guard-host')).toHaveAttribute('data-dock-side', 'right');
+    const restored = await app.firstWindow();
+    // The welcome page covering restored tabs keeps the panel closed and empty until the session resumes.
+    await expect(restored.locator('#version-guard-host')).toBeHidden(); await expect(restored.locator('.guard-repository')).toHaveCount(0);
+    await resumeRestoredSession(restored); await expect(restored.locator('#version-guard-host')).toBeVisible(); await expect(restored.locator('#version-guard-host')).toHaveAttribute('data-dock-side', 'right');
   } finally { await terminateElectron(app); await rm(temp, { recursive: true, force: true }); }
 });

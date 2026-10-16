@@ -170,7 +170,7 @@ class DesktopAppStateStore implements AppStateStore {
 function normalizeWorkspaceState(value: unknown): DesktopWorkspaceState {
   if (!isRecord(value)) return { ...DEFAULT_WORKSPACE_STATE };
   const width = (candidate: unknown) => typeof candidate === 'number' && Number.isFinite(candidate)
-    ? Math.max(220, Math.min(520, Math.round(candidate)))
+    ? Math.max(220, Math.min(8000, Math.round(candidate)))
     : 280;
   const openTabs = normalizeOpenTabs(value.openTabs);
   const legacyActiveDocumentPath = typeof value.activeDocumentPath === 'string' ? value.activeDocumentPath : null;
@@ -203,7 +203,7 @@ function normalizeWorkspaceState(value: unknown): DesktopWorkspaceState {
       ? value.expandedRelativePaths.filter((item): item is string => typeof item === 'string')
       : [],
     versionGuardVisible: value.versionGuardVisible === true,
-    versionGuardWidth: typeof value.versionGuardWidth === 'number' ? Math.max(280, Math.min(640, value.versionGuardWidth)) : 360,
+    versionGuardWidth: typeof value.versionGuardWidth === 'number' ? Math.max(280, Math.min(8000, value.versionGuardWidth)) : 360,
     explorerVisible: typeof value.explorerVisible === 'boolean' ? value.explorerVisible : true,
     outlineVisible: typeof value.outlineVisible === 'boolean' ? value.outlineVisible : true,
     explorerWidth: width(value.explorerWidth),

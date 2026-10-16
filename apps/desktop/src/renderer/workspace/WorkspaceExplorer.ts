@@ -1,4 +1,4 @@
-import { WorkspaceSearchPanel, WORKSPACE_SEARCH_ICON_SVG } from '@easyview/editor-core/workspace';
+import { WorkspaceSearchPanel, WORKSPACE_SEARCH_ICON_SVG, maxPanelWidth } from '@easyview/editor-core/workspace';
 import type { DesktopPanelLayout, DesktopWorkspaceState, WorkspaceEntry, WorkspaceTreeSortMode } from '../../contracts';
 import { DOCK_GRIP_ICON_SVG } from '../panelDock';
 import type { EasyViewDesktopApi } from '../../preload/desktopApi';
@@ -772,10 +772,11 @@ export class WorkspaceExplorer {
     event.preventDefault(); this.resizing = true;
     const startX = event.clientX;
     const startWidth = this.state.explorerWidth;
+    const maxWidth = maxPanelWidth(this.options.container, 220);
     const direction = this.options.container.dataset.dockSide === 'right' ? -1 : 1;
     const onMove = (moveEvent: PointerEvent) => {
       if (!this.resizing) return;
-      this.updateState({ explorerWidth: Math.max(220, Math.min(520, Math.round(startWidth + direction * (moveEvent.clientX - startX)))) });
+      this.updateState({ explorerWidth: Math.max(220, Math.min(maxWidth, Math.round(startWidth + direction * (moveEvent.clientX - startX)))) });
     };
     const onEnd = () => { this.resizing = false; window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onEnd); };
     window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onEnd);

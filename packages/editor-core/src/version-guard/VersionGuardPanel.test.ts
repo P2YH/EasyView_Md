@@ -45,4 +45,25 @@ describe('VersionGuardPanel', () => {
     expect(panel.element.querySelector('textarea')?.getAttribute('rows')).toBe('1');
     panel.dispose();
   });
+  it('indents nested repositories and collapses history by clicking its header', async () => {
+    const guard = client();
+    const base = guard.request;
+    guard.request = vi.fn(async (request: GuardRequest) => request.method === 'discover'
+      ? [{ id: '/repo', name: 'repo', rootPath: '/repo' }, { id: '/repo/sub', name: 'sub', rootPath: '/repo/sub' }]
+      : base(request));
+    const panel = new VersionGuardPanel({ client: guard }); document.body.append(panel.element);
+    panel.setVisible(true); for (let i = 0; i < 6; i++) await flush();
+    const sections = panel.element.querySelectorAll<HTMLElement>('.guard-repository');
+    expect(sections[0].classList.contains('is-nested')).toBe(false);
+    expect(sections[1].classList.contains('is-nested')).toBe(true);
+    expect(sections[1].style.getPropertyValue('--guard-depth')).toBe('1');
+    const head = () => panel.element.querySelector<HTMLElement>('.guard-history-head')!;
+    expect(panel.element.querySelector('.guard-commit')).not.toBeNull();
+    head().click();
+    expect(head().getAttribute('aria-expanded')).toBe('false');
+    expect(panel.element.querySelector('.guard-commit')).toBeNull();
+    head().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(panel.element.querySelector('.guard-commit')).not.toBeNull();
+    panel.dispose();
+  });
 });

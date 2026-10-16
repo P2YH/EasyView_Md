@@ -38,6 +38,12 @@ module.exports = {
     name: 'EasyView_Md',
     appBundleId: 'com.easyview.md',
     icon: path.resolve(appDir, 'assets/icon'),
+    // Squirrel names the Start Menu folder after CompanyName; Electron's default is "GitHub, Inc.".
+    win32metadata: {
+      CompanyName: 'EasyView_Md',
+      ProductName: 'EasyView_Md',
+      FileDescription: 'EasyView_Md',
+    },
     extendInfo: {
       CFBundleDisplayName: 'EasyView_Md',
       CFBundleName: 'EasyView_Md',

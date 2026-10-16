@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('electron', () => ({ app: { quit: vi.fn() } }));
 
-const { fileAssociationRegistryCommands, fileAssociationRemovalCommands, MARKDOWN_PROG_ID } = await import('./squirrelEvents');
+const { fileAssociationRegistryCommands, fileAssociationRemovalCommands, legacyStartMenuShortcut, MARKDOWN_PROG_ID } = await import('./squirrelEvents');
 
 const stub = 'C:\\Users\\me\\AppData\\Local\\easyview_md\\EasyView_Md.exe';
 
@@ -33,5 +33,14 @@ describe('Windows Markdown file association', () => {
     expect(commands).toContainEqual(['delete', 'HKCU\\Software\\Classes\\Applications\\EasyView_Md.exe', '/f']);
     expect(commands).toContainEqual(['delete', 'HKCU\\Software\\Classes\\.md\\OpenWithProgids', '/v', MARKDOWN_PROG_ID, '/f']);
     expect(commands.some((args) => args[1] === 'HKCU\\Software\\Classes\\.md' && args.length === 3)).toBe(false);
+  });
+});
+
+describe('legacy Start Menu shortcut', () => {
+  it('targets only this app shortcut in the default Electron company folder', () => {
+    expect(legacyStartMenuShortcut('C:\\Users\\me\\AppData\\Roaming', 'EasyView_Md.exe')).toEqual({
+      folder: 'C:\\Users\\me\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\GitHub, Inc',
+      shortcut: 'C:\\Users\\me\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\GitHub, Inc\\EasyView_Md.lnk',
+    });
   });
 });

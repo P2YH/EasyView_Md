@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
+import { existsSync, readdirSync, rmSync, rmdirSync } from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
 
@@ -49,6 +50,25 @@ function runRegistry(commands: string[][]): void {
   }
 }
 
+/**
+ * Start Menu shortcut created by releases built without win32metadata.CompanyName (Electron's default
+ * "GitHub, Inc."). Squirrel only manages the folder of the current company name, so the old one is removed here.
+ */
+export function legacyStartMenuShortcut(appDataDir: string, exeName: string): { folder: string; shortcut: string } {
+  const folder = path.win32.join(appDataDir, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'GitHub, Inc');
+  return { folder, shortcut: path.win32.join(folder, `${path.win32.parse(exeName).name}.lnk`) };
+}
+
+function removeLegacyStartMenuShortcut(exeName: string): void {
+  const { folder, shortcut } = legacyStartMenuShortcut(app.getPath('appData'), exeName);
+  try {
+    rmSync(shortcut, { force: true });
+    if (existsSync(folder) && readdirSync(folder).length === 0) rmdirSync(folder);
+  } catch (error) {
+    console.warn('[EasyView_Md] Failed to remove legacy Start Menu shortcut:', error);
+  }
+}
+
 function runUpdateExe(args: string[], done: () => void): void {
   const updateExe = path.resolve(path.dirname(process.execPath), '..', 'Update.exe');
   spawn(updateExe, args, { detached: true }).on('close', done).on('error', done);
@@ -65,11 +85,13 @@ export function handleSquirrelEvent(): boolean {
   const stubPath = path.resolve(path.dirname(process.execPath), '..', exeName);
   if (command === '--squirrel-install' || command === '--squirrel-updated') {
     runRegistry(fileAssociationRegistryCommands(stubPath));
+    removeLegacyStartMenuShortcut(exeName);
     runUpdateExe([`--createShortcut=${exeName}`], () => app.quit());
     return true;
   }
   if (command === '--squirrel-uninstall') {
     runRegistry(fileAssociationRemovalCommands(stubPath));
+    removeLegacyStartMenuShortcut(exeName);
     runUpdateExe([`--removeShortcut=${exeName}`], () => app.quit());
     return true;
   }

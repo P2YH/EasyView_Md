@@ -5,7 +5,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { log } from '../help/appLogger';
 import {
-  compareVersions, DEFAULT_UPDATE_SETTINGS, isUpdateDisabled, LATEST_RELEASE_API, LATEST_RELEASE_PAGE, normalizeUpdateSettings,
+  assetDownloadSources, compareVersions, DEFAULT_UPDATE_SETTINGS, isUpdateDisabled, LATEST_RELEASE_API, LATEST_RELEASE_PAGE, normalizeUpdateSettings,
   parseGitHubRelease, parseReleaseFromTagUrl, parseSha256Sums, type ReleaseAsset, type ReleaseInfo, selectInstallerAsset, shouldPrompt,
   trimNotes, type UpdateSettings, WEBSITE_URL,
 } from './updateCore';
@@ -16,6 +16,7 @@ const FIRST_CHECK_DELAY_MS = 10_000;
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 15_000;
 const DOWNLOAD_STALL_MS = 60_000;
+const DOWNLOAD_MAX_ATTEMPTS = 6;
 
 let settings: UpdateSettings = { ...DEFAULT_UPDATE_SETTINGS };
 let checking = false;
@@ -169,10 +170,24 @@ export function cancelUpdateDownload(): void {
 async function fetchExpectedChecksum(release: ReleaseInfo, assetName: string): Promise<string> {
   const sums = release.assets.find((asset) => asset.name === 'SHA256SUMS');
   if (!sums) throw new Error('release has no SHA256SUMS asset');
-  const expected = parseSha256Sums(await (await fetchWithTimeout(sums.url, 'text/plain,application/octet-stream')).text()).get(assetName);
-  if (!expected) throw new Error(`SHA256SUMS has no entry for ${assetName}`);
-  return expected;
+  let lastError: unknown;
+  for (const source of assetDownloadSources(sums)) {
+    try {
+      const expected = parseSha256Sums(await (await fetchWithTimeout(source.url, source.accept)).text()).get(assetName);
+      if (!expected) throw new Error(`SHA256SUMS has no entry for ${assetName}`);
+      return expected;
+    } catch (error) {
+      lastError = error;
+      ulog('warn', `SHA256SUMS from ${new URL(source.url).host} failed: ${String(error)}`);
+    }
+  }
+  throw lastError;
 }
+
+const sleep = (ms: number, signal: AbortSignal) => new Promise<void>((resolve) => {
+  const timer = setTimeout(resolve, ms);
+  signal.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true });
+});
 
 async function downloadUpdate(release: ReleaseInfo, asset: ReleaseAsset): Promise<void> {
   if (download) return;
@@ -183,9 +198,11 @@ async function downloadUpdate(release: ReleaseInfo, asset: ReleaseAsset): Promis
   const finalPath = path.join(dir, asset.name);
   const partPath = `${finalPath}.part`;
   let stallTimer: NodeJS.Timeout | undefined;
+  let attemptController: AbortController | undefined;
   const armStall = () => {
     clearTimeout(stallTimer);
-    stallTimer = setTimeout(() => controller.abort(new Error('download stalled')), DOWNLOAD_STALL_MS);
+    const current = attemptController;
+    stallTimer = setTimeout(() => current?.abort(new Error('download stalled')), DOWNLOAD_STALL_MS);
   };
   try {
     await cleanupUpdateDirectory({ root: updatesRoot(), currentVersion: app.getVersion(), keepVersion: release.version, maxRetained: 1, log: (m) => ulog('info', `cleanup: ${m}`) });
@@ -196,24 +213,49 @@ async function downloadUpdate(release: ReleaseInfo, asset: ReleaseAsset): Promis
       ulog('info', `reusing verified download ${asset.name}`);
     } else {
       ulog('info', `downloading ${asset.name} (${asset.size} bytes) to ${dir}`);
-      armStall();
-      const response = await net.fetch(asset.url, { signal: controller.signal, headers: { 'User-Agent': `EasyView_Md/${app.getVersion()}` } });
-      if (!response.ok || !response.body) throw new Error(`HTTP ${response.status} downloading ${asset.name}`);
-      const total = Number(response.headers.get('content-length')) || asset.size;
+      const sources = assetDownloadSources(asset);
       const hash = createHash('sha256');
       const out = createWriteStream(partPath);
       const closed = new Promise<void>((resolve, reject) => { out.on('finish', resolve); out.on('error', reject); });
       let received = 0;
+      let total = asset.size;
       try {
-        const reader = response.body.getReader();
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          armStall();
-          hash.update(value);
-          received += value.byteLength;
-          if (!out.write(value)) await new Promise<void>((resolve) => { out.once('drain', () => resolve()); });
-          if (total > 0) setProgress(Math.min(1, received / total));
+        // Each attempt resumes after the bytes already hashed and written, rotating through the sources.
+        for (let attempt = 0; ; attempt += 1) {
+          const source = sources[attempt % sources.length];
+          attemptController = new AbortController();
+          try {
+            armStall();
+            const response = await net.fetch(source.url, {
+              signal: AbortSignal.any([controller.signal, attemptController.signal]),
+              headers: {
+                'User-Agent': `EasyView_Md/${app.getVersion()}`,
+                Accept: source.accept,
+                ...(received > 0 ? { Range: `bytes=${received}-` } : {}),
+              },
+            });
+            if (!response.ok || !response.body) throw new Error(`HTTP ${response.status} downloading ${asset.name}`);
+            if (received > 0 && response.status !== 206) throw new Error(`HTTP ${response.status} instead of 206 resuming at byte ${received}`);
+            if (received === 0) total = Number(response.headers.get('content-length')) || asset.size;
+            const reader = response.body.getReader();
+            for (;;) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              armStall();
+              hash.update(value);
+              received += value.byteLength;
+              if (!out.write(value)) await new Promise<void>((resolve) => { out.once('drain', () => resolve()); });
+              if (total > 0) setProgress(Math.min(1, received / total));
+            }
+            if (total > 0 && received < total) throw new Error(`connection closed at byte ${received} of ${total}`);
+            break;
+          } catch (error) {
+            if (controller.signal.aborted || attempt + 1 >= DOWNLOAD_MAX_ATTEMPTS) throw error;
+            ulog('warn', `download attempt ${attempt + 1} via ${new URL(source.url).host} failed at byte ${received}: ${String(error)}`);
+            clearTimeout(stallTimer);
+            await sleep(Math.min(2_000 * (attempt + 1), 10_000), controller.signal);
+            if (controller.signal.aborted) throw error;
+          }
         }
       } finally {
         out.end();

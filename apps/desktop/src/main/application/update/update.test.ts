@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { compareVersions, isUpdateDisabled, normalizeUpdateSettings, parseGitHubRelease, parseReleaseFromTagUrl, parseSha256Sums, selectInstallerAsset, shouldPrompt, trimNotes } from './updateCore';
+import { assetDownloadSources, compareVersions, isUpdateDisabled, normalizeUpdateSettings, parseGitHubRelease, parseReleaseFromTagUrl, parseSha256Sums, selectInstallerAsset, shouldPrompt, trimNotes } from './updateCore';
 import { cleanupUpdateDirectory, findVerifiedDownload } from './updateStorage';
 
 const assets = ['EasyView_Md-mac-arm64.dmg', 'EasyView_Md-mac-arm64.zip', 'EasyView_Md-win-x64-setup.exe', 'EasyView_Md-win-x64.zip', 'EasyView_Md-win-x64-store.appx', 'SHA256SUMS']
@@ -27,6 +27,16 @@ describe('parseGitHubRelease', () => {
     expect(parseGitHubRelease({ ...base, prerelease: true })).toBeUndefined();
     expect(parseGitHubRelease({ ...base, tag_name: 'v2.0.6-rc.1' })).toBeUndefined();
     expect(parseGitHubRelease(null)).toBeUndefined();
+  });
+
+  it('prefers the api.github.com asset endpoint so downloads avoid github.com', () => {
+    const apiUrl = 'https://api.github.com/repos/o/r/releases/assets/1';
+    const release = parseGitHubRelease({ tag_name: 'v2.0.6', assets: [{ name: 'a', browser_download_url: 'https://github.com/o/r/a', url: apiUrl, size: 3 }] });
+    expect(assetDownloadSources(release!.assets[0])).toEqual([
+      { url: apiUrl, accept: 'application/octet-stream' },
+      { url: 'https://github.com/o/r/a', accept: '*/*' },
+    ]);
+    expect(assetDownloadSources({ name: 'a', url: 'https://github.com/o/r/a', size: 3 })).toEqual([{ url: 'https://github.com/o/r/a', accept: '*/*' }]);
   });
 });
 

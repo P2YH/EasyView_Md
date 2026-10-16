@@ -2,7 +2,20 @@ export const UPDATE_REPO = 'tiantianmanmanzou/EasyView_Md';
 export const LATEST_RELEASE_API = `https://api.github.com/repos/${UPDATE_REPO}/releases/latest`;
 export const WEBSITE_URL = 'https://easyview.wonderxy.art';
 
-export interface ReleaseAsset { name: string; url: string; size: number }
+/**
+ * `url` is the github.com download link; `apiUrl` is the REST asset endpoint, which redirects straight to the
+ * asset CDN and so still works on networks where github.com itself is blocked but api.github.com is not.
+ */
+export interface ReleaseAsset { name: string; url: string; apiUrl?: string; size: number }
+
+export interface AssetSource { url: string; accept: string }
+
+export function assetDownloadSources(asset: ReleaseAsset): AssetSource[] {
+  return [
+    ...(asset.apiUrl ? [{ url: asset.apiUrl, accept: 'application/octet-stream' }] : []),
+    { url: asset.url, accept: '*/*' },
+  ];
+}
 export interface ReleaseInfo { version: string; tag: string; notes: string; htmlUrl: string; assets: ReleaseAsset[] }
 
 /** Parses "v1.2.3" / "1.2.3" / "1.2.3-beta.1". Returns undefined if not semver-like. */
@@ -46,7 +59,12 @@ export function parseGitHubRelease(payload: unknown): ReleaseInfo | undefined {
     assets: assets.flatMap((item) => {
       const asset = item as Record<string, unknown>;
       return typeof asset?.name === 'string' && typeof asset.browser_download_url === 'string'
-        ? [{ name: asset.name, url: asset.browser_download_url, size: typeof asset.size === 'number' ? asset.size : 0 }]
+        ? [{
+          name: asset.name,
+          url: asset.browser_download_url,
+          ...(typeof asset.url === 'string' && asset.url.startsWith('https://api.github.com/') ? { apiUrl: asset.url } : {}),
+          size: typeof asset.size === 'number' ? asset.size : 0,
+        }]
         : [];
     }),
   };

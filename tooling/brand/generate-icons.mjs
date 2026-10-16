@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { buildIco, decodePng } from './ico.mjs';
 
 if (process.platform !== 'darwin') throw new Error('Desktop icon generation currently requires macOS sips and iconutil.');
 const execFileAsync = promisify(execFile);
@@ -30,24 +31,13 @@ await execFileAsync('/usr/bin/iconutil', ['-c', 'icns', iconset, '-o', path.join
 await resize(512, path.join(outputDir, 'icon.png'));
 
 const icoSizes = [16, 24, 32, 48, 64, 128, 256];
-const frames = [];
+const icoImages = [];
 for (const size of icoSizes) {
   const file = path.join(temp, `icon-${size}.png`);
   await resize(size, file);
-  frames.push({ size, data: await readFile(file) });
+  icoImages.push(decodePng(await readFile(file)));
 }
-const header = Buffer.alloc(6);
-header.writeUInt16LE(0, 0); header.writeUInt16LE(1, 2); header.writeUInt16LE(frames.length, 4);
-let offset = 6 + frames.length * 16;
-const entries = frames.map(({ size, data }) => {
-  const entry = Buffer.alloc(16);
-  entry.writeUInt8(size === 256 ? 0 : size, 0); entry.writeUInt8(size === 256 ? 0 : size, 1);
-  entry.writeUInt16LE(1, 4); entry.writeUInt16LE(32, 6);
-  entry.writeUInt32LE(data.length, 8); entry.writeUInt32LE(offset, 12);
-  offset += data.length;
-  return entry;
-});
-await writeFile(path.join(outputDir, 'icon.ico'), Buffer.concat([header, ...entries, ...frames.map(({ data }) => data)]));
+await writeFile(path.join(outputDir, 'icon.ico'), buildIco(icoImages));
 const sourceHash = createHash('sha256').update(await readFile(source)).digest('hex');
 await writeFile(path.join(outputDir, 'brand-source.sha256'), `${sourceHash}\n`);
 await rm(temp, { recursive: true, force: true });

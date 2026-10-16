@@ -21,8 +21,13 @@ test('Version Guard discovers nested repositories, commits index only, pushes, d
     const panel = page.locator('.version-guard'); await expect(panel.locator('.guard-repository')).toHaveCount(3);
     const main = panel.locator('.guard-repository').filter({ has: page.locator('.guard-repo-name', { hasText: /^main$/ }) });
     await main.locator('.guard-repo-name').click();
-    // Explicitly expand by the disclosure rather than selecting the repository.
-    if (!(await main.locator('textarea').count())) await main.locator('.guard-repo-title button').first().click();
+    // The whole header row toggles expansion; click again if the first click collapsed it.
+    if (!(await main.locator('textarea').count())) await main.locator('.guard-repo-title').click();
+    await expect(main.locator('textarea')).toHaveAttribute('rows', '1');
+    const fontSize = (selector: string) => page.locator(selector).first().evaluate(element => getComputedStyle(element).fontSize);
+    const treeFont = await fontSize('.workspace-entry-name');
+    await expect.poll(() => fontSize('.version-guard .guard-file-name')).toBe(treeFont);
+    await expect.poll(() => fontSize('.version-guard .guard-group')).toBe(treeFont);
     const change = main.locator('.guard-file').filter({ has: page.locator('.guard-file-name', { hasText: /^notes\.md$/ }) });
     await change.getByRole('button', { name: 'notes.md', exact: true }).click();
     await expect(page.locator('.easyview-history-view .cm-content')).toContainText('Changed');
@@ -32,7 +37,7 @@ test('Version Guard discovers nested repositories, commits index only, pushes, d
     await main.locator('textarea').fill('Guard runtime commit'); await main.getByRole('button', { name: '提交', exact: true }).click();
     await expect.poll(() => git(repo, 'log', '-1', '--format=%s')).toBe('Guard runtime commit'); expect(git(repo, 'ls-tree', '--name-only', 'HEAD')).not.toContain('other.txt');
     await main.getByRole('button', { name: '推送', exact: true }).click(); await expect.poll(() => git(remote, 'log', '-1', '--format=%s')).toBe('Guard runtime commit');
-    await main.getByRole('button', { name: '检查更新', exact: true }).click(); await expect(main.locator('.guard-checked')).toContainText('上次检查远程');
+    await main.getByRole('button', { name: '检查更新', exact: true }).click(); await expect(main.getByRole('button', { name: /^上次检查远程/ })).toBeVisible(); await expect(main.locator('.guard-checked')).toHaveCount(0);
     await expect(panel.locator('.guard-commit', { hasText: 'Guard runtime commit' })).toBeVisible();
     // Open working file, edit without manually saving, and stage through the panel.
     const api = (request: object) => page.evaluate(async request => { const result = await (window as any).easyViewDesktop.versionGuard.request(request); if (!result.ok) throw new Error(result.message); return result.value; }, request);

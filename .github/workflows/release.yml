@@ -103,6 +103,24 @@ jobs:
           if-no-files-found: ignore
       - if: matrix.platform == 'darwin'
         run: npm run make:dmg --workspace @easyview/desktop
+      # Installs the DMG users download; a failure here blocks publish.
+      - name: Install, launch and remove macOS DMG
+        if: matrix.platform == 'darwin'
+        env:
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: |
+          bash .github/scripts/macos-install-test.sh \
+            "apps/desktop/out/make/dmg/$TARGET_ARCH/EasyView_Md-$RELEASE_VERSION-$TARGET_ARCH.dmg" \
+            "$RELEASE_VERSION" .github/test-sample.md logs-install
+      - name: Upload macOS install test logs
+        if: always() && matrix.platform == 'darwin'
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-install-test
+          path: logs-install/
+          retention-days: 14
+          if-no-files-found: ignore
       # The VSIX is platform-neutral (node-pty prebuilds for all targets ship inside it); build it once, on macOS.
       - name: Package VS Code extension
         if: matrix.platform == 'darwin'

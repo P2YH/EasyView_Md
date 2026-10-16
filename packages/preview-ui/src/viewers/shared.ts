@@ -78,8 +78,16 @@ export function loadingElement(label = tPreview('common.loading')): React.ReactE
   return Loading({ label });
 }
 
+/** JSZip's wording when the bytes have no ZIP central directory (OOXML, EPUB, ZIP-based archives). */
+const NOT_ZIP_ERROR = /end of central directory|is this a zip file/i;
+
+export function viewerErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) return tPreview('common.failed');
+  return NOT_ZIP_ERROR.test(error.message) ? tPreview('common.notZipDocument') : error.message;
+}
+
 export function ViewerError({ error }: { error: unknown }): React.ReactElement {
-  const message = error instanceof Error ? error.message : tPreview('common.failed');
+  const message = viewerErrorMessage(error);
   return h('div', { className: 'preview-viewer-message preview-viewer-error', role: 'alert' }, message);
 }
 

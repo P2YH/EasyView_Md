@@ -36,6 +36,13 @@ export function PreviewShell({ host, assets, extraViewers }: PreviewShellProps):
   );
 }
 
+const OFFICE_DOCUMENT_ROUTES: ReadonlySet<PreviewDescriptor['route']> = new Set(['spreadsheet', 'word', 'powerpoint']);
+
+/** Office / WPS write a small `~$name` owner file next to an open document; it is not a document. */
+export function isOfficeLockFile(descriptor: Pick<PreviewDescriptor, 'fileName' | 'route'>): boolean {
+  return OFFICE_DOCUMENT_ROUTES.has(descriptor.route) && descriptor.fileName.startsWith('~$');
+}
+
 function RouteViewer({
   descriptor,
   host,
@@ -47,8 +54,10 @@ function RouteViewer({
 }): React.ReactElement {
   const [renderer, setRenderer] = React.useState<PreviewViewerRenderer | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const lockFile = isOfficeLockFile(descriptor);
 
   React.useEffect(() => {
+    if (lockFile) return undefined;
     let active = true;
     setRenderer(null);
     setError(null);
@@ -58,8 +67,11 @@ function RouteViewer({
       if (active) setError(reason instanceof Error ? reason.message : tPreview('shell.viewerLoadFailed'));
     });
     return () => { active = false; };
-  }, [descriptor.route, extraViewers]);
+  }, [descriptor.route, extraViewers, lockFile]);
 
+  if (lockFile) {
+    return React.createElement('div', { className: 'preview-viewer-message' }, tPreview('shell.officeLockFile', { fileName: descriptor.fileName }));
+  }
   if (error) {
     return React.createElement('div', { className: 'preview-viewer-message preview-viewer-error' }, error);
   }

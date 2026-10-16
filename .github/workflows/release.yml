@@ -118,6 +118,27 @@ jobs:
           $exe = 'apps/desktop/out/EasyView_Md-win32-x64/EasyView_Md.exe'
           $version = (Get-Item $exe).VersionInfo.ProductVersion
           if ($version -ne $env:RELEASE_VERSION) { throw "Unexpected application version: $version" }
+      # Runs the Setup.exe users download; a failure here blocks publish.
+      - name: Install, launch and uninstall Windows Setup.exe
+        if: matrix.platform == 'win32'
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          .\.github\scripts\windows-install-test.ps1 `
+            -SetupPath "apps/desktop/out/make/squirrel.windows/x64/EasyView_Md-$env:RELEASE_VERSION Setup.exe" `
+            -ExpectedVersion $env:RELEASE_VERSION `
+            -SetupIconPath apps/desktop/assets/icon.ico `
+            -TestFile .github/test-sample.md `
+            -LogsDir logs-install
+      - name: Upload Windows installer test logs
+        if: always() && matrix.platform == 'win32'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-test
+          path: logs-install/
+          retention-days: 14
+          if-no-files-found: ignore
       # Microsoft Store package (product 9MTQTBP489CN). Re-packages the Forge output with
       # electron-builder; built unsigned on purpose because Partner Center re-signs it.
       # Kept out of release-assets/ so it never reaches SHA256SUMS, release.json or the website.

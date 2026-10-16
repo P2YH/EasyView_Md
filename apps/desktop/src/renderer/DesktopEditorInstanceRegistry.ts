@@ -226,6 +226,13 @@ export class DesktopEditorInstanceRegistry {
         return;
       }
     }
+    // AI chat replies are matched by requestId inside the panel. Routing them only to the active
+    // tab dropped them whenever a non-editor tab (diff, preview) or no tab was active, which left
+    // the settings dialog stuck at "Saving…".
+    if (message.type.startsWith('aiChat.')) {
+      for (const session of this.sessions.values()) session.listeners.forEach((listener) => listener(message));
+      return;
+    }
     if (!this.activeTabId) return;
     this.sessions.get(this.activeTabId)?.listeners.forEach((listener) => listener(message));
   }

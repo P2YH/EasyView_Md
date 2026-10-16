@@ -142,6 +142,19 @@ describe('DesktopEditorInstanceRegistry', () => {
     expect(bMessages).toHaveLength(0);
   });
 
+  it('delivers AI chat replies even when a non-editor tab is active (no stuck "Saving…")', () => {
+    const hosts: EditorHostTransport[] = [];
+    const { registry, listener } = createRegistry({ retainLimit: 5, hosts });
+    registry.activate(editorTab('a', '/tmp/a.md'));
+    registry.activate(editorTab('b', '/tmp/b.md'));
+    const received: string[] = [];
+    hosts[0]?.subscribe((message) => received.push(`a:${message.type}`));
+    hosts[1]?.subscribe((message) => received.push(`b:${message.type}`));
+    registry.clearActive();
+    listener()?.({ type: 'aiChat.settingsSaved', requestId: 'r1', ok: true });
+    expect(received).toEqual(['a:aiChat.settingsSaved', 'b:aiChat.settingsSaved']);
+  });
+
   it('disposes instances whose tabs have closed', () => {
     const { registry, disposed } = createRegistry({ retainLimit: 5 });
     registry.activate(editorTab('a', '/tmp/a.md'));

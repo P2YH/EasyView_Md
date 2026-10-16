@@ -1,7 +1,7 @@
 /** @vitest-environment happy-dom */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EditorToHostMessage } from '@easyview/contracts';
-import { createAiChatPanel } from './AiChatPanel';
+import { createAiChatPanel, SETTINGS_SAVE_TIMEOUT_MS } from './AiChatPanel';
 
 describe('AiChatPanel host and document context', () => {
   beforeEach(() => {
@@ -104,5 +104,48 @@ describe('AiChatPanel host and document context', () => {
     tool('result', 'read_file');
     expect(host.querySelector('.ai-chat-tool-line')!.classList.contains('running')).toBe(false);
     panel.destroy();
+  });
+
+  describe('settings save', () => {
+    afterEach(() => vi.useRealTimers());
+    const setup = () => {
+      const messages: EditorToHostMessage[] = [];
+      const host = document.getElementById('global-ai-host')!;
+      const panel = createAiChatPanel({
+        container: host, postMessage: (message) => messages.push(message),
+        getDocumentContent: () => '', getFilePath: () => '', getFileName: () => '', applyDocumentEdit: () => undefined, copyText: () => undefined,
+      });
+      const q = <T extends Element>(selector: string) => host.querySelector<T>(selector)!;
+      q<HTMLTextAreaElement>('.ai-chat-settings-models').value = 'deepseek-chat\ndeepseek-reasoner';
+      q<HTMLInputElement>('.ai-chat-settings-temperature').value = '0.7';
+      q<HTMLInputElement>('.ai-chat-settings-topp').value = '1';
+      q<HTMLInputElement>('.ai-chat-settings-maxtokens').value = '4096';
+      q<HTMLInputElement>('.ai-chat-settings-key').value = 'test-key';
+      q<HTMLInputElement>('.ai-chat-settings-web-search-key').value = '';
+      return { messages, panel, status: () => q<HTMLElement>('.ai-chat-settings-status'), save: q<HTMLButtonElement>('.ai-chat-settings-save') };
+    };
+    it('waits for settings and key replies, skips an empty optional key, and reports key errors', () => {
+      const { messages, panel, status, save } = setup();
+      save.click();
+      const saves = messages.filter((m) => m.type === 'aiChat.saveSettings' || m.type === 'aiChat.saveApiKey' || m.type === 'aiChat.saveWebSearchApiKey');
+      expect(saves.map((m) => m.type)).toEqual(['aiChat.saveSettings', 'aiChat.saveApiKey']);
+      expect(status().textContent).toBe('保存中…'); expect(save.disabled).toBe(true);
+      const id = (m: EditorToHostMessage) => (m as { requestId: string }).requestId;
+      panel.handleMessage({ type: 'aiChat.settingsSaved', requestId: 'someone-else', ok: true });
+      panel.handleMessage({ type: 'aiChat.settingsSaved', requestId: id(saves[0]), ok: true });
+      expect(status().textContent).toBe('保存中…');
+      panel.handleMessage({ type: 'aiChat.settingsSaved', requestId: id(saves[1]), ok: false, message: 'Keychain denied' });
+      expect(status().textContent).toBe('Keychain denied'); expect(save.disabled).toBe(false);
+      panel.destroy();
+    });
+    it('times out instead of staying at "Saving…" forever', () => {
+      vi.useFakeTimers();
+      const { panel, status, save } = setup();
+      save.click();
+      vi.advanceTimersByTime(SETTINGS_SAVE_TIMEOUT_MS + 1);
+      expect(status().textContent).toContain('保存超时');
+      expect(status().className).toContain('err'); expect(save.disabled).toBe(false);
+      panel.destroy();
+    });
   });
 });

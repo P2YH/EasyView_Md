@@ -22,6 +22,8 @@ const HISTORY_KEY_PREFIX = 'easyview-ai-chat-history:';
 const PANEL_MIN_WIDTH = 280;
 const PANEL_DEFAULT_WIDTH = 360;
 const MAX_STORED_MESSAGES = 200;
+/** A settings save that gets no host reply within this time is reported as failed. */
+export const SETTINGS_SAVE_TIMEOUT_MS = 15_000;
 const MAX_STORED_MESSAGE_CHARS = 32_000;
 
 type ChatMode = 'chat' | 'agent';
@@ -1090,6 +1092,15 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
   };
 
   const settingsRequests = new Map<string, 'get' | 'save'>();
+  /** One click on Save posts up to three requests; the status settles when all have answered. */
+  let pendingSave: { ids: Set<string>; errors: string[]; timer: ReturnType<typeof setTimeout> } | null = null;
+  const finishSave = (): void => {
+    if (!pendingSave) return;
+    clearTimeout(pendingSave.timer);
+    const { errors } = pendingSave; pendingSave = null;
+    settingsEls.save.disabled = false;
+    setSettingsStatus(errors.length ? errors.join('\n') : tAiChat('settings.saved'), errors.length === 0);
+  };
 
   settingsEls.save.addEventListener('click', () => {
     const models = settingsEls.models.value
@@ -1128,19 +1139,36 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
       stream: settingsEls.stream.checked,
     };
 
+    if (pendingSave) return;
     const requestId = createRequestId();
-    settingsRequests.set(requestId, 'save');
-    deps.postMessage({ type: 'aiChat.saveSettings', requestId, settings: nextSettings });
-
+    const ids = new Set<string>([requestId]);
     const apiKey = settingsEls.key.value.trim();
-    if (apiKey.length > 0) {
-      deps.postMessage({ type: 'aiChat.saveApiKey', requestId: `${requestId}-key`, apiKey });
-    }
     const webSearchApiKey = settingsEls.webSearchKey.value.trim();
-    if (webSearchApiKey.length > 0) {
-      deps.postMessage({ type: 'aiChat.saveWebSearchApiKey', requestId: `${requestId}-web-search-key`, apiKey: webSearchApiKey });
-    }
+    // Optional keys left empty keep the stored key and send nothing.
+    if (apiKey.length > 0) ids.add(`${requestId}-key`);
+    if (webSearchApiKey.length > 0) ids.add(`${requestId}-web-search-key`);
+    for (const id of ids) settingsRequests.set(id, 'save');
+    pendingSave = {
+      ids,
+      errors: [],
+      timer: setTimeout(() => {
+        if (!pendingSave) return;
+        for (const id of pendingSave.ids) settingsRequests.delete(id);
+        pendingSave.errors.push(tAiChat('settings.saveTimeout'));
+        finishSave();
+      }, SETTINGS_SAVE_TIMEOUT_MS),
+    };
+    settingsEls.save.disabled = true;
     setSettingsStatus(tAiChat('settings.saving'), true);
+    try {
+      deps.postMessage({ type: 'aiChat.saveSettings', requestId, settings: nextSettings });
+      if (apiKey.length > 0) deps.postMessage({ type: 'aiChat.saveApiKey', requestId: `${requestId}-key`, apiKey });
+      if (webSearchApiKey.length > 0) deps.postMessage({ type: 'aiChat.saveWebSearchApiKey', requestId: `${requestId}-web-search-key`, apiKey: webSearchApiKey });
+    } catch (error) {
+      for (const id of ids) settingsRequests.delete(id);
+      pendingSave.errors.push(error instanceof Error ? error.message : String(error));
+      finishSave();
+    }
   });
 
   // ------------------------------------------------------------ composer
@@ -1516,9 +1544,12 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
       }
       case 'aiChat.settingsSaved': {
         const kind = settingsRequests.get(message.requestId);
+        // Replies are broadcast to every editor instance; only the panel that asked reacts.
+        if (!kind) return true;
         settingsRequests.delete(message.requestId);
-        if (kind === 'save') {
-          setSettingsStatus(message.ok ? (message.message ?? tAiChat('settings.saved')) : (message.message ?? tAiChat('settings.saveFailed')), message.ok);
+        if (kind === 'save' && pendingSave?.ids.delete(message.requestId)) {
+          if (!message.ok) pendingSave.errors.push(message.message ?? tAiChat('settings.saveFailed'));
+          if (pendingSave.ids.size === 0) finishSave();
         }
         requestSettings();
         return true;

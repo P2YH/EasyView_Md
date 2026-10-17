@@ -25,19 +25,23 @@ test('lazily switches worksheets, retains edits, saves and preserves unopened sh
     const paragraph = page.locator('.ProseMirror p').last();
     await paragraph.click(); await page.keyboard.press('End'); await page.keyboard.type(' Sync change.');
     await expect(paragraph).toContainText('Sync change.');
-    await page.keyboard.press('Meta+z'); await expect(paragraph).not.toContainText('Sync change.');
-    await page.keyboard.press('Meta+Shift+z'); await expect(paragraph).toContainText('Sync change.');
-    await page.keyboard.press('Meta+s');
+    await page.keyboard.press('ControlOrMeta+z'); await expect(paragraph).not.toContainText('Sync change.');
+    await page.keyboard.press('ControlOrMeta+Shift+z'); await expect(paragraph).toContainText('Sync change.');
+    await page.keyboard.press('ControlOrMeta+s');
     await expect.poll(() => readFile(markdown, 'utf8')).toContain('Sync change.');
     await page.evaluate(async () => { await (window as any).easyViewDesktop.tabs.openWorkspaceEntry('book.xlsx'); });
     const first = page.getByRole('tab', { name: 'First', exact: true }), second = page.getByRole('tab', { name: 'Second', exact: true });
     await expect(first).toHaveAttribute('aria-selected', 'true');
     await second.click(); await expect(second).toHaveAttribute('aria-selected', 'true');
     const overlay = page.locator('.x-spreadsheet-overlayer');
+    // The toolbar chrome is attached after mount and can shift the grid; aim at A1 only once the layout is stable.
+    let previous = '';
+    await expect.poll(async () => { const box = JSON.stringify(await overlay.boundingBox()); const stable = box === previous; previous = box; return stable; }, { intervals: [100] }).toBe(true);
     await overlay.dblclick({ position: { x: 85, y: 40 } });
     const input = page.locator('.x-spreadsheet-editor textarea'); await expect(input).toBeVisible();
     await input.fill('Changed second'); await input.press('Enter');
-    await first.click(); await second.click();
+    await first.click(); await expect(first).toHaveAttribute('aria-selected', 'true');
+    await second.click(); await expect(second).toHaveAttribute('aria-selected', 'true'); await expect(first).toBeEnabled();
     const expand = page.getByRole('button', { name: '展开预览工具栏' }); if (await expand.isVisible()) await expand.click();
     await page.getByRole('button', { name: '保存', exact: true }).click();
     await expect.poll(async () => {

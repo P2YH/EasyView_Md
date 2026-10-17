@@ -45,6 +45,9 @@ test('closed outline collapses to a heading rail that expands on hover and can b
     await panel.locator('.outline-minimap-item').filter({ hasText: '总结' }).click();
     await expect(panel.locator('.outline-minimap-item.active')).toHaveText('总结');
 
+    // Jumping to a heading scrolls the document and can move the rail out from under the pointer,
+    // which closes the hover panel; hover again like a user would before pinning.
+    await miniMap.hover(); await expect(panel).toBeVisible();
     await panel.locator('.outline-minimap-pin').click();
     await expect(page.locator('.toc-sidebar')).not.toHaveClass(/hidden/);
     await expect(miniMap).toBeHidden();

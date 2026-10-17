@@ -20,10 +20,15 @@ test('Version Guard discovers nested repositories, commits index only, pushes, d
     await page.getByRole('button', { name: '仓库版本管理', exact: true }).click();
     const panel = page.locator('.version-guard'); await expect(panel.locator('.guard-repository')).toHaveCount(3);
     const main = panel.locator('.guard-repository').filter({ has: page.locator('.guard-repo-name', { hasText: /^main$/ }) });
-    await main.locator('.guard-repo-name').click();
-    // The whole header row toggles expansion; click again if the first click collapsed it.
-    if (!(await main.locator('textarea').count())) await main.locator('.guard-repo-title').click();
-    await expect(main.locator('textarea')).toHaveAttribute('rows', '1');
+    // The whole header row toggles expansion. The panel may auto-expand the first repository and load
+    // its status asynchronously right after the scan, so a single blind click can collapse it again.
+    // Retry until the row is expanded and its composer (rendered once status loads) is present.
+    const mainTitle = main.locator('.guard-repo-title');
+    await expect(async () => {
+      if ((await mainTitle.getAttribute('aria-expanded')) !== 'true') await mainTitle.click();
+      await expect(mainTitle).toHaveAttribute('aria-expanded', 'true', { timeout: 1000 });
+      await expect(main.locator('textarea')).toHaveAttribute('rows', '1', { timeout: 3000 });
+    }).toPass({ timeout: 20000 });
     const fontSize = (selector: string) => page.locator(selector).first().evaluate(element => getComputedStyle(element).fontSize);
     const treeFont = await fontSize('.workspace-entry-name');
     await expect.poll(() => fontSize('.version-guard .guard-file-name')).toBe(treeFont);
@@ -42,9 +47,9 @@ test('Version Guard discovers nested repositories, commits index only, pushes, d
     // Open working file, edit without manually saving, and stage through the panel.
     const api = (request: object) => page.evaluate(async request => { const result = await (window as any).easyViewDesktop.versionGuard.request(request); if (!result.ok) throw new Error(result.message); return result.value; }, request);
     await api({ method: 'openFile', repository: repo, paths: ['notes.md'] });
-    const editor = page.locator('.ProseMirror:visible'); await editor.click(); await editor.press('Meta+End'); await page.keyboard.type(' unsaved');
+    const editor = page.locator('.ProseMirror:visible'); await editor.click(); await editor.press('ControlOrMeta+End'); await page.keyboard.type(' unsaved');
     await api({ method: 'stage', repository: repo, paths: ['notes.md'] }); expect(git(repo, 'show', ':notes.md')).toContain('unsaved');
-    await editor.click(); await editor.press('Meta+End'); await page.keyboard.type(' discard-me');
+    await editor.click(); await editor.press('ControlOrMeta+End'); await page.keyboard.type(' discard-me');
     await app.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false }); });
     await api({ method: 'discard', repository: repo, paths: ['notes.md'] });
     await expect(editor).toContainText('unsaved'); await expect(editor).not.toContainText('discard-me'); expect(await readFile(file, 'utf8')).not.toContain('discard-me');

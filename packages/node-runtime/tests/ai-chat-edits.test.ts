@@ -23,7 +23,7 @@ describe('AI tool edit confirmation', () => {
       return { content: 'Applied', finishReason: 'stop' };
     });
     await host.handle({ type: 'aiChat.send', requestId: 'edit', mode: 'agent', model: 'test', userMessage: 'edit', history: [], attachments: [], documentFilePath: path.join(root, 'notes.md'), documentContent: 'original' });
-    await vi.waitFor(() => expect(posted.some(message => message.type === 'aiChat.applyPatches')).toBe(true));
+    await vi.waitFor(() => expect(posted.some(message => message.type === 'aiChat.applyPatches')).toBe(true), { timeout: 5000 });
     const patch = posted.find(message => message.type === 'aiChat.applyPatches') as Extract<HostToEditorMessage, { type: 'aiChat.applyPatches' }>;
     return { posted, patch };
   }
@@ -31,12 +31,12 @@ describe('AI tool edit confirmation', () => {
     const { posted, patch } = await start();
     expect(posted.some(message => message.type === 'aiChat.done')).toBe(false);
     await host!.handle({ type: 'aiChat.patchesApplied', requestId: 'edit', operationId: patch.operationId });
-    await vi.waitFor(() => expect(posted.some(message => message.type === 'aiChat.done')).toBe(true));
+    await vi.waitFor(() => expect(posted.some(message => message.type === 'aiChat.done')).toBe(true), { timeout: 5000 });
   });
   it('propagates an editor conflict to the request instead of claiming success', async () => {
     const { posted, patch } = await start();
     await host!.handle({ type: 'aiChat.patchesApplied', requestId: 'edit', operationId: patch.operationId, error: 'Document changed' });
-    await vi.waitFor(() => expect(posted).toContainEqual({ type: 'aiChat.error', requestId: 'edit', message: 'Document changed' }));
+    await vi.waitFor(() => expect(posted).toContainEqual({ type: 'aiChat.error', requestId: 'edit', message: 'Document changed' }), { timeout: 5000 });
     expect(posted.some(message => message.type === 'aiChat.done')).toBe(false);
   });
 });

@@ -1,0 +1,433 @@
+{
+  "date": "2026-10-17T11:44:53.610Z",
+  "node": "v22.17.1",
+  "platform": "darwin",
+  "arch": "arm64",
+  "streaming": [
+    {
+      "characters": 20000,
+      "chunk": 64,
+      "beforeMs": 133.17,
+      "afterMs": 4.65,
+      "beforeParses": 313,
+      "beforeParsedCharacters": 3144992,
+      "after": {
+        "parses": 627,
+        "parsedCharacters": 57512,
+        "committedBlocks": 500,
+        "referenceRenders": 0
+      }
+    },
+    {
+      "characters": 40000,
+      "chunk": 64,
+      "beforeMs": 451.85,
+      "afterMs": 6.6,
+      "beforeParses": 625,
+      "beforeParsedCharacters": 12520000,
+      "after": {
+        "parses": 1251,
+        "parsedCharacters": 115000,
+        "committedBlocks": 1000,
+        "referenceRenders": 0
+      }
+    },
+    {
+      "characters": 80000,
+      "chunk": 64,
+      "beforeMs": 1824.21,
+      "afterMs": 13.25,
+      "beforeParses": 1250,
+      "beforeParsedCharacters": 50040000,
+      "after": {
+        "parses": 2501,
+        "parsedCharacters": 230000,
+        "committedBlocks": 2000,
+        "referenceRenders": 0
+      }
+    }
+  ],
+  "pmSync": {
+    "characters": 1233928,
+    "edits": 40,
+    "beforeMs": 16396.79,
+    "afterMs": 54.35,
+    "hash40Ms": 363.05,
+    "metrics": {
+      "serializedNodes": 5040,
+      "reusedNodes": 199960,
+      "fallbacks": 0
+    }
+  },
+  "cmPatch": {
+    "edits": 100,
+    "beforeMs": 207.45,
+    "afterMs": 0.08,
+    "note": "Patch calculation only; ChangeSet already holds offsets. Full text/hash remain in the protocol."
+  },
+  "workbook": {
+    "sheets": 8,
+    "cellsPerSheet": 9000,
+    "beforeMs": 120.83,
+    "afterMs": 19.22,
+    "beforeDecoded": 8,
+    "afterDecoded": 1
+  },
+  "fingerprint": {
+    "bytes": 8000000,
+    "beforeMs": 201.19,
+    "afterMs": 165.43,
+    "beforeWholeFileBuffers": 3,
+    "afterWholeFileBuffers": 0,
+    "streamBufferBytes": 65536,
+    "reads": 3
+  },
+  "streamingTailGrowth": {
+    "date": "2026-10-17T13:22:04.979Z",
+    "node": "v22.17.1",
+    "platform": "darwin",
+    "arch": "arm64",
+    "optimizedRuns": 7,
+    "timings": "optimized median; baseline single run; parsing and HTML generation, no DOM",
+    "growth": [
+      {
+        "kind": "fence",
+        "characters": 20000,
+        "chunk": 64,
+        "beforeMs": 23.741,
+        "afterMs": 0.63,
+        "beforeParses": 313,
+        "beforeParsedCharacters": 3144992,
+        "after": {
+          "parses": 20,
+          "parsedCharacters": 48710,
+          "committedBlocks": 1,
+          "referenceRenders": 0,
+          "tailScannedCharacters": 19994,
+          "checkpointParses": 0,
+          "domCharacters": 0
+        }
+      },
+      {
+        "kind": "fence",
+        "characters": 40000,
+        "chunk": 64,
+        "beforeMs": 86.94,
+        "afterMs": 0.995,
+        "beforeParses": 625,
+        "beforeParsedCharacters": 12520000,
+        "after": {
+          "parses": 20,
+          "parsedCharacters": 88710,
+          "committedBlocks": 1,
+          "referenceRenders": 0,
+          "tailScannedCharacters": 39994,
+          "checkpointParses": 0,
+          "domCharacters": 0
+        }
+      },
+      {
+        "kind": "fence",
+        "characters": 80000,
+        "chunk": 64,
+        "beforeMs": 349.991,
+        "afterMs": 1.909,
+        "beforeParses": 1250,
+        "beforeParsedCharacters": 50040000,
+        "after": {
+          "parses": 20,
+          "parsedCharacters": 168710,
+          "committedBlocks": 1,
+          "referenceRenders": 0,
+          "tailScannedCharacters": 79994,
+          "checkpointParses": 0,
+          "domCharacters": 0
+        }
+      },
+      {
+        "kind": "list",
+        "characters": 20000,
+        "chunk": 64,
+        "beforeMs": 134.092,
+        "afterMs": 4.736,
+        "beforeParses": 313,
+        "beforeParsedCharacters": 3144992,
+        "after": {
+          "parses": 631,
+          "parsedCharacters": 77330,
+          "committedBlocks": 1,
+          "referenceRenders": 0,
+          "tailScannedCharacters": 20000,
+          "checkpointParses": 0,
+          "domCharacters": 0
+        }
+      },
+      {
+        "kind": "list",
+        "characters": 40000,
+        "chunk": 64,
+        "beforeMs": 494.725,
+        "afterMs": 9.856,
+        "beforeParses": 625,
+        "beforeParsedCharacters": 12520000,
+        "after": {
+          "parses": 1255,
+          "parsedCharacters": 146309,
+          "committedBlocks": 1,
+          "referenceRenders": 0,
+          "tailScannedCharacters": 40000,
+          "checkpointParses": 0,
+          "domCharacters": 0
+        }
+      },
+      {
+        "kind": "list",
+        "characters": 80000,
+        "chunk": 64,
+        "beforeMs": 1980.282,
+        "afterMs": 19.257,
+        "beforeParses": 1250,
+        "beforeParsedCharacters": 50040000,
+        "after": {
+          "parses": 2505,
+          "parsedCharacters": 284392,
+          "committedBlocks": 1,
+          "referenceRenders": 0,
+          "tailScannedCharacters": 80000,
+          "checkpointParses": 0,
+          "domCharacters": 0
+        }
+      },
+      {
+        "kind": "quote",
+        "characters": 20000,
+        "chunk": 64,
+        "beforeMs": 55.613,
+        "afterMs": 1.989,
+        "beforeParses": 313,
+        "beforeParsedCharacters": 3144992,
+        "after": {
+          "parses": 702,
+          "parsedCharacters": 76425,
+          "committedBlocks": 1,
+          "referenceRenders": 0,
+          "tailScannedCharacters": 20000,
+          "checkpointParses": 0,
+          "domCharacters": 0
+        }
+      },
+      {
+        "kind": "quote",
+        "characters": 40000,
+        "chunk": 64,
+        "beforeMs": 200.527,
+        "afterMs": 3.707,
+        "beforeParses": 625,
+        "beforeParsedCharacters": 12520000,
+        "after": {
+          "parses": 1400,
+          "parsedCharacters": 144510,
+          "committedBlocks": 1,
+          "referenceRenders": 0,
+          "tailScannedCharacters": 40000,
+          "checkpointParses": 0,
+          "domCharacters": 0
+        }
+      },
+      {
+        "kind": "quote",
+        "characters": 80000,
+        "chunk": 64,
+        "beforeMs": 805.039,
+        "afterMs": 7.192,
+        "beforeParses": 1250,
+        "beforeParsedCharacters": 50040000,
+        "after": {
+          "parses": 2797,
+          "parsedCharacters": 280727,
+          "committedBlocks": 1,
+          "referenceRenders": 0,
+          "tailScannedCharacters": 80000,
+          "checkpointParses": 0,
+          "domCharacters": 0
+        }
+      },
+      {
+        "kind": "table",
+        "characters": 20000,
+        "chunk": 64,
+        "beforeMs": 158.36,
+        "afterMs": 6.394,
+        "beforeParses": 313,
+        "beforeParsedCharacters": 3144992,
+        "after": {
+          "parses": 675,
+          "parsedCharacters": 91092,
+          "committedBlocks": 1,
+          "referenceRenders": 0,
+          "tailScannedCharacters": 19978,
+          "checkpointParses": 0,
+          "domCharacters": 0
+        }
+      },
+      {
+        "kind": "table",
+        "characters": 40000,
+        "chunk": 64,
+        "beforeMs": 621.291,
+        "afterMs": 11.872,
+        "beforeParses": 625,
+        "beforeParsedCharacters": 12520000,
+        "after": {
+          "parses": 1347,
+          "parsedCharacters": 174319,
+          "committedBlocks": 1,
+          "referenceRenders": 0,
+          "tailScannedCharacters": 39978,
+          "checkpointParses": 0,
+          "domCharacters": 0
+        }
+      },
+      {
+        "kind": "table",
+        "characters": 80000,
+        "chunk": 64,
+        "beforeMs": 2550.061,
+        "afterMs": 24.42,
+        "beforeParses": 1250,
+        "beforeParsedCharacters": 50040000,
+        "after": {
+          "parses": 2690,
+          "parsedCharacters": 340745,
+          "committedBlocks": 1,
+          "referenceRenders": 0,
+          "tailScannedCharacters": 79978,
+          "checkpointParses": 0,
+          "domCharacters": 0
+        }
+      },
+      {
+        "kind": "paragraph",
+        "characters": 20000,
+        "chunk": 64,
+        "beforeMs": 111.618,
+        "afterMs": 3.602,
+        "beforeParses": 313,
+        "beforeParsedCharacters": 3144992,
+        "after": {
+          "parses": 24,
+          "parsedCharacters": 82432,
+          "committedBlocks": 1,
+          "referenceRenders": 0,
+          "tailScannedCharacters": 0,
+          "checkpointParses": 5,
+          "domCharacters": 0
+        }
+      },
+      {
+        "kind": "paragraph",
+        "characters": 40000,
+        "chunk": 64,
+        "beforeMs": 438.561,
+        "afterMs": 7.217,
+        "beforeParses": 625,
+        "beforeParsedCharacters": 12520000,
+        "after": {
+          "parses": 25,
+          "parsedCharacters": 157248,
+          "committedBlocks": 1,
+          "referenceRenders": 0,
+          "tailScannedCharacters": 0,
+          "checkpointParses": 6,
+          "domCharacters": 0
+        }
+      },
+      {
+        "kind": "paragraph",
+        "characters": 80000,
+        "chunk": 64,
+        "beforeMs": 1773.306,
+        "afterMs": 15.04,
+        "beforeParses": 1250,
+        "beforeParsedCharacters": 50040000,
+        "after": {
+          "parses": 26,
+          "parsedCharacters": 306880,
+          "committedBlocks": 1,
+          "referenceRenders": 0,
+          "tailScannedCharacters": 0,
+          "checkpointParses": 7,
+          "domCharacters": 0
+        }
+      },
+      {
+        "kind": "fence-single-line",
+        "characters": 20000,
+        "chunk": 64,
+        "beforeMs": 7.815,
+        "afterMs": 0.322,
+        "beforeParses": 313,
+        "beforeParsedCharacters": 3144992,
+        "after": {
+          "parses": 20,
+          "parsedCharacters": 48712,
+          "committedBlocks": 1,
+          "referenceRenders": 0,
+          "tailScannedCharacters": 19992,
+          "checkpointParses": 0,
+          "domCharacters": 0
+        }
+      },
+      {
+        "kind": "fence-single-line",
+        "characters": 40000,
+        "chunk": 64,
+        "beforeMs": 28.548,
+        "afterMs": 0.604,
+        "beforeParses": 625,
+        "beforeParsedCharacters": 12520000,
+        "after": {
+          "parses": 20,
+          "parsedCharacters": 88712,
+          "committedBlocks": 1,
+          "referenceRenders": 0,
+          "tailScannedCharacters": 39992,
+          "checkpointParses": 0,
+          "domCharacters": 0
+        }
+      },
+      {
+        "kind": "fence-single-line",
+        "characters": 80000,
+        "chunk": 64,
+        "beforeMs": 112.727,
+        "afterMs": 1.197,
+        "beforeParses": 1250,
+        "beforeParsedCharacters": 50040000,
+        "after": {
+          "parses": 20,
+          "parsedCharacters": 168712,
+          "committedBlocks": 1,
+          "referenceRenders": 0,
+          "tailScannedCharacters": 79992,
+          "checkpointParses": 0,
+          "domCharacters": 0
+        }
+      }
+    ]
+  },
+  "streamingLimitsBeforeTailFix": [
+    {
+      "kind": "single unfinished fence",
+      "characters": 20008,
+      "ms": 7.26,
+      "parsedCharacters": 3185016
+    },
+    {
+      "kind": "single unfinished fence",
+      "characters": 40008,
+      "ms": 28.46,
+      "parsedCharacters": 12640024
+    }
+  ]
+}

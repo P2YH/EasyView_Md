@@ -58,12 +58,19 @@ test('dropping below a nested folder\'s last child uses the pointer X to choose 
     ]);
 
     // Pointer over the label: the line starts at the nested level and the folder stays inside 功能设计, at the end.
-    await dragToTopEdge(page, '功能设计/b-接口管理模块', '项目管理', 120, false);
+    // A tree refresh (e.g. a late file-watcher event, common on Windows) rebuilds the tree and drops the
+    // indicator. A real drag repeats dragover continuously; the synthetic one fires once, so repeat it.
     const indicator = page.locator('.workspace-drop-indicator.is-visible');
-    await expect(indicator).toBeVisible();
-    const rowLeft = await page.locator('.workspace-entry[data-relative-path="项目管理"]').evaluate((row) => row.getBoundingClientRect().left);
-    const nestedLeft = await indicator.evaluate((line) => line.getBoundingClientRect().left);
-    expect(Math.round(nestedLeft - rowLeft)).toBe(40);
+    const lineOffset = async (source: string, offsetX: number) => {
+      let offset = Number.NaN;
+      await expect(async () => {
+        await dragToTopEdge(page, source, '项目管理', offsetX, false);
+        const rowLeft = await page.locator('.workspace-entry[data-relative-path="项目管理"]').evaluate((row) => row.getBoundingClientRect().left, undefined, { timeout: 1000 });
+        offset = Math.round(await indicator.evaluate((line) => line.getBoundingClientRect().left, undefined, { timeout: 1000 }) - rowLeft);
+      }).toPass({ timeout: 20000 });
+      return offset;
+    };
+    expect(await lineOffset('功能设计/b-接口管理模块', 120)).toBe(40);
     await page.screenshot({ path: join(appDir, '../../test-results/desktop-tree-drop-nested.png') });
 
     await dragToTopEdge(page, '功能设计/b-接口管理模块', '项目管理', 120, true);
@@ -72,9 +79,7 @@ test('dropping below a nested folder\'s last child uses the pointer X to choose 
     ]);
 
     // Pointer at the far left: the line starts at the root level and the folder moves out before 项目管理.
-    await dragToTopEdge(page, '功能设计/c-仪表盘功能', '项目管理', 4, false);
-    const rootLeft = await indicator.evaluate((line) => line.getBoundingClientRect().left);
-    expect(Math.round(rootLeft - rowLeft)).toBe(24);
+    expect(await lineOffset('功能设计/c-仪表盘功能', 4)).toBe(24);
     await dragToTopEdge(page, '功能设计/c-仪表盘功能', '项目管理', 4, true);
     await expect.poll(() => treeOrder(page)).toEqual([
       '功能设计', '功能设计/a-平台UI', '功能设计/b-接口管理模块', 'c-仪表盘功能', '项目管理', 'notes.md',

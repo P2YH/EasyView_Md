@@ -96,10 +96,10 @@ function assertContentSize(content: string): void {
 
 async function gitBaseline(rootPath: string, relativePath: string): Promise<{ repository: boolean; status: string; diff: string }> {
   try {
-    const [{ stdout: status }, { stdout: diff }] = await Promise.all([
-      execFileAsync('git', ['status', '--short'], { cwd: rootPath, maxBuffer: MAX_FILE_BYTES }),
-      execFileAsync('git', ['diff', '--', relativePath], { cwd: rootPath, maxBuffer: MAX_FILE_BYTES }),
-    ]);
+    // Outside a repository `git status` exits 128 but `git diff` exits 129 (usage error), so running them in
+    // parallel made the outcome depend on which rejected first. Status decides whether this is a repository.
+    const { stdout: status } = await execFileAsync('git', ['status', '--short'], { cwd: rootPath, maxBuffer: MAX_FILE_BYTES });
+    const { stdout: diff } = await execFileAsync('git', ['diff', '--', relativePath], { cwd: rootPath, maxBuffer: MAX_FILE_BYTES });
     return { repository: true, status: status.trimEnd(), diff: diff.trimEnd() };
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;

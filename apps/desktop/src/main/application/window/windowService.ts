@@ -11,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { requestRestart } from '../document/appLifecycle';
+import { flushDesktopEditors } from '../document/flushDesktopEditors';
 import { anonymizePath, buildFeedbackMailto, buildIssueUrl, FEEDBACK_REPO_URL, type FeedbackEnvironment } from '../help/feedbackLinks';
 import os from 'node:os';
 import { getLogsDirectory, log as appLog } from '../help/appLogger';
@@ -146,17 +147,23 @@ function setMenuBarVisible(visible: boolean): void {
   applyMenuBarVisibility();
 }
 
+let restartRequest: Promise<boolean> | undefined;
 export async function restartApp(): Promise<void> {
-  if (isWindowClosing()) return;
-  await requestRestart({
-    hasDirtyDocuments: documentSessions.hasDirty(),
-    confirmCloseAll,
+  if (restartRequest) { await restartRequest; return; }
+  restartRequest = requestRestart({
+    windows: () => windowSessions.values().map(({ context }) => ({
+      prepare: () => flushDesktopEditors(context, [...context.documentSessions.values()]),
+      hasDirtyDocuments: () => context.documentSessions.hasDirty(),
+      confirmCloseAll: () => runInWindowContext(context, confirmCloseAll),
+    })),
     relaunch() {
-      setClosing(true);
       app.relaunch();
       app.exit(0);
     },
   });
+  try { await restartRequest; }
+  catch (error) { await dialog.showMessageBox({ type: 'error', message: error instanceof Error ? error.message : String(error) }); }
+  finally { restartRequest = undefined; }
 }
 
 export function syncShellMenu(): void {

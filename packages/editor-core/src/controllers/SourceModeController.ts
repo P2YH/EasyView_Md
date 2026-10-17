@@ -40,7 +40,7 @@ export interface SourceModeControllerDeps {
   setHasEditedInCurrentMode: (value: boolean) => void;
   setModeEntryContent: (content: string) => void;
   hideGhost: () => void;
-  postEdit: (content: string) => void;
+  postEdit: (content: string, edits?: import('@easyview/editor-sync').TextOffsetPatch[]) => void;
   requestTabCompletion: (line: number, character: number, wordPrefix: string) => Promise<{ insertText: string; replaceStartCharacter?: number; replaceEndCharacter?: number } | null>;
   describeSourceDocChange: (before: string, after: string) => string | null;
   syncSourceHistory: (state: CodeMirrorState) => void;
@@ -146,12 +146,12 @@ export class SourceModeController {
     if (!this.deps.getSourceEditor()) {
       this.deps.setSourceEditor(createSourceEditor({
         parent: sourceContainer,
-        onChange: (rawContent) => {
+        onChange: (rawContent, edits) => {
           this.deps.setHasEditedInCurrentMode(true);
           const content = stripSettingsComment(rawContent);
           if (content !== this.deps.getCurrentContent()) {
             this.deps.setCurrentContent(content);
-            this.deps.postEdit(content);
+            this.deps.postEdit(content, content === rawContent ? edits : undefined);
           }
         },
         onDocumentHistoryChange: (update) => {

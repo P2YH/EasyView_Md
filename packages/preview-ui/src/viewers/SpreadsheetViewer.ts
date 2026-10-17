@@ -27,11 +27,9 @@ import {
   spreadsheetDefaultStyle,
 } from '../spreadsheet/spreadsheetTheme';
 import { attachSpreadsheetWheelNormalization } from '../spreadsheet/spreadsheetWheel';
-import {
-  workbookBytesToXsSheets,
-  xsSheetsToWorkbookBytes,
-} from '../spreadsheet/xSpreadsheetBridge';
 import { tPreview } from '../preview.i18n';
+import { usePreviewAssets } from '../assets';
+import { openSpreadsheetWorker } from '../spreadsheet/spreadsheetWorker';
 
 /** x-data-spreadsheet hardcodes these when computing sheet viewHeight (data_proxy). */
 const XS_LIBRARY_TOOLBAR_HEIGHT_PX = 41;
@@ -56,7 +54,7 @@ function spreadsheetViewHeight(mount: HTMLElement | null | undefined): number {
   // Library always subtracts 41 for each enabled chrome flag (both stay true here).
   return mount.clientHeight - toolbarH - bottomH
     + XS_LIBRARY_TOOLBAR_HEIGHT_PX
-    + XS_LIBRARY_BOTTOMBAR_HEIGHT_PX;
+    + (bottomVisible ? XS_LIBRARY_BOTTOMBAR_HEIGHT_PX : 0);
 }
 
 /**
@@ -72,8 +70,17 @@ export function SpreadsheetViewer({ descriptor, host }: SpreadsheetViewerProps):
 }
 
 function SpreadsheetEditor({ descriptor, host }: { descriptor: ViewerProps['descriptor']; host: PreviewHost }): React.ReactElement {
+  const assets = usePreviewAssets();
   const mountRef = React.useRef<HTMLDivElement | null>(null);
   const sheetRef = React.useRef<XsSpreadsheetInstance | null>(null);
+  const workbookRef = React.useRef<Awaited<ReturnType<typeof openSpreadsheetWorker>> | null>(null);
+  const workingSheets = React.useRef(new Map<number, import('../spreadsheet/xSpreadsheetTypes').XsSheetData>());
+  const activeSheet = React.useRef(0);
+  const [sheetNames, setSheetNames] = React.useState<string[]>([]);
+  const [selectedSheet, setSelectedSheet] = React.useState(0);
+  const switching = React.useRef(false);
+  const generationRef = React.useRef(0);
+  const revisionRef = React.useRef(0);
   const [error, setError] = React.useState<unknown>(null);
   const [loading, setLoading] = React.useState(true);
   const [dirty, setDirty] = React.useState(false);
@@ -87,6 +94,14 @@ function SpreadsheetEditor({ descriptor, host }: { descriptor: ViewerProps['desc
 
   React.useEffect(() => {
     let disposed = false;
+    const generation = ++generationRef.current;
+    let ownedSpreadsheet: XsSpreadsheetInstance | null = null;
+    const releaseSpreadsheet = () => {
+      ownedSpreadsheet?.destroy();
+      if (sheetRef.current === ownedSpreadsheet) sheetRef.current = null;
+      ownedSpreadsheet = null;
+    };
+    const abort = new AbortController();
     let resizeObserver: ResizeObserver | null = null;
     let detachWheel: (() => void) | null = null;
 
@@ -94,17 +109,28 @@ function SpreadsheetEditor({ descriptor, host }: { descriptor: ViewerProps['desc
       setLoading(true);
       setError(null);
       setDirty(false);
+      setSaving(false);
+      revisionRef.current = 0;
       setSaveMessage(null);
       setChromeSlot(null);
       try {
-        const response = await fetch(descriptor.contentUrl);
+        const response = await fetch(descriptor.contentUrl, { signal: abort.signal });
         if (!response.ok) throw new Error(tPreview('spreadsheet.readFailed', { status: response.status }));
         const bytes = await response.arrayBuffer();
-        const sheets = await workbookBytesToXsSheets(bytes);
+        if (!assets.spreadsheetWorkerUrl) throw new Error(tPreview('spreadsheet.libraryLoadFailed'));
+        const workbook = await openSpreadsheetWorker(bytes, assets.spreadsheetWorkerUrl, abort.signal);
+        if (disposed) { workbook.dispose(); return; }
+        workbookRef.current = workbook;
+        workingSheets.current.clear();
+        activeSheet.current = workbook.overview.active;
+        setSelectedSheet(workbook.overview.active);
+        setSheetNames(workbook.overview.sheets.map(sheet => sheet.name));
+        const sheets = [workbook.overview.data];
         if (disposed || !mountRef.current) return;
 
         const SpreadsheetModule = await import('x-data-spreadsheet/dist/xspreadsheet.js');
         await import('x-data-spreadsheet/dist/xspreadsheet.css');
+        if (disposed || !mountRef.current) return;
         if (!document.getElementById('easyview-xlsx-edge-fix')) {
           const style = document.createElement('style');
           style.id = 'easyview-xlsx-edge-fix';
@@ -138,7 +164,7 @@ html, body, .preview-root, .preview-shell, .preview-content {
           showToolbar: true,
           showGrid: true,
           showContextmenu: true,
-          showBottomBar: true,
+          showBottomBar: false,
           style: spreadsheetDefaultStyle(themeModeRef.current),
           view: {
             // Library subtracts fixed 41+41; compensate from measured CSS chrome
@@ -147,11 +173,12 @@ html, body, .preview-root, .preview-shell, .preview-content {
             width: () => mountRef.current?.clientWidth || 800,
           },
         });
+        ownedSpreadsheet = spreadsheet;
+        sheetRef.current = spreadsheet;
         spreadsheet.loadData(sheets);
         spreadsheet.change(() => {
-          if (!disposed) setDirty(true);
+          if (!disposed && !switching.current) { revisionRef.current++; setDirty(true); }
         });
-        sheetRef.current = spreadsheet;
         applyXSpreadsheetTheme(spreadsheet, themeModeRef.current);
         detachWheel = attachSpreadsheetWheelNormalization(mountRef.current);
 
@@ -176,11 +203,12 @@ html, body, .preview-root, .preview-shell, .preview-content {
           window.dispatchEvent(new Event('resize'));
         }, 0);
         resizeObserver = new ResizeObserver(() => {
-          spreadsheet.reRender?.();
+          if (!disposed) spreadsheet.reRender?.();
         });
         resizeObserver.observe(mountRef.current);
         if (!disposed) setLoading(false);
       } catch (reason) {
+        releaseSpreadsheet();
         if (!disposed) {
           setError(reason);
           setLoading(false);
@@ -191,14 +219,18 @@ html, body, .preview-root, .preview-shell, .preview-content {
     void boot();
     return () => {
       disposed = true;
+      abort.abort();
+      workbookRef.current?.dispose(); workbookRef.current = null;
+      workingSheets.current.clear();
       detachWheel?.();
       detachWheel = null;
       resizeObserver?.disconnect();
-      sheetRef.current = null;
+      releaseSpreadsheet();
+      if (generationRef.current === generation) generationRef.current++;
       setChromeSlot(null);
       if (mountRef.current) mountRef.current.innerHTML = '';
     };
-  }, [descriptor.contentUrl, descriptor.sessionId]);
+  }, [descriptor.contentUrl, descriptor.sessionId, assets.spreadsheetWorkerUrl]);
 
   React.useEffect(() => {
     applyXSpreadsheetTheme(sheetRef.current, themeMode);
@@ -208,27 +240,54 @@ html, body, .preview-root, .preview-shell, .preview-content {
   React.useEffect(() => {
     const spreadsheet = sheetRef.current;
     if (!spreadsheet) return;
-    window.requestAnimationFrame(() => {
+    const frame = window.requestAnimationFrame(() => {
+      if (sheetRef.current !== spreadsheet) return;
       spreadsheet.reRender?.();
       window.dispatchEvent(new Event('resize'));
     });
-  }, [pinnedOpen]);
+    return () => window.cancelAnimationFrame(frame);
+  }, [pinnedOpen, descriptor.sessionId]);
 
   const save = React.useCallback(async () => {
     if (!host.writeBytes || !sheetRef.current || saving) return;
+    const spreadsheet = sheetRef.current;
+    const generation = generationRef.current;
+    const revision = revisionRef.current;
+    const sessionId = descriptor.sessionId;
     setSaving(true);
     setSaveMessage(null);
     try {
-      const bytes = await xsSheetsToWorkbookBytes(sheetRef.current.getData());
-      const result: PreviewWriteResult = await host.writeBytes(descriptor.sessionId, bytes);
-      setDirty(false);
+      const workbook = workbookRef.current;
+      if (!workbook) return;
+      workingSheets.current.set(activeSheet.current, spreadsheet.getData()[0]);
+      const changes = [...workingSheets.current].map(([index, data]) => ({ index, data: structuredClone(data) }));
+      const bytes = await workbook.save(changes);
+      const result: PreviewWriteResult = await host.writeBytes(sessionId, bytes);
+      if (generationRef.current !== generation) return;
+      if (revisionRef.current === revision) setDirty(false);
       setSaveMessage(tPreview('common.savedSize', { size: (result.size / 1024).toFixed(result.size >= 10240 ? 0 : 1) }));
     } catch (reason) {
-      setSaveMessage(reason instanceof Error ? reason.message : tPreview('common.saveFailed'));
+      if (generationRef.current === generation) setSaveMessage(reason instanceof Error ? reason.message : tPreview('common.saveFailed'));
     } finally {
-      setSaving(false);
+      if (generationRef.current === generation) setSaving(false);
     }
   }, [descriptor.sessionId, host, saving]);
+
+  const switchSheet = async (index: number): Promise<void> => {
+    const workbook = workbookRef.current, spreadsheet = sheetRef.current;
+    if (!workbook || !spreadsheet || switching.current || index === activeSheet.current) return;
+    const generation = generationRef.current;
+    workingSheets.current.set(activeSheet.current, structuredClone(spreadsheet.getData()[0]));
+    switching.current = true; setLoading(true);
+    try {
+      const data = workingSheets.current.get(index) ?? await workbook.load(index);
+      if (generation !== generationRef.current) return;
+      activeSheet.current = index; setSelectedSheet(index);
+      spreadsheet.loadData([structuredClone(data)]);
+      applyXSpreadsheetTheme(spreadsheet, themeModeRef.current);
+    } catch (reason) { if (generation === generationRef.current) setSaveMessage(String(reason)); }
+    finally { switching.current = false; if (generation === generationRef.current) setLoading(false); }
+  };
 
   const toolbarChrome = chromeSlot && pinnedOpen
     ? createPortal(
@@ -263,6 +322,8 @@ html, body, .preview-root, .preview-shell, .preview-content {
       ref: mountRef,
       'aria-busy': loading || undefined,
     }),
+    h('div', { className: 'preview-spreadsheet-tabs', role: 'tablist' },
+      ...sheetNames.map((name, index) => h('button', { key: index, role: 'tab', 'aria-selected': selectedSheet === index, disabled: loading, onClick: () => { void switchSheet(index); } }, name))),
     toolbarChrome,
     loading ? h('div', { className: 'preview-spreadsheet-loading' }, loadingElement(tPreview('spreadsheet.loadingEditor'))) : null,
   );

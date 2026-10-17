@@ -100,7 +100,7 @@ export class DocumentSyncSession {
       this.state = 'awaitingAckWithBufferedEdits';
       return null;
     }
-    return this.sendPendingEdits();
+    return this.sendPendingEdits(valid);
   }
 
   handleAck(ack: EditsAppliedAck): void {
@@ -199,8 +199,8 @@ export class DocumentSyncSession {
     this.bufferedEditCount = 0;
   }
 
-  private sendPendingEdits(): ApplyEditsMessage {
-    const edits = minimalTextPatch(this.confirmedContent, this.optimisticContent);
+  private sendPendingEdits(knownEdits?: TextOffsetPatch[]): ApplyEditsMessage {
+    const edits = knownEdits ?? minimalTextPatch(this.confirmedContent, this.optimisticContent);
     const message: ApplyEditsMessage = {
       type: 'applyEdits',
       documentId: this.documentId,

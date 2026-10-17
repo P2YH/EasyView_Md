@@ -144,7 +144,8 @@ export type EditorToHostMessage =
   | { type: 'aiChat.saveSettings'; requestId: string; settings: AiChatSettings }
   | { type: 'aiChat.saveApiKey'; requestId: string; apiKey: string }
   | { type: 'aiChat.saveWebSearchApiKey'; requestId: string; apiKey: string }
-  | { type: 'aiChat.pickImage' }
+  | { type: 'aiChat.pickImage'; requestId: string }
+  | { type: 'aiChat.patchesApplied'; requestId: string; operationId: string; error?: string }
   | { type: 'productThemeChanged'; mode: 'light' | 'gray' | 'dark' };
 
 export type HostToEditorMessage =
@@ -183,11 +184,11 @@ export type HostToEditorMessage =
   | { type: 'aiChat.delta'; requestId: string; text?: string; reasoning?: string }
   | { type: 'aiChat.done'; requestId: string; content: string; reasoning?: string; finishReason?: string }
   | { type: 'aiChat.tool'; requestId: string; phase: 'call' | 'result'; toolName: string; input: unknown; output?: unknown }
-  | { type: 'aiChat.applyPatches'; requestId: string; path: string; patches: AiTextPatch[] }
+  | { type: 'aiChat.applyPatches'; requestId: string; operationId: string; path: string; patches: AiTextPatch[] }
   | { type: 'aiChat.error'; requestId: string; message: string; aborted?: boolean }
   | { type: 'aiChat.settingsResponse'; requestId: string; settings: AiChatSettings; hasApiKey: boolean; hasWebSearchApiKey: boolean }
   | { type: 'aiChat.settingsSaved'; requestId: string; ok: boolean; message?: string }
-  | { type: 'aiChat.imagePicked'; images: Array<{ name: string; dataUrl: string }> }
+  | { type: 'aiChat.imagePicked'; requestId: string; error?: string; images: Array<{ name: string; dataUrl: string }> }
   | { type: 'setProductTheme'; mode: 'light' | 'gray' | 'dark' };
 
 export type EditorMessageHandler = (message: EditorToHostMessage) => void;
@@ -234,6 +235,7 @@ const EDITOR_MESSAGE_TYPES = new Set<EditorToHostMessage['type']>([
   'aiChat.saveApiKey',
   'aiChat.saveWebSearchApiKey',
   'aiChat.pickImage',
+  'aiChat.patchesApplied',
   'productThemeChanged',
 ]);
 

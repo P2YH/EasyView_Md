@@ -214,3 +214,55 @@ describe('AiChatPanel host and document context', () => {
     });
   });
 });
+
+describe('AI conversation lifetime', () => {
+  function setup(applyDocumentEdit: (content: string) => void | Promise<void> = () => undefined) {
+    document.body.innerHTML = '<div id="editor-body"></div>';
+    window.localStorage.clear();
+    const sent: EditorToHostMessage[] = [];
+    const panel = createAiChatPanel({ postMessage: message => sent.push(message), getDocumentContent: () => 'original', getFilePath: () => '/audit.md', getFileName: () => 'audit.md', applyDocumentEdit, copyText: () => undefined });
+    panel.open();
+    const request = sent.find(message => message.type === 'aiChat.getSettings')! as { requestId: string };
+    panel.handleMessage({ type: 'aiChat.settingsResponse', requestId: request.requestId, settings: { baseUrl: '', models: ['test'], defaultModel: 'test', temperature: 1, topP: 1, maxTokens: 100, systemPrompt: '', stream: true }, hasApiKey: true, hasWebSearchApiKey: false });
+    return { panel, sent, send(text: string) {
+      document.querySelector<HTMLTextAreaElement>('.ai-chat-input')!.value = text;
+      document.querySelector<HTMLButtonElement>('.ai-chat-send-btn')!.click();
+      return (sent.filter(message => message.type === 'aiChat.send').at(-1)! as { requestId: string }).requestId;
+    } };
+  }
+  it('bounds retained messages, pages earlier rows, and reuses completed reply DOM', () => {
+    const { panel, send } = setup();
+    let id = send('first'); panel.handleMessage({ type: 'aiChat.done', requestId: id, content: 'answer', finishReason: 'stop' });
+    const row = document.querySelector('.ai-chat-msg.assistant');
+    id = send('second'); panel.handleMessage({ type: 'aiChat.done', requestId: id, content: 'answer 2', finishReason: 'stop' });
+    expect(document.querySelector('.ai-chat-msg.assistant')).toBe(row);
+    for (let i = 2; i < 105; i++) {
+      id = send(`message ${i}`); panel.handleMessage({ type: 'aiChat.done', requestId: id, content: `answer ${i}`, finishReason: 'stop' });
+    }
+    expect(document.querySelectorAll('.ai-chat-msg')).toHaveLength(80);
+    expect(JSON.parse(localStorage.getItem('easyview-ai-chat-history:/audit.md')!).messages).toHaveLength(200);
+    document.querySelector<HTMLButtonElement>('.ai-chat-earlier')!.click();
+    expect(document.querySelectorAll('.ai-chat-msg')).toHaveLength(160);
+    panel.destroy();
+  });
+  it('acknowledges a background edit only after its document accepts it', async () => {
+    let accept!: () => void;
+    const applied = vi.fn(() => new Promise<void>(resolve => { accept = resolve; }));
+    const { panel, sent, send } = setup(applied);
+    const requestId = send('edit'); panel.setSuspended(true);
+    panel.handleMessage({ type: 'aiChat.applyPatches', requestId, operationId: 'edit-1', path: '/audit.md', patches: [{ description: 'edit', expectedText: 'original', replacement: 'changed' }] });
+    expect(applied).toHaveBeenCalledWith('changed');
+    expect(sent.some(message => message.type === 'aiChat.patchesApplied')).toBe(false);
+    accept(); await Promise.resolve(); await Promise.resolve();
+    expect(sent).toContainEqual({ type: 'aiChat.patchesApplied', requestId, operationId: 'edit-1', error: undefined });
+    panel.destroy();
+  });
+  it('reports a patch conflict instead of acknowledging a successful edit', async () => {
+    const applied = vi.fn(); const { panel, sent, send } = setup(applied); const requestId = send('edit');
+    panel.handleMessage({ type: 'aiChat.applyPatches', requestId, operationId: 'conflict', path: '/audit.md', patches: [{ description: 'edit', expectedText: 'missing anchor', replacement: 'changed' }] });
+    await Promise.resolve(); await Promise.resolve();
+    expect(applied).not.toHaveBeenCalled();
+    expect(sent.find(message => message.type === 'aiChat.patchesApplied')).toMatchObject({ operationId: 'conflict', error: expect.any(String) });
+    panel.destroy();
+  });
+});

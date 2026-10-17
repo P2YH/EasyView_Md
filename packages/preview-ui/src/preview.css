@@ -1357,3 +1357,29 @@ body:not([data-mdpre-accent='default'])[data-mdpre-accent] .preview-root {
 .preview-word-editor[data-preview-theme='gray'] .ep-root {
   --doc-page-bg: color-mix(in srgb, var(--file-viewer-bg) 88%, #fff);
 }
+
+.preview-spreadsheet-tabs {
+  display: flex;
+  flex: 0 0 26px;
+  overflow-x: auto;
+  border-top: 1px solid var(--file-viewer-toolbar-border);
+  background: var(--file-viewer-bg);
+}
+.preview-spreadsheet-tabs [role='tab'] {
+  flex: none;
+  padding: 2px 12px;
+  border: 0;
+  border-right: 1px solid var(--file-viewer-toolbar-border);
+  color: var(--file-viewer-button-color, inherit);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.preview-spreadsheet-tabs [aria-selected='true'] {
+  background: var(--file-viewer-button-hover-bg);
+  box-shadow: inset 0 -2px var(--vscode-focusBorder, #3794ff);
+}
+.preview-spreadsheet-tabs [role='tab']:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, #3794ff);
+  outline-offset: -2px;
+}

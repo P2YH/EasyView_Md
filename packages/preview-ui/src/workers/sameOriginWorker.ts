@@ -9,7 +9,7 @@ const managedBlobUrls = new Set<string>();
  * cross-origin. Fetch the script and re-host it as a same-origin `blob:` URL.
  * Same-origin hosts (desktop http) return the original URL unchanged.
  */
-export async function toSameOriginWorkerUrl(workerUrl: string): Promise<string> {
+export async function toSameOriginWorkerUrl(workerUrl: string, signal?: AbortSignal): Promise<string> {
   let absolute: URL;
   try {
     absolute = new URL(workerUrl, typeof location !== 'undefined' ? location.href : undefined);
@@ -21,7 +21,7 @@ export async function toSameOriginWorkerUrl(workerUrl: string): Promise<string> 
     return absolute.href;
   }
 
-  const response = await fetch(absolute.href);
+  const response = await fetch(absolute.href, { signal });
   if (!response.ok) {
     throw new Error(tPreview('worker.loadFailed', { status: response.status }));
   }

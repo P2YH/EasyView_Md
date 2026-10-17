@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { promises as fs, watch, type FSWatcher } from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { fingerprintFiles } from '../filesystem/file-fingerprint';
 import type { GuardRepository, GuardFile, GuardStatus, GuardHistory, GuardComparison, GuardRequest, GuardBranch } from '@easyview/contracts';
 
 // One limiter per host process, shared across windows and repositories.
@@ -232,7 +233,7 @@ export class VersionGuardService {
       if (request.method === 'discard') {
         const status = await this.status(repository);
         const files = paths.map(file => { const item = status.files.find(entry => entry.path === file); if (!item || item.submodule || item.index === 'U') throw new Error('This change cannot be discarded here.'); return item; });
-        const fingerprint = async () => Promise.all(paths.map(async file => { try { const stat = await fs.lstat(path.join(root, file)); return stat.isSymbolicLink() ? `link:${await fs.readlink(path.join(root, file))}` : digest(await fs.readFile(path.join(root, file))); } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return 'missing'; throw error; } }));
+        const fingerprint = () => fingerprintFiles(paths.map(file => path.join(root, file)));
         const before = await fingerprint();
         return this.host.discard(paths.map(file => path.join(root, file)), async () => {
           if (JSON.stringify(before) !== JSON.stringify(await fingerprint()) || JSON.stringify(status.files) !== JSON.stringify((await this.status(repository)).files)) throw new Error('Files changed while confirming. Review and try again.');

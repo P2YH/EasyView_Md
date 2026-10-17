@@ -2,6 +2,10 @@ import { defineMessages } from '@easyview/contracts/i18n';
 
 export const tAiChat = defineMessages({
   'zh-CN': {
+    'input.tooLarge': '消息过长，请将内容控制在 256,000 个字符以内。',
+    'message.showEarlier': '查看更早的消息',
+    'message.tooLarge': '回答已达到会话容量上限，已停止生成。',
+    'attachment.tooLarge': '每次最多添加 4 张图片，总大小不能超过 8 MiB。',
     'resize': '拖拽调整宽度',
     'dragToDock': '拖动以停靠到窗口左侧或右侧，或与其他面板交换位置',
     'title': 'AI 对话',
@@ -58,6 +62,10 @@ export const tAiChat = defineMessages({
     'truncated': '注意：回复因长度限制被截断。',
   },
   en: {
+    'input.tooLarge': 'Keep the message within 256,000 characters.',
+    'message.showEarlier': 'Show earlier messages',
+    'message.tooLarge': 'The reply reached the session size limit and generation was stopped.',
+    'attachment.tooLarge': 'Attach at most 4 images with a combined size of 8 MiB.',
     'resize': 'Drag to resize',
     'dragToDock': 'Drag to dock on the left or right of the window, or swap with another panel',
     'title': 'AI Chat',

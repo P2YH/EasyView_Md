@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { DualModeHistory } from './DualModeHistory';
 
 describe('DualModeHistory', () => {
+  it('evicts old state roots by count and text size while preserving recent undo and redo', () => {
+    const history = new DualModeHistory({ maxEntries: 3, maxTextBytes: 20 });
+    for (const text of ['aaaa', 'bbbb', 'cccc', 'dddd']) history.recordModeSwitch(text, 'source', { doc: text });
+    expect(history.getUndoStack().map(entry => entry.markdown)).toEqual(['cccc', 'dddd']);
+    expect(history.crossModeUndo('eeee', 'wysiwyg')?.markdown).toBe('dddd');
+    expect(history.crossModeRedo('dddd', 'source')?.markdown).toBe('eeee');
+    history.clear();
+    expect(history.getUndoStack()).toHaveLength(0); expect(history.getRedoStack()).toHaveLength(0);
+  });
   it('records a mode switch and restores it via crossModeUndo', () => {
     const history = new DualModeHistory();
     history.recordModeSwitch('# doc A wysiwyg', 'wysiwyg');

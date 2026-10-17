@@ -5,6 +5,7 @@
 
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import type { EditorToHostMessage, HostToEditorMessage } from '@easyview/contracts';
 import { normalizeAiChatSettings, type AiChatSettings } from '@easyview/contracts';
 import { buildAiChatMessages } from './chatPrompt';
@@ -42,6 +43,7 @@ function toErrorMessage(error: unknown): string {
 }
 
 export class AiChatHost {
+  private readonly patchRequests = new Map<string, { requestId: string; finish(error?: string): void }>();
   private settings: AiChatSettings | null = null;
   private settingsLoaded = false;
   private readonly activeRequests = new Map<string, AbortController>();
@@ -72,8 +74,13 @@ export class AiChatHost {
       case 'aiChat.abort':
         this.activeRequests.get(message.requestId)?.abort();
         return;
+      case 'aiChat.patchesApplied': {
+        const pending = this.patchRequests.get(message.operationId);
+        if (pending?.requestId === message.requestId) pending.finish(message.error);
+        return;
+      }
       case 'aiChat.pickImage':
-        await this.pickImages();
+        await this.pickImages(message.requestId);
         return;
       default:
         return;
@@ -183,16 +190,33 @@ export class AiChatHost {
     }
   }
 
-  private async pickImages(): Promise<void> {
+  private async pickImages(requestId: string): Promise<void> {
     if (!this.options.pickImages) return;
     try {
       const images = await this.options.pickImages.pickImages();
-      if (images.length > 0) {
-        this.options.postMessage({ type: 'aiChat.imagePicked', images });
-      }
+      this.options.postMessage({ type: 'aiChat.imagePicked', requestId, images });
     } catch (error) {
-      console.warn('[EasyView AI Chat] Image pick failed:', toErrorMessage(error));
+      this.options.postMessage({ type: 'aiChat.imagePicked', requestId, images: [], error: toErrorMessage(error) });
     }
+  }
+
+  private applyPatches(requestId: string, path: string, patches: import('@easyview/contracts').AiTextPatch[], signal: AbortSignal): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const operationId = randomUUID();
+      const finish = (error?: string) => {
+        clearTimeout(timer);
+        signal.removeEventListener('abort', aborted);
+        this.patchRequests.delete(operationId);
+        if (error) reject(new Error(error)); else resolve();
+      };
+      const aborted = () => finish(tAi('host.editCancelled'));
+      const timer = setTimeout(() => finish(tAi('host.editUnacknowledged')), 8000);
+      this.patchRequests.set(operationId, { requestId, finish });
+      signal.addEventListener('abort', aborted, { once: true });
+      if (signal.aborted) { aborted(); return; }
+      try { this.options.postMessage({ type: 'aiChat.applyPatches', requestId, operationId, path, patches }); }
+      catch (error) { finish(toErrorMessage(error)); }
+    });
   }
 
   private async runSend(message: Extract<EditorToHostMessage, { type: 'aiChat.send' }>): Promise<void> {
@@ -224,9 +248,7 @@ export class AiChatHost {
           ? {
             path: message.documentFilePath,
             content: message.documentContent,
-            applyPatches: (patches) => {
-              this.options.postMessage({ type: 'aiChat.applyPatches', requestId, path: message.documentFilePath!, patches });
-            },
+            applyPatches: (patches) => this.applyPatches(requestId, message.documentFilePath!, patches, controller.signal),
           }
           : undefined,
         includeWorkspaceTools: message.mode === 'agent',

@@ -21,7 +21,7 @@ export interface EditorCoreConfig {
   onDispatch?: (view: EditorView, tr: Transaction, oldState: EditorState) => void;
 
   /** Called when document content changes — use for syncing back to the host */
-  onContentChange?: (markdown: string) => void;
+  onContentChange?: (markdown: string, edits?: import('@easyview/editor-sync').TextOffsetPatch[]) => void;
 
   /** Called when an image node is directly clicked */
   onImageClick?: (view: EditorView, pos: number, node: ProsemirrorNode, dom: HTMLElement) => void;

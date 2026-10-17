@@ -4,6 +4,8 @@
  */
 
 import MarkdownIt from 'markdown-it';
+import { StreamingTailDom } from './StreamingTailDom';
+import { IncrementalMarkdown } from './IncrementalMarkdown';
 import { tAiChat } from './aiChat.i18n';
 
 const markdown = new MarkdownIt({
@@ -22,12 +24,11 @@ export function renderAssistantMarkdown(text: string): string {
 }
 
 /**
- * Renders a partial (still streaming) reply. An unterminated code fence is closed so the code
- * block renders as code instead of swallowing the text as a paragraph; everything else in
- * markdown-it already degrades gracefully on incomplete input. Raw HTML stays disabled.
+ * Reference full renderer for partial replies. markdown-it handles open fences
+ * without inserting synthetic text, which also preserves nested-fence semantics.
  */
 export function renderStreamingMarkdown(text: string): string {
-  return markdown.render(closeOpenFence(text));
+  return markdown.render(text);
 }
 
 export function closeOpenFence(text: string): string {
@@ -63,4 +64,48 @@ export function decorateRenderedMarkdown(container: HTMLElement, onCopyCode: (co
     });
     pre.appendChild(button);
   }
+}
+
+/** Each bubble owns a parser and stable DOM prefix; completed nodes retain identity. */
+export function createStreamingMarkdownRenderer() {
+  const parser = new IncrementalMarkdown(markdown);
+  let mounted: HTMLElement | undefined;
+  let count = 0;
+  let length = 0;
+  let stableBlocks: ReturnType<IncrementalMarkdown['update']>['stable'] | undefined;
+  const mountedBlocks: Array<{ element: HTMLElement; html: string }> = [];
+  const tail = document.createElement('div');
+  tail.style.display = 'contents';
+  let tailDom: StreamingTailDom | undefined;
+  let plainTail: string | undefined;
+  return {
+    render(container: HTMLElement, text: string, decorate: (node: HTMLElement) => void, final = false, appendOnly = false) {
+      const result = appendOnly && text.length >= length ? parser.append(text.slice(length), final) : parser.update(text, final);
+      length = text.length;
+      if (mounted !== container || stableBlocks !== result.stable) {
+        container.replaceChildren(); count = 0; mountedBlocks.length = 0; mounted = container; stableBlocks = result.stable;
+      }
+      if (result.invalidated) for (let i = 0; i < count; i++) {
+        const cached = mountedBlocks[i], html = result.stable[i].html;
+        if (cached.html === html) continue;
+        parser.metrics.domCharacters += html.length;
+        cached.element.innerHTML = html; decorate(cached.element); cached.html = html;
+      }
+      for (; count < result.stable.length; count++) {
+        const block = document.createElement('div'); block.style.display = 'contents';
+        parser.metrics.domCharacters += result.stable[count].html.length;
+        block.innerHTML = result.stable[count].html; decorate(block); container.append(block);
+        mountedBlocks.push({ element: block, html: result.stable[count].html });
+      }
+      if (result.tailView) {
+        if (!tailDom) tailDom = new StreamingTailDom(tail, decorate, parser.metrics);
+        tailDom.render(result.tailView); plainTail = undefined;
+      } else {
+        tailDom = undefined;
+        if (plainTail !== result.tail) { tail.innerHTML = result.tail; parser.metrics.domCharacters += result.tail.length; decorate(tail); plainTail = result.tail; }
+      }
+      if (tail.parentElement !== container || container.lastChild !== tail) container.append(tail);
+    },
+    metrics: parser.metrics,
+  };
 }

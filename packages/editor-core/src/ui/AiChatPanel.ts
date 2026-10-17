@@ -5,13 +5,12 @@
 
 import type {
   AiChatAttachment,
-  AiChatHistoryEntry,
   AiChatSettings,
   EditorToHostMessage,
   HostToEditorMessage,
 } from '@easyview/contracts';
-import { applyAiTextPatches, DEFAULT_AI_CHAT_SETTINGS } from '@easyview/contracts';
-import { decorateRenderedMarkdown, renderAssistantMarkdown, renderStreamingMarkdown } from './aiChatMarkdown';
+import { applyAiTextPatches, DEFAULT_AI_CHAT_SETTINGS, AI_CHAT_MAX_IMAGE_BYTES, aiChatImagesWithinBudget, aiChatAttachmentBytes } from '@easyview/contracts';
+import { decorateRenderedMarkdown, renderAssistantMarkdown, createStreamingMarkdownRenderer } from './aiChatMarkdown';
 import { tAiChat } from './aiChat.i18n';
 import { escapeHtml } from './escapeHtml';
 import { openSettingsDialog, settingsCheckbox, settingsFieldWithHint, type SettingsDialogHandle } from './SettingsDialog';
@@ -23,7 +22,12 @@ const MODE_STORAGE_KEY = 'easyview-ai-chat-mode';
 const HISTORY_KEY_PREFIX = 'easyview-ai-chat-history:';
 const PANEL_MIN_WIDTH = 280;
 const PANEL_DEFAULT_WIDTH = 360;
-const MAX_STORED_MESSAGES = 200;
+export const MAX_CHAT_MESSAGES = 200;
+const MAX_CHAT_TEXT_CHARS = 1_000_000;
+const MAX_REPLY_CHARS = 256_000;
+const MAX_VISIBLE_MESSAGES = 80;
+const MAX_ATTACHMENT_BYTES = AI_CHAT_MAX_IMAGE_BYTES;
+const MAX_STORED_MESSAGES = MAX_CHAT_MESSAGES;
 /** A settings save that gets no host reply within this time is reported as failed. */
 export const SETTINGS_SAVE_TIMEOUT_MS = 15_000;
 const MAX_STORED_MESSAGE_CHARS = 32_000;
@@ -61,7 +65,7 @@ export interface AiChatPanelDeps {
   getDocumentContent: () => string;
   getFilePath: () => string;
   getFileName: () => string;
-  applyDocumentEdit: (content: string) => void;
+  applyDocumentEdit: (content: string) => void | Promise<void>;
   copyText: (text: string, successMessage?: string) => void;
   onVisibilityChange?: (visible: boolean) => void;
   container?: HTMLElement | null;
@@ -593,7 +597,6 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
   let mode: ChatMode = preferredMode;
   let documentContextAvailable = true;
   let messages: ChatUiMessage[] = [];
-  let history: AiChatHistoryEntry[] = [];
   let pendingAttachments: AiChatAttachment[] = [];
   let settings: AiChatSettings = { ...DEFAULT_AI_CHAT_SETTINGS };
   let hasApiKey = false;
@@ -604,6 +607,13 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
   let streamingMessageId: string | null = null;
   let currentFilePath = '';
   let renderScheduled = false;
+  let renderTimer: ReturnType<typeof setTimeout> | undefined;
+  let renderFrame: number | undefined;
+  let scrollFrame: number | undefined;
+  let focusTimer: ReturnType<typeof setTimeout> | undefined;
+  let suspendedState = false;
+  const imageRequests = new Set<string>();
+  let visibleMessageCount = MAX_VISIBLE_MESSAGES;
   let inputHistoryIndex: number | null = null;
   let inputHistoryDraft = '';
 
@@ -675,9 +685,22 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
 
   // -------------------------------------------------------------- history
 
+  const trimMessages = (): void => {
+    let chars = messages.reduce((sum, message) => sum + message.content.length + (message.reasoning?.length ?? 0), 0);
+    let attachmentBytes = messages.reduce((sum, message) => sum + (message.attachments ?? []).reduce((n, attachment) => n + aiChatAttachmentBytes(attachment), 0), 0);
+    while (messages.length > 2 && (messages.length > MAX_CHAT_MESSAGES || chars > MAX_CHAT_TEXT_CHARS || attachmentBytes > MAX_ATTACHMENT_BYTES)) {
+      const removed = messages.splice(0, Math.min(2, messages.length - 2));
+      for (const message of removed) {
+        chars -= message.content.length + (message.reasoning?.length ?? 0);
+        attachmentBytes -= (message.attachments ?? []).reduce((sum, attachment) => sum + aiChatAttachmentBytes(attachment), 0);
+      }
+    }
+  };
+
   const historyStorageKey = (): string => `${HISTORY_KEY_PREFIX}${currentFilePath}`;
 
   const persistSession = (): void => {
+    trimMessages();
     if (messages.length === 0) {
       try {
         window.localStorage.removeItem(historyStorageKey());
@@ -704,7 +727,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
 
   const restoreSession = (): void => {
     messages = [];
-    history = [];
+    visibleMessageCount = MAX_VISIBLE_MESSAGES;
     try {
       const raw = window.localStorage.getItem(historyStorageKey());
       if (raw) {
@@ -713,12 +736,10 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
           messages = parsed.messages
             .filter((message) => message && (message.role === 'user' || message.role === 'assistant'))
             .map((message) => ({ ...message, id: createRequestId() }));
-          history = messages
-            .filter((message) => !message.error && message.content.length > 0)
-            .map((message) => ({ role: message.role, content: message.content }));
         }
       }
     } catch { /* corrupt entry — start fresh */ }
+    trimMessages();
     mode = documentContextAvailable ? preferredMode : 'chat';
     updateModeButtons();
     renderMessages();
@@ -731,7 +752,8 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
   };
 
   const scheduleScroll = (): void => {
-    window.requestAnimationFrame(() => scrollMessagesToBottom());
+    if (scrollFrame !== undefined) window.cancelAnimationFrame(scrollFrame);
+    scrollFrame = window.requestAnimationFrame(() => { scrollFrame = undefined; if (!disposed && !suspendedState) scrollMessagesToBottom(); });
   };
 
   const badgeText = (badge: MessageBadge): string => {
@@ -752,8 +774,21 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
     return tAiChat('tool.summary', { count: String(calls.length), tools });
   };
 
+  const rendered = new Map<string, { message: ChatUiMessage; element: HTMLElement }>();
   const renderMessages = (): void => {
-    messagesEl.innerHTML = '';
+    if (disposed || suspendedState) return;
+    trimMessages();
+    const visible = messages.slice(-visibleMessageCount);
+    const ids = new Set(visible.map(message => message.id));
+    for (const [id, entry] of rendered) if (!ids.has(id)) { entry.element.remove(); rendered.delete(id); }
+    messagesEl.querySelector('.ai-chat-empty')?.remove();
+    messagesEl.querySelector('.ai-chat-earlier')?.remove();
+    if (messages.length > visible.length) {
+      const earlier = document.createElement('button');
+      earlier.className = 'ai-chat-earlier'; earlier.textContent = tAiChat('message.showEarlier');
+      earlier.onclick = () => { visibleMessageCount += MAX_VISIBLE_MESSAGES; renderMessages(); };
+      messagesEl.prepend(earlier);
+    }
     if (messages.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'ai-chat-empty';
@@ -764,7 +799,9 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
       messagesEl.appendChild(empty);
       return;
     }
-    for (const message of messages) {
+    for (const message of visible) {
+      const cached = rendered.get(message.id);
+      if (cached && (Object.keys(message) as Array<keyof ChatUiMessage>).every(key => cached.message[key] === message[key])) continue;
       const item = document.createElement('div');
       item.className = `ai-chat-msg ${message.role}`;
       item.dataset.messageId = message.id;
@@ -803,13 +840,16 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         item.appendChild(details);
       }
 
-      const bubble = document.createElement('div');
+      const previousBubble = cached?.element.querySelector<HTMLElement>('.ai-chat-bubble');
+      const bubble = previousBubble && streamRenderers.has(previousBubble) ? previousBubble : document.createElement('div');
       bubble.className = 'ai-chat-bubble';
       if (message.role === 'user') {
         bubble.textContent = message.content;
       } else if (message.streaming) {
         bubble.classList.add('streaming-markdown');
         renderStreamingBubble(bubble, message.content);
+      } else if (streamRenderers.has(bubble)) {
+        renderStreamingBubble(bubble, message.content, true);
       } else {
         bubble.innerHTML = renderAssistantMarkdown(message.content || tAiChat('message.empty'));
         decorateRenderedMarkdown(bubble, (code) => deps.copyText(code, tAiChat('code.copiedToast')));
@@ -830,34 +870,46 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         item.appendChild(errorText);
       }
 
-      messagesEl.appendChild(item);
+      if (cached) cached.element.replaceWith(item); else messagesEl.appendChild(item);
+      rendered.set(message.id, { message: { ...message }, element: item });
+    }
+    let previous: Element | null = messagesEl.querySelector('.ai-chat-earlier');
+    for (const message of visible) {
+      const element = rendered.get(message.id)!.element;
+      const next = previous ? previous.nextElementSibling : messagesEl.firstElementChild;
+      if (element !== next) messagesEl.insertBefore(element, next);
+      previous = element;
     }
     scheduleScroll();
   };
 
   /** Streaming replies render as Markdown on each animation frame (calls are rAF-throttled). */
-  const renderStreamingBubble = (bubble: HTMLElement, content: string): void => {
+  const streamRenderers = new WeakMap<HTMLElement, ReturnType<typeof createStreamingMarkdownRenderer>>();
+  const renderStreamingBubble = (bubble: HTMLElement, content: string, final = false): void => {
     if (!content) { bubble.textContent = '…'; return; }
-    bubble.innerHTML = renderStreamingMarkdown(content);
-    decorateRenderedMarkdown(bubble, (code) => deps.copyText(code, tAiChat('code.copiedToast')));
+    let renderer = streamRenderers.get(bubble);
+    if (!renderer) { renderer = createStreamingMarkdownRenderer(); streamRenderers.set(bubble, renderer); }
+    renderer.render(bubble, content, node => decorateRenderedMarkdown(node, code => deps.copyText(code, tAiChat('code.copiedToast'))), final, true);
   };
 
   const renderStreamingMessage = (): void => {
-    if (renderScheduled) return;
+    if (renderScheduled || !openState || suspendedState) return;
     renderScheduled = true;
-    window.requestAnimationFrame(() => {
-      renderScheduled = false;
-      if (disposed) return;
-      if (streamingMessageId) {
-        const item = messagesEl.querySelector(`[data-message-id="${streamingMessageId}"] .ai-chat-bubble`);
-        if (item) {
-          renderStreamingBubble(item as HTMLElement, messages.find((message) => message.id === streamingMessageId)?.content ?? '');
-          scheduleScroll();
-          return;
+    renderTimer = setTimeout(() => {
+      renderFrame = window.requestAnimationFrame(() => {
+        renderScheduled = false;
+        if (disposed || suspendedState || !openState) return;
+        if (streamingMessageId) {
+          const item = messagesEl.querySelector(`[data-message-id="${streamingMessageId}"] .ai-chat-bubble`);
+          if (item) {
+            renderStreamingBubble(item as HTMLElement, messages.find((message) => message.id === streamingMessageId)?.content ?? '');
+            scheduleScroll();
+            return;
+          }
         }
-      }
-      renderMessages();
-    });
+        renderMessages();
+      });
+    }, 100);
   };
 
   // ----------------------------------------------------------- model menu
@@ -907,12 +959,13 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
     modeMenu.classList.remove('open');
     modelMenu.classList.toggle('open');
   });
-  document.addEventListener('click', (event) => {
+  const onDocumentClick = (event: MouseEvent): void => {
     if (disposed) return;
     const target = event.target as HTMLElement;
     if (modelMenu.classList.contains('open') && !target.closest('.ai-chat-model-switcher')) modelMenu.classList.remove('open');
     if (modeMenu.classList.contains('open') && !target.closest('.ai-chat-mode-picker')) modeMenu.classList.remove('open');
-  });
+  };
+  document.addEventListener('click', onDocumentClick);
 
   // ------------------------------------------------------------- settings
 
@@ -1100,7 +1153,11 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
   };
 
   const addAttachment = (attachment: AiChatAttachment): void => {
-    if (pendingAttachments.length >= 6) return;
+    const sizes = [...pendingAttachments, attachment].map(item => aiChatAttachmentBytes(item));
+    if (!aiChatImagesWithinBudget(sizes)) {
+      messages.push({ id: createRequestId(), role: 'assistant', content: '', error: tAiChat('attachment.tooLarge'), badge: 'error' });
+      renderMessages(); return;
+    }
     pendingAttachments.push(attachment);
     updatePendingAttachments();
   };
@@ -1141,6 +1198,10 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
   const sendMessage = (): void => {
     if (activeRequestId) return;
     const text = inputEl.value.trim();
+    if (text.length > MAX_REPLY_CHARS) {
+      messages.push({ id: createRequestId(), role: 'assistant', content: '', error: tAiChat('input.tooLarge'), badge: 'error' });
+      renderMessages(); return;
+    }
     if (text.length === 0 && pendingAttachments.length === 0) return;
     if (!hasApiKey) {
       openSettings(tAiChat('settings.apiKeyRequired'));
@@ -1154,7 +1215,6 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
       attachments: pendingAttachments.length > 0 ? [...pendingAttachments] : undefined,
     };
     messages.push(userMessage);
-    if (text.length > 0) history.push({ role: 'user', content: text });
 
     const assistantMessage: ChatUiMessage = {
       id: createRequestId(),
@@ -1173,7 +1233,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
       model: selectedModel,
       userMessage: text,
       attachments: [...pendingAttachments],
-      history: history.slice(0, -1).slice(-40),
+      history: messages.slice(0, -2).filter(message => !message.error && message.content).slice(-40).map(({ role, content }) => ({ role, content })),
       documentContent: mode === 'agent' && documentContextAvailable ? deps.getDocumentContent() : undefined,
       documentFileName: mode === 'agent' && documentContextAvailable ? deps.getFileName() : undefined,
       documentFilePath: mode === 'agent' && documentContextAvailable ? deps.getFilePath() : undefined,
@@ -1249,13 +1309,20 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
   inputEl.addEventListener('paste', (event) => {
     const files = event.clipboardData?.files;
     if (!files || files.length === 0) return;
+    const images = Array.from(files).filter(file => file.type.startsWith('image/'));
+    if (!aiChatImagesWithinBudget([...pendingAttachments.map(aiChatAttachmentBytes), ...images.map(file => file.size)])) {
+      event.preventDefault();
+      messages.push({ id: createRequestId(), role: 'assistant', content: '', error: tAiChat('attachment.tooLarge'), badge: 'error' });
+      renderMessages(); return;
+    }
     let handled = false;
-    for (const file of Array.from(files)) {
+    for (const file of images) {
       if (!file.type.startsWith('image/')) continue;
       event.preventDefault();
       handled = true;
       const reader = new FileReader();
       reader.addEventListener('load', () => {
+        if (disposed) return;
         addAttachment({ source: 'upload', name: file.name, url: String(reader.result) });
       });
       reader.readAsDataURL(file);
@@ -1298,8 +1365,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         break;
       case 'clear':
         messages = [];
-        history = [];
-        persistSession();
+            persistSession();
         renderMessages();
         break;
       case 'settings':
@@ -1308,7 +1374,9 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         openSettings();
         break;
       case 'attach':
-        deps.postMessage({ type: 'aiChat.pickImage' });
+        const requestId = createRequestId();
+        imageRequests.add(requestId);
+        deps.postMessage({ type: 'aiChat.pickImage', requestId });
         break;
       case 'url':
         urlRow.classList.toggle('visible');
@@ -1339,26 +1407,16 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
 
   // --------------------------------------------------------- host messages
 
-  const applyAgentPatches = (patches: import('@easyview/contracts').AiTextPatch[], messageId: string): void => {
+  const applyAgentPatches = async (patches: import('@easyview/contracts').AiTextPatch[], messageId: string): Promise<void> => {
     const message = messages.find((item) => item.id === messageId);
-    if (!documentContextAvailable) {
-      if (message) message.badge = 'no-doc';
+    if (!documentContextAvailable) throw new Error(tAiChat('badge.noDoc'));
+    const nextContent = applyAiTextPatches(deps.getDocumentContent(), patches);
+    if (nextContent === deps.getDocumentContent()) {
+      if (message) message.badge = 'no-change';
       return;
     }
-    try {
-      const nextContent = applyAiTextPatches(deps.getDocumentContent(), patches);
-      if (nextContent === deps.getDocumentContent()) {
-        if (message) message.badge = 'no-change';
-        return;
-      }
-      deps.applyDocumentEdit(nextContent);
-      if (message) message.badge = 'applied';
-    } catch (error) {
-      if (message) {
-        message.badge = 'error';
-        message.error = error instanceof Error ? error.message : String(error);
-      }
-    }
+    await deps.applyDocumentEdit(nextContent);
+    if (message) message.badge = 'applied';
   };
 
   const handleMessage = (message: HostToEditorMessage): boolean => {
@@ -1370,6 +1428,15 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         if (!target) return true;
         if (message.text) target.content += message.text;
         if (message.reasoning) target.reasoning = (target.reasoning ?? '') + message.reasoning;
+        if (target.content.length + (target.reasoning?.length ?? 0) > MAX_REPLY_CHARS) {
+          deps.postMessage({ type: 'aiChat.abort', requestId: message.requestId });
+          target.content = target.content.slice(0, MAX_REPLY_CHARS);
+          target.reasoning = target.reasoning?.slice(0, Math.max(0, MAX_REPLY_CHARS - target.content.length));
+          target.error = tAiChat('message.tooLarge');
+          target.badge = 'stopped';
+          finishStreaming(); renderMessages(); persistSession();
+          return true;
+        }
         renderStreamingMessage();
         return true;
       }
@@ -1388,11 +1455,22 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         return true;
       }
       case 'aiChat.applyPatches': {
-        if (message.requestId !== activeRequestId) return true;
+        if (message.requestId !== activeRequestId) return false;
         const target = messages.find((item) => item.id === streamingMessageId);
-        if (!target || message.path !== deps.getFilePath()) return true;
-        applyAgentPatches(message.patches, target.id);
-        renderMessages();
+        const acknowledge = (error?: string) => deps.postMessage({ type: 'aiChat.patchesApplied', requestId: message.requestId, operationId: message.operationId, error });
+        if (!target || message.path !== deps.getFilePath()) {
+          acknowledge(tAiChat('badge.noDoc'));
+          return true;
+        }
+        void applyAgentPatches(message.patches, target.id).then(() => {
+          acknowledge();
+          renderMessages();
+        }, error => {
+          const detail = error instanceof Error ? error.message : String(error);
+          target.badge = 'error'; target.error = detail;
+          acknowledge(detail);
+          renderMessages();
+        });
         return true;
       }
       case 'aiChat.done': {
@@ -1405,9 +1483,6 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         if (message.finishReason === 'length' && target) {
           target.error = tAiChat('truncated');
         }
-        if (target && target.content) {
-          history.push({ role: 'assistant', content: target.content });
-        }
         finishStreaming();
         renderMessages();
         persistSession();
@@ -1419,12 +1494,10 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         if (message.aborted) {
           if (target) {
             target.badge = 'stopped';
-            if (target.content) history.push({ role: 'assistant', content: target.content });
           }
         } else if (target) {
           if (target.content) {
             // Partial reply kept; error surfaced alongside.
-            history.push({ role: 'assistant', content: target.content });
             target.badge = 'error';
             target.error = message.message;
           } else {
@@ -1438,6 +1511,8 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         return true;
       }
       case 'aiChat.settingsResponse': {
+        if (settingsRequests.get(message.requestId) !== 'get') return false;
+        settingsRequests.delete(message.requestId);
         settingsLoaded = true;
         settings = message.settings;
         hasApiKey = message.hasApiKey;
@@ -1447,7 +1522,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
       }
       case 'aiChat.settingsSaved': {
         const kind = settingsRequests.get(message.requestId);
-        // Replies are broadcast to every editor instance; only the panel that asked reacts.
+        // Standalone and document panels accept only requests they own.
         if (!kind) return true;
         settingsRequests.delete(message.requestId);
         if (kind === 'save' && pendingSave?.ids.delete(message.requestId)) {
@@ -1458,6 +1533,11 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         return true;
       }
       case 'aiChat.imagePicked': {
+        if (!imageRequests.delete(message.requestId)) return false;
+        if (message.error) {
+          messages.push({ id: createRequestId(), role: 'assistant', content: '', error: message.error, badge: 'error' });
+          renderMessages();
+        }
         for (const image of message.images) {
           addAttachment({ source: 'upload', name: image.name, url: image.dataUrl });
         }
@@ -1482,9 +1562,11 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
     }
     deps.onVisibilityChange?.(visible);
     if (visible) {
+      renderMessages();
       if (!settingsLoaded) requestSettings();
       notifyLayoutChange();
-      window.setTimeout(() => {
+      if (focusTimer) clearTimeout(focusTimer);
+      focusTimer = setTimeout(() => {
         if (!disposed && openState) inputEl.focus();
       }, 220);
     } else {
@@ -1501,6 +1583,10 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
 
   const setFilePath = (filePath: string): void => {
     if (filePath === currentFilePath) return;
+    if (activeRequestId) {
+      deps.postMessage({ type: 'aiChat.abort', requestId: activeRequestId });
+      finishStreaming();
+    }
     persistSession();
     currentFilePath = filePath;
     restoreSession();
@@ -1516,16 +1602,31 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
 
   const setSuspended = (suspended: boolean): void => {
     if (disposed || root.classList.contains('suspended') === suspended) return;
+    suspendedState = suspended;
     root.classList.toggle('suspended', suspended);
+    if (!suspended && openState) renderMessages();
     if (openState) notifyLayoutChange();
   };
 
   const destroy = (): void => {
     if (disposed) return;
+    persistSession();
     disposed = true;
+    document.removeEventListener('click', onDocumentClick);
+    closeSettings();
+    if (focusTimer) clearTimeout(focusTimer);
+    if (scrollFrame !== undefined) window.cancelAnimationFrame(scrollFrame);
+    if (renderTimer) clearTimeout(renderTimer);
+    if (renderFrame !== undefined) window.cancelAnimationFrame(renderFrame);
+    if (pendingSave) { clearTimeout(pendingSave.timer); pendingSave.resolve(); pendingSave = null; }
+    settingsRequests.clear();
+    imageRequests.clear();
     if (activeRequestId) {
       deps.postMessage({ type: 'aiChat.abort', requestId: activeRequestId });
     }
+    rendered.clear();
+    messages = [];
+    pendingAttachments = [];
     root.remove();
   };
 

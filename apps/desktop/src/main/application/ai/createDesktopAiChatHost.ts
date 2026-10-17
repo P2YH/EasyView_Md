@@ -1,3 +1,4 @@
+import { aiChatImagesWithinBudget } from '@easyview/contracts';
 import { app, dialog, safeStorage } from 'electron';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -64,6 +65,8 @@ export function createDesktopAiChatHost(): AiChatHost {
           ],
         });
         if (chosen.canceled) return [];
+        const stats = await Promise.all(chosen.filePaths.map(file => fs.stat(file)));
+        if (!aiChatImagesWithinBudget(stats.map(stat => stat.size))) throw new Error(tAiHost('imageBudget'));
         const images: Array<{ name: string; dataUrl: string }> = [];
         for (const filePath of chosen.filePaths) {
           const bytes = await fs.readFile(filePath);

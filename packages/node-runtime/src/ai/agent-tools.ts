@@ -123,6 +123,7 @@ function fileTools(rootPath: string, activeDocument?: ActiveAgentDocument): Tool
     }
     if (!requestedPath) throw new Error(tAi('tools.pathRequired'));
     const normalized = ensureRelativePath(requestedPath);
+    if (activeDocument && normalized === activeRelativePath) return { path: normalized, content: activeDocument.content, active: true };
     const filePath = await resolveExistingPath(rootPath, normalized);
     const stat = await fs.lstat(filePath);
     if (!stat.isFile()) throw new Error(tAi('tools.notRegularFile'));
@@ -205,6 +206,7 @@ function fileTools(rootPath: string, activeDocument?: ActiveAgentDocument): Tool
         if (inspected.active) {
           if (!activeDocument) throw new Error(tAi('tools.applyPatch.activeDocumentUnavailable'));
           await activeDocument.applyPatches(patches);
+          activeDocument.content = nextContent;
         } else {
           if (!inspected.diskPath) throw new Error(tAi('tools.applyPatch.targetPathUnavailable'));
           await writeFileAtomically(inspected.diskPath, nextContent);

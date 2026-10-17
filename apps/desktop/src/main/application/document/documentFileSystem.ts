@@ -1,6 +1,7 @@
-import { promises as fs } from 'node:fs';
+import { createReadStream, promises as fs } from 'node:fs';
+import { StringDecoder } from 'node:string_decoder';
 import { writeFileAtomically } from '@easyview/node-runtime';
-import { hashContent } from '@easyview/editor-sync';
+import { createContentHasher, hashContent } from '@easyview/editor-sync';
 
 export type CompareAndWriteResult = 'ok' | 'conflict';
 
@@ -37,23 +38,21 @@ export function createNodeDocumentFileSystem(): DocumentFileSystem {
       return writeFileAtomically(filePath, content);
     },
     async compareAndWrite(filePath, expectedHash, content) {
-      let current: string;
       try {
-        current = await fs.readFile(filePath, 'utf8');
+        const before = await fingerprintDocument(filePath);
+        if (!before.stable || before.hash !== expectedHash) return 'conflict';
+        // Nanosecond metadata is a quick rejection, never a substitute for the
+        // second content check (same-size writes can preserve timestamps).
+        if (!sameFileVersion(before.stat, await fs.stat(filePath, { bigint: true }))) return 'conflict';
+        const checked = await fingerprintDocument(filePath);
+        if (!checked.stable || checked.hash !== expectedHash || !sameFileVersion(before.stat, checked.stat)) return 'conflict';
+        await writeFileAtomically(filePath, content);
+        const published = await fingerprintDocument(filePath);
+        if (!published.stable || published.hash !== hashContent(content)) return 'conflict';
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') return 'conflict';
         throw error;
       }
-      if (hashContent(current) !== expectedHash) return 'conflict';
-      // Re-read immediately before replacement so an external writer that
-      // lands during the initial read is detected before we publish bytes.
-      const beforeWrite = await fs.readFile(filePath, 'utf8');
-      if (hashContent(beforeWrite) !== expectedHash) return 'conflict';
-      await writeFileAtomically(filePath, content);
-      // A non-cooperating external writer can still race the rename. Verify
-      // the published bytes and surface that race as a conflict.
-      const afterWrite = await fs.readFile(filePath, 'utf8');
-      if (hashContent(afterWrite) !== hashContent(content)) return 'conflict';
       return 'ok';
     },
     async stat(filePath) {
@@ -67,4 +66,25 @@ export function createNodeDocumentFileSystem(): DocumentFileSystem {
       return fs.unlink(filePath);
     },
   };
+}
+
+function sameFileVersion(a: import('node:fs').BigIntStats, b: import('node:fs').BigIntStats): boolean {
+  return a.dev === b.dev && a.ino === b.ino && a.size === b.size && a.mtimeNs === b.mtimeNs && a.ctimeNs === b.ctimeNs;
+}
+
+/** Bounded buffers; StringDecoder preserves split UTF-8 sequences and BOM semantics. */
+export async function fingerprintDocument(filePath: string) {
+  const handle = await fs.open(filePath, 'r');
+  try {
+    const before = await handle.stat({ bigint: true });
+    const hash = createContentHasher();
+    const decoder = new StringDecoder('utf8');
+    for await (const chunk of createReadStream(filePath, { fd: handle.fd, autoClose: false, highWaterMark: 64 * 1024 })) {
+      hash.update(decoder.write(chunk as Buffer));
+    }
+    hash.update(decoder.end());
+    const after = await handle.stat({ bigint: true });
+    const current = await fs.stat(filePath, { bigint: true });
+    return { hash: hash.digest(), stat: current, stable: sameFileVersion(before, after) && sameFileVersion(after, current) };
+  } finally { await handle.close(); }
 }

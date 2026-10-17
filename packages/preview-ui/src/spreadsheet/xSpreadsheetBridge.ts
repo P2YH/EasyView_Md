@@ -1,4 +1,6 @@
 import ExcelJS from 'exceljs';
+import JSZip from 'jszip';
+import { tPreview } from '../preview.i18n';
 import type { XsCell, XsCellStyle, XsColumnsData, XsRowsData, XsSheetData } from './xSpreadsheetTypes';
 import { isThemeableBackground, isThemeableForeground } from './spreadsheetTheme';
 
@@ -11,6 +13,7 @@ const MIN_COL_WIDTH_PX = 32;
 
 /** Load workbook bytes into x-data-spreadsheet sheet payloads. */
 export async function workbookBytesToXsSheets(bytes: ArrayBuffer): Promise<XsSheetData[]> {
+  await validateWorkbookBudget(bytes);
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(bytes);
   const sheets: XsSheetData[] = [];
@@ -18,6 +21,26 @@ export async function workbookBytesToXsSheets(bytes: ArrayBuffer): Promise<XsShe
     sheets.push(worksheetToXsSheet(worksheet, workbook));
   });
   return sheets.length > 0 ? sheets : [emptySheet('Sheet1')];
+}
+
+/** Check archive sizes and logical expansion before ExcelJS builds its object graph. */
+async function validateWorkbookBudget(bytes: ArrayBuffer): Promise<void> {
+  const zip = await JSZip.loadAsync(bytes);
+  let expanded = 0, sheets = 0, cells = 0, mergedCells = 0;
+  const reject = () => { throw new Error(tPreview('spreadsheet.tooComplex')); };
+  for (const entry of Object.values(zip.files)) {
+    if (entry.dir) continue;
+    const size = (entry as unknown as { _data: { uncompressedSize: number } })._data.uncompressedSize;
+    if (!Number.isSafeInteger(size) || size < 0) reject();
+    expanded += size;
+    if (expanded > 128 * 1024 * 1024) reject();
+    if (!/^xl\/worksheets\/[^/]+\.xml$/i.test(entry.name)) continue;
+    if (++sheets > 32 || size > 32 * 1024 * 1024) reject();
+    const xml = await entry.async('string');
+    const counts = validateSheetXml(xml);
+    cells += counts.cells; mergedCells += counts.mergedCells;
+    if (cells > 500_000 || mergedCells > 500_000) reject();
+  }
 }
 
 /** Serialize x-data-spreadsheet payloads back to xlsx bytes. */
@@ -43,7 +66,7 @@ function emptySheet(name: string): XsSheetData {
   };
 }
 
-function worksheetToXsSheet(worksheet: ExcelJS.Worksheet, workbook: ExcelJS.Workbook): XsSheetData {
+export function worksheetToXsSheet(worksheet: ExcelJS.Worksheet, workbook: ExcelJS.Workbook): XsSheetData {
   const styles: XsStyle[] = [];
   const styleIndex = new Map<string, number>();
   const rowCount = Math.max(DEFAULT_ROWS, worksheet.rowCount || 0);
@@ -52,20 +75,7 @@ function worksheetToXsSheet(worksheet: ExcelJS.Worksheet, workbook: ExcelJS.Work
   const cols: NonNullable<XsSheetData['cols']> = { len: colCount };
   const mergeRanges = (worksheet.model.merges || []).map(String);
   const merges: string[] = [];
-  const slaveCells = new Set<string>();
-
-  for (const range of mergeRanges) {
-    const parsed = parseA1Range(range);
-    if (!parsed) continue;
-    merges.push(range);
-    const { sri, sci, eri, eci } = parsed;
-    for (let ri = sri; ri <= eri; ri += 1) {
-      for (let ci = sci; ci <= eci; ci += 1) {
-        if (ri === sri && ci === sci) continue;
-        slaveCells.add(`${ri},${ci}`);
-      }
-    }
-  }
+  for (const range of mergeRanges) if (parseA1Range(range)) merges.push(range);
 
   worksheet.columns.forEach((column, index) => {
     if (column && typeof column.width === 'number' && column.width > 0) {
@@ -74,7 +84,7 @@ function worksheetToXsSheet(worksheet: ExcelJS.Worksheet, workbook: ExcelJS.Work
     }
   });
 
-  worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+  worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
     const ri = rowNumber - 1;
     if (typeof row.height === 'number' && row.height > 0) {
       rows[ri] = rows[ri] || { cells: {} };
@@ -82,10 +92,9 @@ function worksheetToXsSheet(worksheet: ExcelJS.Worksheet, workbook: ExcelJS.Work
     }
 
     const cells: Record<number, XsCell> = {};
-    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+    row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
       const ci = colNumber - 1;
-      if (slaveCells.has(`${ri},${ci}`)) return;
-      // Skip pure merge-slave typed cells even if merge list was incomplete.
+      // ExcelJS owns merge membership; do not materialize a second coordinate set.
       if (cell.isMerged && cell.master && cell.master.address !== cell.address) return;
 
       const text = cellToText(cell);
@@ -248,7 +257,7 @@ function cellToXsStyle(cell: ExcelJS.Cell, workbook: ExcelJS.Workbook): XsStyle 
   return style;
 }
 
-function applyXsStyleToCell(style: XsStyle, cell: ExcelJS.Cell): void {
+export function applyXsStyleToCell(style: XsStyle, cell: ExcelJS.Cell): void {
   if (style.font || style.color || style.strike || style.underline) {
     cell.font = {
       ...cell.font,
@@ -356,4 +365,18 @@ function colLettersToIndex(letters: string): number {
 function sanitizeSheetName(name: string): string {
   const cleaned = name.replace(/[\\/?*[\]]/g, '_').slice(0, 31).trim();
   return cleaned || 'Sheet1';
+}
+
+/** Logical expansion is checked only when that worksheet is requested. */
+export function validateSheetXml(xml: string): { cells: number; mergedCells: number } {
+  let cells = 0, mergedCells = 0;
+  const reject = () => { throw new Error(tPreview('spreadsheet.tooComplex')); };
+    for (const _ of xml.matchAll(/<c(?:\s|>)/g)) if (++cells > 500_000) reject();
+    for (const match of xml.matchAll(/<mergeCell\b[^>]*\bref=["']([^"']+)["']/g)) {
+      const range = parseA1Range(match[1]);
+      if (!range) reject();
+      mergedCells += (range!.eri - range!.sri + 1) * (range!.eci - range!.sci + 1);
+      if (mergedCells > 500_000) reject();
+    }
+  return { cells, mergedCells };
 }

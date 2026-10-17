@@ -18,6 +18,7 @@ function getDesktopAssets(): PreviewAssetConfig {
     fileViewerAssetBaseUrl: new URL('./vendor/file-viewer/', window.location.href).toString(),
     pptAssetBaseUrl: new URL('./vendor/file-viewer-ppt/', window.location.href).toString(),
     docWorkerUrl: localizedAssetUrl('./workers/doc-worker.js'),
+    spreadsheetWorkerUrl: localizedAssetUrl('./workers/spreadsheet-worker.js'),
     heicHostUrl: localizedAssetUrl('./heic-host.html'),
     themeStorage: createLocalPreviewThemeStorage(window.localStorage),
   };

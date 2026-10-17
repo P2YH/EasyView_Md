@@ -1,4 +1,5 @@
 import type { GuardBranch, GuardClient, GuardCommit, GuardFile, GuardHistory, GuardRepository, GuardRequest, GuardStatus, GuardUiState } from '@easyview/contracts';
+import { LruCache, windowedList } from './guardList';
 import { formatGuard, tGuard } from './guard.i18n';
 /** `header: false` drops the built-in title bar when the host already shows a title and refresh action. */
 export interface GuardPanelOptions { client: GuardClient; grip?: string; header?: boolean; onExpandStateChange?: (allExpanded: boolean) => void }
@@ -22,11 +23,12 @@ export class VersionGuardPanel {
   private generation = 0;
   private timer?: ReturnType<typeof setTimeout>;
   private lastRefresh = new Map<string, number>();
-  private histories = new Map<string, GuardHistory>();
+  private histories = new LruCache<string, GuardHistory>(8);
   private selectedCommit?: GuardCommit;
   private collapsedDirs = new Set<string>();
-  private commitFiles = new Map<string, GuardFile[]>();
+  private commitFiles = new LruCache<string, GuardFile[]>(16);
   private historyKey?: string;
+  private historyRequests = new Set<string>();
   private historyCollapsed = false;
   private expandToggle?: HTMLButtonElement;
   private lastAllExpanded?: boolean;
@@ -276,22 +278,24 @@ export class VersionGuardPanel {
     type Node = { dirs: Map<string, Node>; files: GuardFile[] };
     const tree: Node = { dirs: new Map(), files: [] };
     for (const file of files) { let node = tree; for (const part of file.path.replace(/\/$/, '').split('/').slice(0, -1)) { let next = node.dirs.get(part); if (!next) { next = { dirs: new Map(), files: [] }; node.dirs.set(part, next); } node = next; } node.files.push(file); }
+    const visibleRows: Array<() => HTMLElement> = [];
     const walk = (node: Node, depth: number, prefix: string): void => {
       for (const [name, child] of [...node.dirs].sort(([a], [b]) => a.localeCompare(b))) {
         // Collapse single-child directory chains like VS Code's compact folders.
         let label = name; let target = child; let path = `${prefix}${name}/`;
         while (!target.files.length && target.dirs.size === 1) { const [[next, nested]] = [...target.dirs]; label += `/${next}`; path += `${next}/`; target = nested; }
         const key = `${id}:${source}:${path}`; const collapsed = this.collapsedDirs.has(key);
+        visibleRows.push(() => {
         const row = document.createElement('div'); row.className = 'guard-file guard-dir'; row.style.paddingLeft = `${8 + depth * 12}px`; row.tabIndex = 0; row.title = path; row.setAttribute('role', 'treeitem'); row.setAttribute('aria-expanded', String(!collapsed));
         row.innerHTML = `<span class="guard-twisty">${collapsed ? ICONS.chevronRight : ICONS.chevronDown}</span><span class="guard-file-icon">${ICONS.folder}</span>`;
         const text = document.createElement('span'); text.className = 'guard-file-name'; text.textContent = label; row.append(text);
         const toggle = (): void => { if (collapsed) this.collapsedDirs.delete(key); else this.collapsedDirs.add(key); this.render(); };
         row.onclick = toggle; row.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggle(); } };
-        root.append(row); if (!collapsed) walk(target, depth + 1, path);
+        return row; }); if (!collapsed) walk(target, depth + 1, path);
       }
-      for (const file of [...node.files].sort((a, b) => a.path.localeCompare(b.path))) { const row = this.fileRow(id, file, source, busy, conflict, true); row.style.paddingLeft = `${8 + depth * 12 + 16}px`; root.append(row); }
+      for (const file of [...node.files].sort((a, b) => a.path.localeCompare(b.path))) { visibleRows.push(() => { const row = this.fileRow(id, file, source, busy, conflict, true); row.style.paddingLeft = `${8 + depth * 12 + 16}px`; return row; }); }
     };
-    walk(tree, 0, '');
+    walk(tree, 0, ''); const viewport = document.createElement('div'); root.append(viewport); windowedList(viewport, visibleRows);
   }
   private fileRow(id: string, file: GuardFile, source: 'working' | 'staged' | 'commit', busy = false, conflict = false, nested = false): HTMLElement {
     const row = document.createElement('div'); row.className = 'guard-file'; row.title = file.oldPath ? `${file.oldPath} → ${file.path}` : file.path; row.dataset.path = file.path;
@@ -315,8 +319,11 @@ export class VersionGuardPanel {
   private async loadHistory(cursor?: string): Promise<void> {
     const id = this.ui.selected; if (!id || this.histories.has(id) && !cursor) return;
     const generation = this.generation;
-    try { const page = await this.options.client.request({ method: 'history', repository: id, cursor }) as GuardHistory; if (generation !== this.generation || this.disposed) return; this.histories.set(id, { ...page, entries: cursor ? [...(this.histories.get(id)?.entries ?? []), ...page.entries] : page.entries }); this.renderHistory(); }
-    catch (error) { this.error(error); }
+    const requestKey = `${id}:${cursor ?? ''}`; if (this.historyRequests.has(requestKey)) return;
+    this.historyRequests.add(requestKey);
+    try { const page = await this.options.client.request({ method: 'history', repository: id, cursor }) as GuardHistory; if (generation !== this.generation || this.disposed) return; this.histories.set(id, { ...page, entries: (cursor ? [...(this.histories.get(id)?.entries ?? []), ...page.entries] : page.entries).slice(-500) }); this.renderHistory(); }
+    catch (error) { if (generation === this.generation && !this.disposed) this.error(error); }
+    finally { this.historyRequests.delete(requestKey); }
   }
   /**
    * Rebuilds the history footer only when what it shows changes. render() runs on every status
@@ -329,7 +336,7 @@ export class VersionGuardPanel {
   }
   private renderHistory(): void {
     const id = this.ui.selected; const history = id ? this.histories.get(id) : undefined;
-    const key = id ? `${id}|${this.selectedCommit?.hash ?? ''}|${history?.entries.length ?? -1}|${history?.cursor ?? ''}|${this.selectedCommit && this.commitFiles.has(this.selectedCommit.hash) ? 'files' : ''}|${this.repositories.find(repo => repo.id === id)?.name ?? ''}|${this.historyCollapsed}` : '';
+    const key = id ? `${id}|${this.selectedCommit?.hash ?? ''}|${history?.entries[0]?.hash ?? ''}|${history?.entries.length ?? -1}|${history?.cursor ?? ''}|${this.selectedCommit && this.commitFiles.has(`${id}:${this.selectedCommit.hash}`) ? 'files' : ''}|${this.repositories.find(repo => repo.id === id)?.name ?? ''}|${this.historyCollapsed}` : '';
     if (key === this.historyKey) return; this.historyKey = key;
     this.footer.replaceChildren(); if (!id) return;
     const head = document.createElement('div'); head.className = 'guard-history-head'; head.tabIndex = 0; head.setAttribute('role', 'button'); head.setAttribute('aria-expanded', String(!this.historyCollapsed));
@@ -348,17 +355,20 @@ export class VersionGuardPanel {
       const back = this.button('', tGuard('back'), () => { this.selectedCommit = undefined; this.renderHistory(); }); back.className = 'guard-back'; back.innerHTML = ICONS.back; back.append(tGuard('back')); head.append(back);
       const description = document.createElement('pre'); description.textContent = `${commit.message}\n\n${commit.author} · ${new Date(commit.timestamp).toLocaleString()}\n${commit.hash}${commit.parents.length > 1 ? `\n${tGuard('first')}` : ''}`; this.footer.append(description);
       const filesRoot = document.createElement('div'); this.footer.append(filesRoot);
-      const cached = this.commitFiles.get(commit.hash);
-      if (cached) { cached.forEach(file => filesRoot.append(this.fileRow(id, file, 'commit'))); return; }
-      void this.options.client.request({ method: 'commitFiles', repository: id, revision: commit.hash }).then(files => { this.commitFiles.set(commit.hash, files as GuardFile[]); if (this.ui.selected !== id || this.selectedCommit !== commit) return; this.renderHistory(); }).catch(error => this.error(error)); return;
+      const cached = this.commitFiles.get(`${id}:${commit.hash}`);
+      if (cached) { windowedList(filesRoot, cached.map(file => () => this.fileRow(id, file, 'commit'))); return; }
+      const generation = this.generation;
+      void this.options.client.request({ method: 'commitFiles', repository: id, revision: commit.hash }).then(files => { if (this.disposed || generation !== this.generation) return; this.commitFiles.set(`${id}:${commit.hash}`, files as GuardFile[]); if (this.ui.selected !== id || this.selectedCommit !== commit) return; this.renderHistory(); }).catch(error => this.error(error)); return;
     }
-    for (const commit of this.histories.get(id)?.entries ?? []) {
+    const entriesRoot = document.createElement('div'); this.footer.append(entriesRoot);
+    windowedList(entriesRoot, (this.histories.get(id)?.entries ?? []).map(commit => () => {
       const item = this.button(commit.message.split('\n')[0], `${commit.author} · ${new Date(commit.timestamp).toLocaleString()} · ${commit.hash.slice(0, 8)}`, () => { this.selectedCommit = commit; this.renderHistory(); }); item.className = 'guard-commit';
-      const author = document.createElement('small'); author.textContent = ` ${commit.author} · ${new Date(commit.timestamp).toLocaleDateString()}`; item.append(author); this.footer.append(item);
-    }
+      const author = document.createElement('small'); author.textContent = ` ${commit.author} · ${new Date(commit.timestamp).toLocaleDateString()}`; item.append(author); return item;
+    }));
+    if ((history?.entries.length ?? 0) >= 500) this.footer.append(this.button(tGuard('refresh'), tGuard('refresh'), () => { this.histories.delete(id); return this.loadHistory(); }));
     const cursor = this.histories.get(id)?.cursor; if (cursor) this.footer.append(this.button(tGuard('more'), tGuard('more'), () => this.loadHistory(cursor)));
   }
-  dispose(): void { this.closeBranchPicker(); this.disposed = true; this.generation++; if (this.timer) clearTimeout(this.timer); this.subscription.dispose(); this.discoverySubscription?.dispose(); window.removeEventListener('focus', this.onFocus); window.removeEventListener('blur', this.onBlur); void this.options.client.request({ method: 'active', active: false }).catch(() => undefined); this.element.remove(); }
+  dispose(): void { this.closeBranchPicker(); this.disposed = true; this.generation++; if (this.timer) clearTimeout(this.timer); this.histories.clear(); this.commitFiles.clear(); this.subscription.dispose(); this.discoverySubscription?.dispose(); window.removeEventListener('focus', this.onFocus); window.removeEventListener('blur', this.onBlur); void this.options.client.request({ method: 'active', active: false }).catch(() => undefined); this.element.remove(); }
 }
 function installStyles(): void {
   if (document.getElementById('version-guard-styles')) return;

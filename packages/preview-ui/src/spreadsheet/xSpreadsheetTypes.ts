@@ -87,6 +87,7 @@ export interface XsSpreadsheetLike {
 }
 
 export interface XsSpreadsheetInstance extends XsSpreadsheetLike {
+  destroy(): void;
   loadData: (data: XsSheetData[]) => unknown;
   getData: () => XsSheetData[];
   change: (callback: () => void) => unknown;

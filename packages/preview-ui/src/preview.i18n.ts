@@ -2,6 +2,8 @@ import { defineMessages } from '@easyview/contracts/i18n';
 
 export const tPreview = defineMessages({
   'zh-CN': {
+    'spreadsheet.parseTimeout': '表格解析超时，已停止处理。',
+    'spreadsheet.tooComplex': '表格超出编辑容量：最多 32 个工作表、50 万个单元格或合并单元格；单工作表数据不超过 32 MiB，解压总量不超过 128 MiB。',
     'shell.ariaLabel': '文件预览',
     'shell.creatingSession': '正在创建安全预览会话…',
     'shell.viewerLoadFailed': '预览器加载失败',
@@ -83,6 +85,8 @@ export const tPreview = defineMessages({
     'worker.loadFailed': '无法加载 Worker（HTTP {status}）',
   },
   en: {
+    'spreadsheet.parseTimeout': 'Spreadsheet parsing timed out and was stopped.',
+    'spreadsheet.tooComplex': 'Spreadsheet editing limit exceeded: 32 sheets, 500,000 cells or merged cells, 32 MiB per sheet, or 128 MiB of expanded content.',
     'shell.ariaLabel': 'File preview',
     'shell.creatingSession': 'Creating secure preview session…',
     'shell.viewerLoadFailed': 'Failed to load the viewer',

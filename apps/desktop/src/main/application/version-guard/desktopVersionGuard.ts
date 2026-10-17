@@ -1,23 +1,16 @@
+import { flushDesktopEditors } from '../document/flushDesktopEditors';
 import { dialog, shell, type WebContents } from 'electron';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { VersionGuardService, guardDiagnostics, flushGuardEditor } from '@easyview/node-runtime';
+import { VersionGuardService, guardDiagnostics } from '@easyview/node-runtime';
 import { guardTimelineComparison, type GuardComparison, type GuardRequest } from '@easyview/contracts';
 import { getWindowContext, windowSessions, workspaceRoot, runInWindowContext, sendEditorMessage, editorDocumentMessage, syncTabState } from '../host/desktopRuntime';
 import { saveSession, openWorkspaceEntryTab, stopWatcher, watchDocumentSession, closeTab } from '../document/documentWorkflow';
 import { openReadOnlyComparison } from '../timeline/desktopTimeline';
 import { tGuardHost } from './guardHost.i18n';
 const services = new Map<number, VersionGuardService>();
-const flushListeners = new Map<number, Set<(message: import('@easyview/contracts').EditorToHostMessage) => void>>();
-export function acceptGuardFlush(sender: WebContents, message: import('@easyview/contracts').EditorToHostMessage): boolean {
-  if (message.type !== 'documentFlushed') return false;
-  flushListeners.get(sender.id)?.forEach(listener => listener(message)); return true;
-}
 async function flushFiles(files: string[]): Promise<void> {
-  await Promise.all(windowSessions.values().flatMap(window => files.flatMap(file => window.context.documentSessions.findByFilePath(file).map(session => flushGuardEditor(session.documentId,
-    message => window.context.window?.webContents.send('editor.message', message),
-    listener => { const id = window.webContentsId; let set = flushListeners.get(id); if (!set) { set = new Set(); flushListeners.set(id, set); } set.add(listener); return { dispose: () => { set!.delete(listener); if (!set!.size) flushListeners.delete(id); } }; },
-  )))));
+  for (const window of windowSessions.values()) await flushDesktopEditors(window.context, files.flatMap(file => window.context.documentSessions.findByFilePath(file)));
 }
 export async function handleVersionGuard(sender: WebContents, request: GuardRequest): Promise<unknown> {
   let service = services.get(sender.id);

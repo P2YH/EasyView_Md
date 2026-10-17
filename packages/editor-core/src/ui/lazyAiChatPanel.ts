@@ -6,7 +6,7 @@ export type { AiChatPanel, AiChatPanelDeps } from './AiChatPanel';
 /**
  * Keeps the editor entry point free of the AI chat implementation and its
  * markdown renderer. The implementation is loaded only when the panel is
- * opened or an AI response arrives.
+ * opened.
  */
 export function createLazyAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
   let panel: AiChatPanel | undefined;
@@ -79,11 +79,8 @@ export function createLazyAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
     },
     handleMessage(message: HostToEditorMessage): boolean {
       if (panel) return panel.handleMessage(message);
-      if (!message?.type.startsWith('aiChat.')) return false;
-      forwardAfterLoad((value) => {
-        value.handleMessage(message);
-      });
-      return true;
+      // A panel that has never loaded cannot own an outbound request.
+      return false;
     },
     destroy(): void {
       if (disposed) return;

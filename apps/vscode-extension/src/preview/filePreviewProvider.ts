@@ -181,6 +181,7 @@ export class FilePreviewProvider implements vscode.CustomReadonlyEditorProvider<
       pptAssetBaseUrl: webviewPanel.webview.asWebviewUri(
         vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'preview', 'vendor', 'file-viewer', 'vendor', 'ppt'),
       ).toString().replace(/\/?$/, '/'),
+      spreadsheetWorkerUrl: webviewPanel.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'preview', 'workers', 'spreadsheet-worker.js')).toString(),
       docWorkerUrl: webviewPanel.webview.asWebviewUri(
         vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'preview', 'workers', 'doc-worker.js'),
       ).toString(),
@@ -266,7 +267,7 @@ export class FilePreviewProvider implements vscode.CustomReadonlyEditorProvider<
   private getHtml(
     webview: vscode.Webview,
     descriptor: PreviewDescriptor,
-    assets: { fileViewerAssetBaseUrl: string; pptAssetBaseUrl: string; docWorkerUrl: string },
+    assets: { fileViewerAssetBaseUrl: string; pptAssetBaseUrl: string; docWorkerUrl: string; spreadsheetWorkerUrl: string },
     productTheme: EasyViewThemeMode,
     fileTheme: EasyViewThemeMode | null,
     extraOrigins: string[] = [],

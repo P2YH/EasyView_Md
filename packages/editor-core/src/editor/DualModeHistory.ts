@@ -21,9 +21,23 @@ export interface ModeSnapshot {
   editorState?: any;
 }
 
+export const CROSS_MODE_HISTORY_MAX_ENTRIES = 32;
+export const CROSS_MODE_HISTORY_MAX_TEXT_BYTES = 8 * 1024 * 1024;
+
 export class DualModeHistory {
   private undoStack: ModeSnapshot[] = [];
   private redoStack: ModeSnapshot[] = [];
+
+  constructor(private readonly limits = { maxEntries: CROSS_MODE_HISTORY_MAX_ENTRIES, maxTextBytes: CROSS_MODE_HISTORY_MAX_TEXT_BYTES }) {}
+
+  private trim(): void {
+    let bytes = [...this.undoStack, ...this.redoStack].reduce((total, entry) => total + entry.markdown.length * 2, 0);
+    while (this.undoStack.length + this.redoStack.length > this.limits.maxEntries || bytes > this.limits.maxTextBytes) {
+      const removed = (this.undoStack.length ? this.undoStack : this.redoStack).shift();
+      if (!removed) break;
+      bytes -= removed.markdown.length * 2;
+    }
+  }
 
   /**
    * Record a snapshot when switching modes.
@@ -39,6 +53,7 @@ export class DualModeHistory {
     this.undoStack.push({ markdown, mode: currentMode, editorState });
     // Mode switch clears redo stack (like normal editing)
     this.redoStack.length = 0;
+    this.trim();
   }
 
   /**
@@ -54,6 +69,7 @@ export class DualModeHistory {
     // Save current state for redo
     this.redoStack.push({ markdown: currentMarkdown, mode: currentMode });
 
+    this.trim();
     return snapshot;
   }
 
@@ -70,6 +86,7 @@ export class DualModeHistory {
     // Save current state for undo
     this.undoStack.push({ markdown: currentMarkdown, mode: currentMode });
 
+    this.trim();
     return snapshot;
   }
 

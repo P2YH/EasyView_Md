@@ -576,7 +576,7 @@ function searchSourceText(
 
 export interface SourceEditorOptions {
   parent: HTMLElement;
-  onChange: (content: string) => void;
+  onChange: (content: string, edits?: import('@easyview/editor-sync').TextOffsetPatch[]) => void;
   visualMode?: 'default' | 'stickyNoteCompactMarkdown' | 'changeViewMarkdown';
   extraExtensions?: Extension[];
   enableWordWrapToggle?: boolean;
@@ -833,7 +833,9 @@ export function createSourceEditor(options: SourceEditorOptions) {
     }
 
     if (update.docChanged && !suppressChange) {
-      options.onChange(update.state.doc.toString());
+      const edits: import('@easyview/editor-sync').TextOffsetPatch[] = [];
+      update.changes.iterChanges((from, to, _fromNew, _toNew, insert) => edits.push({ from, to, insert: insert.toString() }));
+      options.onChange(update.state.doc.toString(), edits);
       options.onDocumentHistoryChange?.(update);
     }
 

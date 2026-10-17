@@ -5,6 +5,7 @@ import { promisify } from 'node:util';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cssInjectPlugin } from '../../packages/preview-ui/esbuild-css-inject.mjs';
+import { spreadsheetLifecyclePlugin } from '../../packages/preview-ui/esbuild-spreadsheet.mjs';
 
 const execFileAsync = promisify(execFile);
 const appDir = path.dirname(fileURLToPath(import.meta.url));
@@ -66,7 +67,7 @@ const buildResults = await Promise.all([
     sourcemap: !production,
     metafile: production,
     logLevel: 'info',
-    plugins: [cssInjectPlugin()],
+    plugins: [spreadsheetLifecyclePlugin(), cssInjectPlugin()],
     loader: {
       '.svg': 'dataurl',
       '.png': 'dataurl',
@@ -79,6 +80,8 @@ const buildResults = await Promise.all([
 ]);
 
 await build({ bundle: true, entryPoints: [path.join(workspaceDir, 'packages/editor-core/src/timeline/history-diff-worker.ts')], outfile: path.join(rendererDir, 'history-diff-worker.js'), platform: 'browser', format: 'iife', target: 'chrome128', minify: production });
+
+await build({ bundle: true, entryPoints: [path.join(workspaceDir, 'packages/preview-ui/src/workers/spreadsheet-worker.ts')], outfile: path.join(rendererDir, 'workers/spreadsheet-worker.js'), platform: 'browser', format: 'iife', target: 'chrome128', minify: production });
 
 const rendererBuild = buildResults[3];
 if (production && rendererBuild.metafile) {

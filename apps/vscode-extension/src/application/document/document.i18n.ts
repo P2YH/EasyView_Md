@@ -2,6 +2,7 @@ import { defineMessages } from '@easyview/contracts/i18n';
 
 export const tDocument = defineMessages({
   'zh-CN': {
+    'image.budget': '每次最多添加 4 张图片，总大小不能超过 8 MiB。',
     'convert.outputExists': '{name} 已存在，是否替换？',
     'convert.replace': '替换',
     'convert.converted': '已转换为 {name}',
@@ -55,6 +56,7 @@ export const tDocument = defineMessages({
     'export.docxFailed': 'DOCX 导出失败：{message}',
   },
   en: {
+    'image.budget': 'Attach at most 4 images with a combined size of 8 MiB.',
     'convert.outputExists': '{name} already exists. Replace it?',
     'convert.replace': 'Replace',
     'convert.converted': 'Converted to {name}',

@@ -1,4 +1,9 @@
 /** Shared AI chat contracts: settings, attachments, and persisted history. */
+export const AI_CHAT_MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+export const AI_CHAT_MAX_IMAGES = 4;
+export function aiChatImagesWithinBudget(sizes: readonly number[]): boolean {
+  return sizes.length <= AI_CHAT_MAX_IMAGES && sizes.reduce((sum, size) => sum + size, 0) <= AI_CHAT_MAX_IMAGE_BYTES;
+}
 
 export interface AiChatSettings {
   baseUrl: string;
@@ -17,6 +22,12 @@ export interface AiChatAttachment {
   name: string;
   /** data:image/...;base64,... or https://... */
   url: string;
+}
+
+export function aiChatAttachmentBytes(attachment: AiChatAttachment): number {
+  if (attachment.source !== 'upload') return 0;
+  const encoded = attachment.url.slice(attachment.url.indexOf(',') + 1);
+  return Math.floor(encoded.length * 3 / 4) - (encoded.endsWith('==') ? 2 : encoded.endsWith('=') ? 1 : 0);
 }
 
 export interface AiChatHistoryEntry {

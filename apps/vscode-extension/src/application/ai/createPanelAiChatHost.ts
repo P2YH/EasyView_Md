@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { AiChatHost } from '@easyview/node-runtime';
-import type { HostToEditorMessage } from '@easyview/contracts';
+import { aiChatImagesWithinBudget, type HostToEditorMessage } from '@easyview/contracts';
 import { tDocument } from '../document/document.i18n';
 
 const AI_CHAT_API_KEY_SECRET = 'easyview.aiChat.apiKey';
@@ -59,6 +59,8 @@ export function createPanelAiChatHost(
           },
         });
         if (!selected?.length) return [];
+        const stats = await Promise.all(selected.map(uri => vscode.workspace.fs.stat(uri)));
+        if (!aiChatImagesWithinBudget(stats.map(stat => stat.size))) throw new Error(tDocument('image.budget'));
         const images: Array<{ name: string; dataUrl: string }> = [];
         for (const uri of selected) {
           const bytes = await vscode.workspace.fs.readFile(uri);

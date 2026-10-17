@@ -2,6 +2,8 @@ import { defineMessages } from '@easyview/contracts/i18n';
 
 export const tAi = defineMessages({
   'zh-CN': {
+    'host.editCancelled': 'AI 编辑已取消。',
+    'host.editUnacknowledged': '编辑器未确认 AI 修改结果。',
     'tools.fieldEmpty': '{field} 不能为空',
     'tools.fieldNotRelative': '{field} 必须是工作区内的相对路径',
     'tools.pathOutsideWorkspace': '路径不能超出当前工作区',
@@ -61,6 +63,8 @@ export const tAi = defineMessages({
     'host.apiKeyMissing': '请先配置 API Key',
   },
   en: {
+    'host.editCancelled': 'The AI edit was cancelled.',
+    'host.editUnacknowledged': 'The editor did not acknowledge the AI edit.',
     'tools.fieldEmpty': '{field} must not be empty',
     'tools.fieldNotRelative': '{field} must be a relative path inside the workspace',
     'tools.pathOutsideWorkspace': 'Path must not leave the current workspace',

@@ -46,6 +46,7 @@ describe('DesktopEditorInstanceRegistry', () => {
 
   function createRegistry(overrides: {
     retainLimit?: number;
+    textBudget?: number;
     disposed?: string[];
     created?: string[];
     hosts?: EditorHostTransport[];
@@ -62,6 +63,7 @@ describe('DesktopEditorInstanceRegistry', () => {
     const registry = new DesktopEditorInstanceRegistry({
       mount,
       retainLimit: overrides.retainLimit ?? 2,
+      textBudget: overrides.textBudget,
       capabilities: {
         sourceMode: 'embedded',
         git: false,
@@ -143,6 +145,17 @@ describe('DesktopEditorInstanceRegistry', () => {
     expect(bMessages).toHaveLength(0);
   });
 
+  it('evicts a large inactive editor by text budget while preserving the active editor', () => {
+    const { registry, listener, disposed } = createRegistry({ retainLimit: 5, textBudget: 8 });
+    registry.activate(editorTab('a', '/tmp/a.md'));
+    listener()?.({ type: 'documentSnapshot', documentId: '/tmp/a.md', revision: 1, content: '123456', contentHash: 'ignored' });
+    expect(registry.size()).toBe(1);
+    expect(registry.diagnostics.pendingSnapshots).toBe(0);
+    registry.activate(editorTab('b', '/tmp/b.md'));
+    expect(disposed).toEqual(['a']);
+    expect(registry.has('b')).toBe(true);
+  });
+
   it('delivers AI chat replies even when a non-editor tab is active (no stuck "Saving…")', () => {
     const hosts: EditorHostTransport[] = [];
     const { registry, listener } = createRegistry({ retainLimit: 5, hosts });
@@ -151,9 +164,11 @@ describe('DesktopEditorInstanceRegistry', () => {
     const received: string[] = [];
     hosts[0]?.subscribe((message) => received.push(`a:${message.type}`));
     hosts[1]?.subscribe((message) => received.push(`b:${message.type}`));
+    hosts[0]!.postMessage({ type: 'aiChat.saveApiKey', requestId: 'r1', apiKey: 'test' });
     registry.clearActive();
     listener()?.({ type: 'aiChat.settingsSaved', requestId: 'r1', ok: true });
-    expect(received).toEqual(['a:aiChat.settingsSaved', 'b:aiChat.settingsSaved']);
+    expect(received).toEqual(['a:aiChat.settingsSaved']);
+    expect(registry.diagnostics.aiRequests).toBe(0);
   });
 
   it('disposes instances whose tabs have closed', () => {

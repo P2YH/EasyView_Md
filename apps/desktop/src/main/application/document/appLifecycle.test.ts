@@ -1,46 +1,43 @@
 import { describe, expect, it, vi } from 'vitest';
-import { requestRestart } from './appLifecycle';
+import { requestRestart, type RestartWindow } from './appLifecycle';
 
-describe('requestRestart (problem 5)', () => {
-  it('must confirm dirty documents before relaunching', async () => {
-    const confirmCloseAll = vi.fn().mockResolvedValue(false);
-    const relaunch = vi.fn();
+function window(dirty: boolean, confirmed = true): RestartWindow & { dirty: boolean } {
+  const owner = { dirty, prepare: vi.fn().mockResolvedValue(undefined), hasDirtyDocuments: () => owner.dirty,
+    confirmCloseAll: vi.fn(async () => { if (confirmed) owner.dirty = false; return confirmed; }), };
+  return owner;
+}
 
-    await expect(requestRestart({
-      hasDirtyDocuments: true,
-      confirmCloseAll,
-      relaunch,
-    })).resolves.toBe(false);
-
-    expect(confirmCloseAll).toHaveBeenCalledTimes(1);
-    expect(relaunch).not.toHaveBeenCalled();
-  });
-
-  it('relaunches only after confirmCloseAll accepts', async () => {
-    const confirmCloseAll = vi.fn().mockResolvedValue(true);
-    const relaunch = vi.fn();
-
-    await expect(requestRestart({
-      hasDirtyDocuments: true,
-      confirmCloseAll,
-      relaunch,
-    })).resolves.toBe(true);
-
-    expect(confirmCloseAll).toHaveBeenCalledTimes(1);
+describe('application restart', () => {
+  it('confirms a dirty background window even when the invoking window is clean', async () => {
+    const background = window(true), active = window(false), relaunch = vi.fn();
+    expect(await requestRestart({ windows: () => [background, active], relaunch })).toBe(true);
+    expect(background.confirmCloseAll).toHaveBeenCalledTimes(1);
+    expect(active.confirmCloseAll).not.toHaveBeenCalled();
     expect(relaunch).toHaveBeenCalledTimes(1);
   });
-
-  it('skips the confirmation prompt when nothing is dirty', async () => {
-    const confirmCloseAll = vi.fn();
+  it('aborts the global restart when any window cancels', async () => {
     const relaunch = vi.fn();
-
-    await expect(requestRestart({
-      hasDirtyDocuments: false,
-      confirmCloseAll,
-      relaunch,
-    })).resolves.toBe(true);
-
-    expect(confirmCloseAll).not.toHaveBeenCalled();
+    expect(await requestRestart({ windows: () => [window(false), window(true, false)], relaunch })).toBe(false);
+    expect(relaunch).not.toHaveBeenCalled();
+  });
+  it('flushes debounced edits before checking whether a window is dirty', async () => {
+    const owner = window(false), relaunch = vi.fn();
+    vi.mocked(owner.prepare).mockImplementationOnce(async () => { owner.dirty = true; });
+    await requestRestart({ windows: () => [owner], relaunch });
+    expect(owner.confirmCloseAll).toHaveBeenCalledTimes(1);
+    expect(relaunch).toHaveBeenCalledTimes(1);
+  });
+  it('checks edits made in an already confirmed window while another prompt is open', async () => {
+    const first = window(true), second = window(true), relaunch = vi.fn();
+    vi.mocked(second.confirmCloseAll).mockImplementationOnce(async () => { second.dirty = false; first.dirty = true; return true; });
+    await requestRestart({ windows: () => [first, second], relaunch });
+    expect(first.confirmCloseAll).toHaveBeenCalledTimes(2);
+    expect(relaunch).toHaveBeenCalledTimes(1);
+  });
+  it('restarts clean windows without asking for confirmation', async () => {
+    const owner = window(false), relaunch = vi.fn();
+    await requestRestart({ windows: () => [owner], relaunch });
+    expect(owner.confirmCloseAll).not.toHaveBeenCalled();
     expect(relaunch).toHaveBeenCalledTimes(1);
   });
 });

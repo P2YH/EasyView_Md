@@ -39,6 +39,8 @@ export interface PreviewAssetConfig {
   pptAssetBaseUrl?: string;
   /** Absolute URL to the bundled legacy .doc worker module. */
   docWorkerUrl?: string;
+  /** Standalone, cancellable XLSX parser bundle. Required by editable spreadsheets. */
+  spreadsheetWorkerUrl?: string;
   /** Absolute URL to the HEIC decode host HTML (Desktop phase-2). */
   heicHostUrl?: string;
   /** Product + per-file preview theme storage. Defaults to localStorage adapter. */

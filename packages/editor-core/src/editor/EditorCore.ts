@@ -39,6 +39,7 @@ import {
   createPasteParser,
   parseMarkdown,
 } from './lib/MarkdownParser';
+import { IncrementalMarkdownSerializer } from './lib/IncrementalMarkdownSerializer';
 import { docToMarkdown } from './lib/MarkdownSerializer';
 import {
   applyTextPatches,
@@ -89,6 +90,7 @@ export class EditorCore {
   private _currentContent = '';
   private _syncTimer: ReturnType<typeof setTimeout> | null = null;
   private _suppressHistory = false;
+  private readonly incrementalSerializer = new IncrementalMarkdownSerializer();
 
   constructor(config: EditorCoreConfig) {
     const t0 = performance.now();
@@ -536,10 +538,10 @@ export class EditorCore {
       this._syncTimer = null;
       if (!this._view) return;
       try {
-        const md = docToMarkdown(this._view.state.doc);
+        const { content: md, edits } = this.incrementalSerializer.serialize(this._view.state.doc, this._currentContent);
         if (md !== this._currentContent) {
           this._currentContent = md;
-          this.config.onContentChange?.(md);
+          this.config.onContentChange?.(md, edits);
         }
       } catch (err) {
         console.warn('[EasyView_Md] Serialization error in flushSync:', err);
@@ -730,6 +732,7 @@ export class EditorCore {
 
       // Content sync — debounced to avoid race conditions with VS Code applyEdit
       if (!this._isUpdatingFromExtension && tr.docChanged) {
+        this.incrementalSerializer.observeTransaction(tr);
         // Undo/redo transactions (prosemirror-history meta) are local operations.
         // We update _currentContent to keep it in sync, but skip onContentChange
         // to avoid a round-trip through VS Code that disrupts cursor position.
@@ -742,9 +745,9 @@ export class EditorCore {
             this._syncTimer = null;
           }
           try {
-            const md = docToMarkdown(this._view.state.doc);
+            const { content: md, edits } = this.incrementalSerializer.serialize(this._view.state.doc, this._currentContent);
             this._currentContent = md;
-            this.config.onContentChange?.(md);
+            this.config.onContentChange?.(md, edits);
           } catch (err) {
             console.warn(
               '[EasyView_Md] Serialization error in dispatch (history):',
@@ -757,10 +760,10 @@ export class EditorCore {
             this._syncTimer = null;
             if (!this._view) return;
             try {
-              const md = docToMarkdown(this._view.state.doc);
+              const { content: md, edits } = this.incrementalSerializer.serialize(this._view.state.doc, this._currentContent);
               if (md !== this._currentContent) {
                 this._currentContent = md;
-                this.config.onContentChange?.(md);
+                this.config.onContentChange?.(md, edits);
               }
             } catch (err) {
               console.warn(

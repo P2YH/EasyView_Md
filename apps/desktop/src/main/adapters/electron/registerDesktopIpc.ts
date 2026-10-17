@@ -1,4 +1,5 @@
-import { handleVersionGuard, acceptGuardFlush } from '../../application/version-guard/desktopVersionGuard';
+import { acceptDesktopEditorFlush } from '../../application/document/flushDesktopEditors';
+import { handleVersionGuard } from '../../application/version-guard/desktopVersionGuard';
 import { handleDesktopTimeline, getHistoryComparison, desktopTimelineDiagnostics } from '../../application/timeline/desktopTimeline';
 import { getHistorySettings, setHistorySettings } from '../../application/document/desktopHistory';
 import type { TimelineRequestMessage } from '@easyview/contracts';
@@ -704,7 +705,7 @@ export function registerDesktopIpc(): void {
 
   registerEvent('editor.message', (event, value: unknown) => {
     if (!trustedRenderer(event) || !isEditorToHostMessage(value)) return;
-    if (acceptGuardFlush(event.sender, value)) return;
+    if (acceptDesktopEditorFlush(event.sender, value)) return;
     void handleEditorMessage(value).catch((error) => {
       console.error('[EasyView_Md] Failed to handle editor message:', error);
       void showOperationError(failure('UNKNOWN', error instanceof Error ? error.message : tIpc('editor.operationFailed')));

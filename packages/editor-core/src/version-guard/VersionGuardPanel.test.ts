@@ -178,4 +178,28 @@ describe('VersionGuardPanel', () => {
     if (!disabled) { sync.click(); for (let i = 0; i < 3; i++) await flush(); expect(guard.calls.some(call => call.method === method)).toBe(true); }
     panel.dispose();
   });
+  it('bounds history pages and renders file/history viewports after repeated more requests', async () => {
+    const guard = client(); const base = guard.request;
+    guard.request = vi.fn(async request => {
+      if (request.method === 'history') {
+        const offset = Number(request.cursor ?? 0);
+        return { entries: Array.from({ length: 100 }, (_, i) => ({ ...commit, hash: `commit-${offset + i}`, message: `Commit ${offset + i}` })), cursor: String(offset + 100) };
+      }
+      if (request.method === 'commitFiles') return Array.from({ length: 5000 }, (_, i) => ({ path: `file-${i}.md`, index: 'M', worktree: '.', submodule: false }));
+      return base(request);
+    });
+    const panel = new VersionGuardPanel({ client: guard }); document.body.append(panel.element); panel.setVisible(true);
+    for (let i = 0; i < 5; i++) await flush();
+    for (let page = 0; page < 9; page++) {
+      panel.element.querySelector<HTMLButtonElement>('.guard-history button[aria-label="加载更多"]')!.click();
+      for (let i = 0; i < 3; i++) await flush();
+    }
+    const internal = panel as unknown as { histories: { get(key: string): { entries: unknown[] } }; commitFiles: { size: number } };
+    expect(internal.histories.get('/repo').entries).toHaveLength(500);
+    expect(panel.element.querySelectorAll('.guard-commit').length).toBeLessThan(25);
+    panel.element.querySelector<HTMLButtonElement>('.guard-commit')!.click(); for (let i = 0; i < 3; i++) await flush();
+    expect(panel.element.querySelectorAll('.guard-history .guard-file').length).toBeLessThan(25);
+    expect(internal.commitFiles.size).toBe(1); panel.dispose(); expect(internal.commitFiles.size).toBe(0);
+  });
+
 });

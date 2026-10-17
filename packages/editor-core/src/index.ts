@@ -1085,12 +1085,12 @@ function updateSourceSettingsComment(): void {
   return;
 }
 
-function postEdit(content: string): void {
+function postEdit(content: string, edits?: import('@easyview/editor-sync').TextOffsetPatch[]): void {
   if (!canPostEditsToHost || !editorSync?.isReady) {
     console.debug('[EasyView_Md] Suppressed pre-snapshot edit sync', { length: content.length });
     return;
   }
-  editorSync.applyLocalContent(content, 'local');
+  editorSync.applyLocalContent(content, 'local', edits);
 }
 
 type HeadingBreadcrumbEntry = { level: number; text: string; pos: number };
@@ -1533,10 +1533,10 @@ function initEditor() {
       editOperationLog.sync(undoDepth(view.state), redoDepth(view.state), 'wysiwyg');
       refreshHistoryPanel();
     },
-    onContentChange(markdown) {
+    onContentChange(markdown, edits) {
       _hasEditedInCurrentMode = true;
       currentContent = markdown;
-      postEdit(markdown);
+      postEdit(markdown, edits);
     },
     onImageClick(view, pos, node, dom) {
       imageToolbar.show(view, pos, node, dom);
@@ -1625,7 +1625,7 @@ function initEditor() {
           _modeEntryContent = content;
         }
         currentFilePath = message.filePath;
-        aiChatPanel.setFilePath(documentActive ? currentFilePath : '');
+        aiChatPanel.setFilePath(currentFilePath);
         toc.setFilePath(currentFilePath);
       }
       if (typeof message.uiState?.viewChanges === 'boolean' && currentFilePath) {
@@ -1744,15 +1744,12 @@ function initEditor() {
   const aiChatPanel = createLazyAiChatPanel({
     postMessage: (msg) => host.postMessage(msg),
     container: aiChatContainer,
-    getDocumentContent: () => documentActive
-      ? (isSourceMode && sourceEditor
+    getDocumentContent: () => (isSourceMode && sourceEditor
         ? stripSettingsComment(sourceEditor.getContent())
-        : currentContent || editor.getMarkdown())
-      : '',
-    getFilePath: () => documentActive ? currentFilePath : '',
-    getFileName: () => documentActive ? currentFilePath.split('/').pop() || '' : '',
-    applyDocumentEdit: (content) => {
-      if (!documentActive) return;
+        : currentContent || editor.getMarkdown()),
+    getFilePath: () => currentFilePath,
+    getFileName: () => currentFilePath.split('/').pop() || '',
+    applyDocumentEdit: async (content) => {
       currentContent = content;
       if (isSourceMode && sourceEditor) {
         sourceEditor.setContent(content, { addToHistory: true });
@@ -1764,6 +1761,7 @@ function initEditor() {
         updateTocStatusBar();
       }
       postEdit(content);
+      await editorSync?.whenSynced();
     },
     copyText: (text, successMessage) => {
       void copyTextToClipboard(text, successMessage ?? tEditorCore('copied'));
@@ -1774,6 +1772,7 @@ function initEditor() {
       notifyUiState();
     },
   });
+  aiChatPanel.setSuspended(!documentActive);
   if (pendingAiChatVisible && host.capabilities.aiChat) aiChatPanel.open();
   isAiChatOpen = () => aiChatPanel.isOpen();
   setAiChatVisibleImpl = (visible) => {
@@ -1783,9 +1782,7 @@ function initEditor() {
   };
   setDocumentActiveImpl = (active) => {
     documentActive = active;
-    aiChatPanel.setDocumentContextAvailable(active);
     aiChatPanel.setSuspended(!active);
-    aiChatPanel.setFilePath(active ? currentFilePath : '');
   };
 
   let previousTocClickHandler: typeof toc.sourceClickHandler = null;

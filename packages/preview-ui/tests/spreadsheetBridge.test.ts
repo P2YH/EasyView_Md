@@ -19,6 +19,13 @@ describe('editable spreadsheet formats', () => {
 });
 
 describe('xSpreadsheetBridge', () => {
+  it('rejects a tiny archive with an enormous merge before expanding the workbook', async () => {
+    const JSZip = (await import('jszip')).default;
+    const zip = new JSZip();
+    zip.file('xl/worksheets/sheet1.xml', '<worksheet><mergeCells><mergeCell ref="A1:XFD1048576"/></mergeCells></worksheet>');
+    const bytes = await zip.generateAsync({ type: 'arraybuffer' });
+    await expect(workbookBytesToXsSheets(bytes)).rejects.toThrow(/容量|limit/);
+  });
   it('round-trips a simple workbook and drops merge-slave cells', async () => {
     const ExcelJS = (await import('exceljs')).default;
     const workbook = new ExcelJS.Workbook();

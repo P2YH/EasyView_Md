@@ -2,6 +2,7 @@ import type { EditorToHostMessage, HostToEditorMessage, TextOffsetPatchPayload }
 import {
   DocumentSyncSession,
   hashContent,
+  applyTextPatches,
   minimalTextPatch,
   type ExternalPatch,
 } from '@easyview/editor-sync';
@@ -47,9 +48,14 @@ export class EditorSyncAdapter {
     });
   }
 
-  applyLocalContent(content: string, source: LocalSource = 'local'): void {
+  applyLocalContent(content: string, source: LocalSource = 'local', incremental?: TextOffsetPatchPayload[]): void {
     if (!this.session) return;
-    const edits = minimalTextPatch(this.session.snapshot.canonicalContent, content);
+    const before = this.session.snapshot.canonicalContent;
+    // Validate the incremental result against the optimistic protocol baseline.
+    // Structural snapshots/mode changes can invalidate editor-local offsets.
+    let edits: TextOffsetPatchPayload[];
+    try { edits = incremental && applyTextPatches(before, incremental) === content ? incremental : minimalTextPatch(before, content); }
+    catch { edits = minimalTextPatch(before, content); }
     if (edits.length === 0) return;
     this.outboundSource = source;
     this.session.applyLocalEdits(edits);

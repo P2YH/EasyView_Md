@@ -8,6 +8,8 @@ import type { EasyViewEditorInstance } from '@easyview/editor-core';
 import type { DesktopEditorTab } from '../contracts';
 
 export const DESKTOP_EDITOR_RETAIN_LIMIT = 5;
+export const DESKTOP_EDITOR_TEXT_BUDGET = 32 * 1024 * 1024;
+const SNAPSHOT_TEXT_BUDGET = 16 * 1024 * 1024;
 
 export interface DesktopEditorFactoryOptions {
   root: HTMLElement;
@@ -22,12 +24,14 @@ export interface DesktopEditorInstanceRegistryOptions {
   subscribe(listener: (message: HostToEditorMessage) => void): EditorHostSubscription;
   createEditor(options: DesktopEditorFactoryOptions): EasyViewEditorInstance;
   retainLimit?: number;
+  textBudget?: number;
 }
 
 interface EditorSession {
   tabId: string;
   documentId: string;
   filePath: string;
+  textBytes: number;
   root: HTMLElement;
   editor: EasyViewEditorInstance;
   listeners: Set<(message: HostToEditorMessage) => void>;
@@ -65,6 +69,7 @@ function tabDocumentId(tab: DesktopEditorTab): string {
  */
 export class DesktopEditorInstanceRegistry {
   private readonly sessions = new Map<string, EditorSession>();
+  private readonly aiRequestOwners = new Map<string, string>();
   private readonly retainLimit: number;
   private readonly lru: string[] = [];
   private readonly pendingSnapshots = new Map<string, HostToEditorMessage>();
@@ -175,6 +180,7 @@ export class DesktopEditorInstanceRegistry {
     for (const tabId of [...this.sessions.keys()]) this.disposeSession(tabId);
     this.activeTabId = null;
     this.pendingSnapshots.clear();
+    this.aiRequestOwners.clear();
   }
 
   private createSession(tab: DesktopEditorTab, mount: HTMLElement = this.options.mount): EditorSession {
@@ -183,7 +189,14 @@ export class DesktopEditorInstanceRegistry {
     mount.append(root);
     const host: EditorHostTransport = {
       capabilities: this.options.capabilities,
-      postMessage: (message) => this.options.postMessage(message),
+      postMessage: (message) => {
+        if (message.type.startsWith('aiChat.') && 'requestId' in message && message.type !== 'aiChat.abort' && message.type !== 'aiChat.patchesApplied') this.aiRequestOwners.set(message.requestId, tab.id);
+        if (message.type === 'applyEdits') {
+          const session = this.sessions.get(tab.id);
+          if (session) session.textBytes += message.edits.reduce((sum, edit) => sum + (edit.insert.length - (edit.to - edit.from)) * 2, 0);
+        }
+        return this.options.postMessage(message);
+      },
       subscribe: (listener) => {
         listeners.add(listener);
         return { unsubscribe: () => listeners.delete(listener) };
@@ -197,6 +210,7 @@ export class DesktopEditorInstanceRegistry {
       tabId: tab.id,
       documentId,
       filePath: tab.filePath,
+      textBytes: initialMessage?.type === 'documentSnapshot' ? initialMessage.content.length * 2 : 0,
       root,
       editor,
       listeners,
@@ -211,26 +225,29 @@ export class DesktopEditorInstanceRegistry {
       return;
     }
     const documentId = messageDocumentId(message);
-    if (message.type === 'documentSnapshot' && documentId) {
+    const matches = documentId ? this.sessionsByDocumentId(documentId) : [];
+    if (message.type === 'documentSnapshot' && documentId && matches.length === 0) {
       this.pendingSnapshots.set(documentId, message);
-      while (this.pendingSnapshots.size > 64) {
-        const oldest = this.pendingSnapshots.keys().next().value as string | undefined;
-        if (!oldest) break;
-        this.pendingSnapshots.delete(oldest);
+      const bytes = () => [...this.pendingSnapshots.values()].reduce((sum, snapshot) => sum + (snapshot.type === 'documentSnapshot' ? snapshot.content.length * 2 : 0), 0);
+      while (this.pendingSnapshots.size > 1 && (this.pendingSnapshots.size > 64 || bytes() > SNAPSHOT_TEXT_BUDGET)) {
+        this.pendingSnapshots.delete(this.pendingSnapshots.keys().next().value!);
       }
     }
     if (documentId) {
-      const matches = this.sessionsByDocumentId(documentId);
       if (matches.length > 0) {
-        for (const session of matches) session.listeners.forEach((listener) => listener(message));
+        for (const session of matches) {
+          if (message.type === 'documentSnapshot') session.textBytes = message.content.length * 2;
+          if (message.type === 'documentPatched') session.textBytes += message.edits.reduce((sum, edit) => sum + (edit.insert.length - (edit.to - edit.from)) * 2, 0);
+          session.listeners.forEach((listener) => listener(message));
+        }
+        this.evictIfNeeded();
         return;
       }
     }
-    // AI chat replies are matched by requestId inside the panel. Routing them only to the active
-    // tab dropped them whenever a non-editor tab (diff, preview) or no tab was active, which left
-    // the settings dialog stuck at "Saving…".
-    if (message.type.startsWith('aiChat.')) {
-      for (const session of this.sessions.values()) session.listeners.forEach((listener) => listener(message));
+    if (message.type.startsWith('aiChat.') && 'requestId' in message) {
+      const owner = this.aiRequestOwners.get(message.requestId);
+      if (['aiChat.done', 'aiChat.error', 'aiChat.settingsResponse', 'aiChat.settingsSaved', 'aiChat.imagePicked'].includes(message.type)) this.aiRequestOwners.delete(message.requestId);
+      if (owner) this.sessions.get(owner)?.listeners.forEach(listener => listener(message));
       return;
     }
     if (!this.activeTabId) return;
@@ -247,8 +264,12 @@ export class DesktopEditorInstanceRegistry {
     this.lru.push(tabId);
   }
 
+  private retainedTextBytes(): number { return [...this.sessions.values()].reduce((sum, session) => sum + session.textBytes, 0); }
+
+  get diagnostics() { return { editors: this.sessions.size, retainedTextBytes: this.retainedTextBytes(), pendingSnapshots: this.pendingSnapshots.size, aiRequests: this.aiRequestOwners.size }; }
+
   private evictIfNeeded(): void {
-    while (this.lru.length > this.retainLimit) {
+    while (this.lru.length > this.retainLimit || this.retainedTextBytes() > (this.options.textBudget ?? DESKTOP_EDITOR_TEXT_BUDGET)) {
       const victim = this.lru.find((tabId) => tabId !== this.activeTabId && !this.visibleTabIds.has(tabId));
       if (!victim) break;
       this.disposeSession(victim);
@@ -260,6 +281,7 @@ export class DesktopEditorInstanceRegistry {
     if (!session) return;
     this.pendingSnapshots.delete(session.documentId);
     this.sessions.delete(tabId);
+    for (const [requestId, owner] of this.aiRequestOwners) if (owner === tabId) this.aiRequestOwners.delete(requestId);
     this.visibleTabIds.delete(tabId);
     const lruIndex = this.lru.indexOf(tabId);
     if (lruIndex >= 0) this.lru.splice(lruIndex, 1);

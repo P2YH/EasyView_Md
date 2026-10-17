@@ -81,14 +81,14 @@ test('keeps Markdown dirty content while preview tabs occupy the central surface
     await expect(page.locator('.workspace-file-context-menu')).toHaveCount(0);
 
     await page.locator('#ai-chat-toggle').click();
-    const aiPanel = page.locator('.ai-chat-panel');
+    const aiPanel = page.locator('.ai-chat-panel:not(.hidden):not(.suspended)');
     await expect(aiPanel).toBeVisible();
     await expect(aiPanel.locator('[data-mode="agent"]')).toBeDisabled();
     await expect.poll(() => aiPanel.evaluate((element) => getComputedStyle(element).opacity)).toBe('1');
     const previewLayout = await page.evaluate(() => {
       const preview = document.getElementById('file-preview-root')!.getBoundingClientRect();
       const tabBar = document.getElementById('desktop-tab-bar')!.getBoundingClientRect();
-      const ai = document.querySelector('.ai-chat-panel')!.getBoundingClientRect();
+      const ai = document.querySelector('.ai-chat-panel:not(.hidden):not(.suspended)')!.getBoundingClientRect();
       return {
         previewRight: preview.right,
         aiLeft: ai.left,
@@ -173,7 +173,7 @@ test('keeps Markdown dirty content while preview tabs occupy the central surface
     await expect(aiPanel.locator('[data-mode="agent"]')).toBeEnabled();
     const markdownLayout = await page.evaluate(() => {
       const outline = document.querySelector('.toc-sidebar:not(.hidden)')!.getBoundingClientRect();
-      const ai = document.querySelector('.ai-chat-panel')!.getBoundingClientRect();
+      const ai = document.querySelector('.ai-chat-panel:not(.hidden):not(.suspended)')!.getBoundingClientRect();
       return { outlineRight: outline.right, aiLeft: ai.left };
     });
     expect(markdownLayout.aiLeft).toBeGreaterThanOrEqual(markdownLayout.outlineRight - 1);

@@ -437,6 +437,7 @@ function publishMenuState(): void {
   api.menu.publishState({
     ...state,
     hasActiveDocument: currentTab?.kind === 'editor',
+    isMarkdownDocument: currentTab?.kind === 'editor' && (!currentTab.filePath || /\.(md|markdown|mdx)$/i.test(currentTab.filePath)),
     themeMode: appearance.mode,
     themeDepth: Math.round(appearance.depth * 100),
     accent: appearance.accent,

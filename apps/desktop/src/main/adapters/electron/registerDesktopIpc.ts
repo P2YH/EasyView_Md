@@ -682,6 +682,7 @@ export function registerDesktopIpc(): void {
       || typeof value.tableWrap !== 'boolean'
       || typeof value.viewChanges !== 'boolean'
       || typeof value.hasActiveDocument !== 'boolean'
+      || typeof value.isMarkdownDocument !== 'boolean'
       || !DESKTOP_APPEARANCE_MODES.includes(value.themeMode as DesktopAppearanceMode)
       || typeof value.themeDepth !== 'number' || !Number.isFinite(value.themeDepth)
       || !DESKTOP_ACCENTS.includes(value.accent as DesktopAccent)
@@ -693,6 +694,7 @@ export function registerDesktopIpc(): void {
       tableWrap: value.tableWrap,
       viewChanges: value.viewChanges,
       hasActiveDocument: value.hasActiveDocument,
+      isMarkdownDocument: value.isMarkdownDocument,
       themeMode: value.themeMode as DesktopAppearanceMode,
       themeDepth: Math.max(0, Math.min(100, value.themeDepth)),
       accent: value.accent as DesktopAccent,

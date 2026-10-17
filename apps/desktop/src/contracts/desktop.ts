@@ -188,6 +188,8 @@ export interface DesktopMenuState {
   tableWrap: boolean;
   viewChanges: boolean;
   hasActiveDocument: boolean;
+  /** True when the active tab is a Markdown document; gates the Markdown menu. */
+  isMarkdownDocument: boolean;
   themeMode: DesktopAppearanceMode;
   /** 0–100; the menu checks the nearest depth preset. */
   themeDepth: number;

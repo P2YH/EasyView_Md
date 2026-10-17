@@ -302,7 +302,11 @@ export function syncTabState(): DesktopTabSnapshot {
   persistTabs();
   updateWindowTitle();
   const active = tabRegistry.active();
-  setDesktopMenuState({ ...getDesktopMenuState(), hasActiveDocument: active?.kind === 'editor' });
+  setDesktopMenuState({
+    ...getDesktopMenuState(),
+    hasActiveDocument: active?.kind === 'editor',
+    isMarkdownDocument: active?.kind === 'editor' && (!active.filePath || isMarkdownPath(active.filePath)),
+  });
   hostHooks.createMenu();
   return publishTabs();
 }

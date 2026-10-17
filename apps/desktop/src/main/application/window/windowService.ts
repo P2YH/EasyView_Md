@@ -231,6 +231,8 @@ export function createMenu(): void {
     click: inContext(() => publishMenuCommand(value)),
     ...options,
   });
+  const md = (label: string, value: DesktopMenuCommand, options: Partial<Electron.MenuItemConstructorOptions> = {}): Electron.MenuItemConstructorOptions =>
+    command(label, value, { enabled: menuState.isMarkdownDocument, ...options });
   const appearanceItem = (id: string, label: string, value: DesktopMenuCommand, checked: boolean): Electron.MenuItemConstructorOptions => ({
     id, label, type: 'radio', checked, click: inContext(() => publishMenuCommand(value)),
   });
@@ -333,11 +335,6 @@ export function createMenu(): void {
         },
         { type: 'separator' },
         { label: 'IndexArea', type: 'checkbox', checked: getWorkspaceState().explorerVisible, click: inContext(() => publishMenuCommand('toggleExplorer')) },
-        command(tMenu('view.outline'), 'toggleOutline', { type: 'checkbox', checked: menuState.outlineVisible }),
-        command(tMenu('view.sourceMode'), 'toggleSourceMode', { type: 'checkbox', checked: menuState.sourceMode }),
-        command(tMenu('view.fullWidth'), 'toggleFullWidth', { type: 'checkbox', checked: menuState.fullWidth }),
-        command(tMenu('view.tableWrap'), 'toggleTableWrap', { type: 'checkbox', checked: menuState.tableWrap }),
-        command(tMenu('view.viewChanges'), 'toggleViewChanges', { type: 'checkbox', checked: menuState.viewChanges, accelerator: 'Alt+V' }),
         ...(process.platform === 'darwin' ? [] : [{
           label: tMenu('view.menuBar'),
           type: 'checkbox' as const,
@@ -349,14 +346,33 @@ export function createMenu(): void {
         { label: tMenu('view.zoomIn'), accelerator: 'CmdOrCtrl+Plus', visible: false, acceleratorWorksWhenHidden: true, click: inContext(() => zoomWindowBy(1)) },
         { label: tMenu('view.zoomOut'), accelerator: 'CmdOrCtrl+-', click: inContext(() => zoomWindowBy(-1)) },
         { label: tMenu('view.resetZoom'), accelerator: 'CmdOrCtrl+0', click: inContext(() => resetWindowZoom()) },
-        { type: 'separator' },
-        command(tMenu('view.scrollTop'), 'scrollTop'),
-        command(tMenu('view.scrollBottom'), 'scrollBottom'),
       ],
     },
-    { label: tMenu('document'), submenu: [command(tMenu('document.toggleHeadings'), 'toggleHeadingCollapse'), command(tMenu('document.history'), 'toggleHistory'), command(tMenu('document.stickyNote'), 'toggleStickyNote')] },
-    { label: tMenu('export'), submenu: [command(tMenu('export.htmlLight'), 'exportHtmlLight'), command(tMenu('export.htmlDark'), 'exportHtmlDark'), command(tMenu('export.pdfLight'), 'exportPdfLight'), command(tMenu('export.pdfDark'), 'exportPdfDark'), command('DOCX', 'exportDocx')] },
-    { label: 'Git', submenu: [command(tMenu('git.stage'), 'stageFile'), command(tMenu('git.commit'), 'openCommit'), command(tMenu('git.sync'), 'syncGit')] },
+    {
+      label: tMenu('markdown'),
+      submenu: [
+        md(tMenu('view.outline'), 'toggleOutline', { type: 'checkbox', checked: menuState.outlineVisible }),
+        md(tMenu('view.sourceMode'), 'toggleSourceMode', { type: 'checkbox', checked: menuState.sourceMode }),
+        md(tMenu('view.fullWidth'), 'toggleFullWidth', { type: 'checkbox', checked: menuState.fullWidth }),
+        md(tMenu('view.tableWrap'), 'toggleTableWrap', { type: 'checkbox', checked: menuState.tableWrap }),
+        md(tMenu('view.viewChanges'), 'toggleViewChanges', { type: 'checkbox', checked: menuState.viewChanges, accelerator: 'Alt+V' }),
+        { type: 'separator' },
+        md(tMenu('document.toggleHeadings'), 'toggleHeadingCollapse'),
+        md(tMenu('document.history'), 'toggleHistory'),
+        md(tMenu('document.stickyNote'), 'toggleStickyNote'),
+        { type: 'separator' },
+        md(tMenu('view.scrollTop'), 'scrollTop'),
+        md(tMenu('view.scrollBottom'), 'scrollBottom'),
+        { type: 'separator' },
+        {
+          label: tMenu('export'),
+          enabled: menuState.isMarkdownDocument,
+          submenu: [md(tMenu('export.htmlLight'), 'exportHtmlLight'), md(tMenu('export.htmlDark'), 'exportHtmlDark'), md(tMenu('export.pdfLight'), 'exportPdfLight'), md(tMenu('export.pdfDark'), 'exportPdfDark'), md('DOCX', 'exportDocx')],
+        },
+      ],
+    },
+    // Git actions target the repository of the active document, independent of its file type.
+    { label: tMenu('repository'), submenu: [command(tMenu('git.stage'), 'stageFile'), command(tMenu('git.commit'), 'openCommit'), command(tMenu('git.sync'), 'syncGit')] },
     { role: 'windowMenu', label: tMenu('window') },
     { label: tMenu('tools'), submenu: [command(tMenu('tools.aiChat'), 'toggleAiChat', { accelerator: 'Alt+I', enabled: true }), command(tMenu('tools.terminal'), 'openTerminal')] },
     {

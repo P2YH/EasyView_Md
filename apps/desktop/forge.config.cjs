@@ -59,6 +59,24 @@ module.exports = {
   rebuildConfig: {
     onlyModules: [],
   },
+  hooks: {
+    // Electron binaries are only linker-signed (ad-hoc) and leave the bundle resources unsealed,
+    // which `codesign --verify --deep --strict` rejects and Gatekeeper may report as "damaged".
+    // Without a Developer ID, seal the whole bundle with a complete ad-hoc signature.
+    postPackage: async (_forgeConfig, { platform, outputPaths }) => {
+      if (platform !== 'darwin') return;
+      const { execFileSync } = require('node:child_process');
+      const fs = require('node:fs');
+      for (const outputPath of outputPaths) {
+        for (const entry of fs.readdirSync(outputPath)) {
+          if (!entry.endsWith('.app')) continue;
+          const app = path.join(outputPath, entry);
+          execFileSync('codesign', ['--force', '--deep', '--sign', '-', app], { stdio: 'inherit' });
+          execFileSync('codesign', ['--verify', '--deep', '--strict', '--verbose=2', app], { stdio: 'inherit' });
+        }
+      }
+    },
+  },
   makers: [
     new MakerZIP({}, ['darwin', 'win32']),
   ],

@@ -14,3 +14,6 @@ coverage/**
 playwright*.config.ts
 
 dist/metafile/**
+
+# node-pty build-time headers/gyp files; not loaded at runtime
+dist/runtime/node-pty/node_modules/node-addon-api/**

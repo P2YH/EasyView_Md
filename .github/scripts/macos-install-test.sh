@@ -48,10 +48,10 @@ hdiutil detach "$MOUNT" | tee "$LOGS_DIR/hdiutil-detach.log"
 echo "=== 3. Verify installed bundle ==="
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")"
 [[ "$VERSION" == "$EXPECTED_VERSION" ]] || fail "Installed version $VERSION, expected $EXPECTED_VERSION"
-# Reported, not enforced: the bundle is only linker-signed (ad-hoc) and its resources are not sealed,
-# so quarantined downloads may be reported as "damaged" until the whole bundle is re-signed.
+# forge.config.cjs (hooks.postPackage) seals the bundle with a complete ad-hoc signature;
+# an unsealed bundle may be reported as "damaged" after download, so this blocks publish.
 codesign --verify --deep --strict --verbose=2 "$APP" > "$LOGS_DIR/codesign.log" 2>&1 \
-  || echo "::warning::codesign verification failed for the installed app: $(head -1 "$LOGS_DIR/codesign.log")"
+  || fail "codesign verification failed for the installed app: $(head -1 "$LOGS_DIR/codesign.log")"
 [[ -x "$BINARY" ]] || fail "Missing executable $BINARY"
 
 echo "=== 4. Launch through LaunchServices ==="
@@ -59,8 +59,9 @@ open -a "$APP" "$TEST_FILE"
 WINDOW_COUNTER="$LOGS_DIR/count-windows.swift"
 cat > "$WINDOW_COUNTER" <<'SWIFT'
 import CoreGraphics
+import Foundation
 let pid = Int(CommandLine.arguments[1]) ?? -1
-let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as NSArray? as? [[String: Any]] ?? []
 print(windows.filter { ($0[kCGWindowOwnerPID as String] as? Int) == pid && ($0[kCGWindowLayer as String] as? Int) == 0 }.count)
 SWIFT
 

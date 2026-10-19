@@ -41,11 +41,11 @@ jobs:
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         run: |
           [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: refs/tags/${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Match tag to desktop package version
@@ -73,11 +73,11 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: refs/tags/${{ needs.version.outputs.tag }}
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -96,7 +96,7 @@ jobs:
       - run: npm run verify:desktop-runtime
       - name: Upload packaged runtime diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: packaged-runtime-diagnostics-${{ matrix.platform }}-${{ matrix.arch }}
           path: apps/desktop/test-results/packaged-runtime
@@ -115,7 +115,7 @@ jobs:
             "$RELEASE_VERSION" .github/test-sample.md logs-install
       - name: Upload macOS install test logs
         if: always() && matrix.platform == 'darwin'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-install-test
           path: logs-install/
@@ -156,7 +156,7 @@ jobs:
             -LogsDir logs-install
       - name: Upload Windows installer test logs
         if: always() && matrix.platform == 'win32'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-installer-test
           path: logs-install/
@@ -172,7 +172,7 @@ jobs:
         run: npm run make:appx --workspace @easyview/desktop
       - name: Upload Microsoft Store package
         if: matrix.platform == 'win32'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: store-win32-x64
           path: apps/desktop/out/store/EasyView_Md-win-x64-store.appx
@@ -184,7 +184,7 @@ jobs:
         run: |
           node tooling/release/desktop-artifacts.mjs stage "$TARGET_PLATFORM" "$TARGET_ARCH" release-assets
           if [[ "$TARGET_PLATFORM" == darwin ]]; then node tooling/release/desktop-artifacts.mjs stage-vsix release-assets; fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: desktop-${{ matrix.platform }}-${{ matrix.arch }}
           path: release-assets/*
@@ -202,27 +202,27 @@ jobs:
       RELEASE_VERSION: ${{ needs.version.outputs.version }}
       EXTENSION_VERSION: ${{ needs.version.outputs.extension_version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: refs/tags/${{ needs.version.outputs.tag }}
           persist-credentials: false
       - name: Checkout website main
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: tiantianmanmanzou/WonderXY-ART
           ref: main
           path: website
           token: ${{ secrets.WONDERXY_ART_TOKEN }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: desktop-*
           merge-multiple: true
           path: artifacts
       # Store AppX: attached to the GitHub Release only (not synced to the download server).
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: store-win32-x64
           path: store-assets
@@ -329,7 +329,7 @@ jobs:
             Write-Output "::warning title=Microsoft Store skipped::PARTNER_CENTER_* secrets are not set; upload the AppX in Partner Center manually."
             "ready=false" >> $env:GITHUB_OUTPUT
           }
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         if: steps.creds.outputs.ready == 'true' && !inputs.store_only
         with:
           name: store-win32-x64
@@ -346,7 +346,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Store package download failed ($LASTEXITCODE)" }
       - name: Setup Microsoft Store Developer CLI
         if: steps.creds.outputs.ready == 'true'
-        uses: microsoft/microsoft-store-apppublisher@v1.1
+        uses: microsoft/microsoft-store-apppublisher@v1.4
       - name: Configure Microsoft Store Developer CLI
         if: steps.creds.outputs.ready == 'true'
         run: msstore reconfigure --tenantId $env:PC_TENANT_ID --sellerId $env:PC_SELLER_ID --clientId $env:PC_CLIENT_ID --clientSecret $env:PC_CLIENT_SECRET

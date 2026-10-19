@@ -128,7 +128,7 @@ for (const required of [
   'packages/node-runtime/src/terminal',
   'tests/e2e/editor',
   'tests/e2e/vscode-extension',
-  'tests/e2e/desktop',
+  'apps/desktop/e2e',
   'tests/fixtures/editor',
 ]) await requirePath(required);
 try {

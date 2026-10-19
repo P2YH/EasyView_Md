@@ -103,7 +103,8 @@ test('explorer can switch between list and icon views and browse folders as icon
     await dialog.getByRole('button', { name: '增大字号' }).click();
     await dialog.getByRole('button', { name: '增大字号' }).click();
     await expect(fontValue).toHaveText('18px');
-    await expect.poll(entryFontSize).toBe('16px');
+    // Settings preview live (209e74273e) and only persist on Save; Escape reverts (checked below).
+    await expect.poll(entryFontSize).toBe('18px');
     await page.screenshot({ path: join(appDir, '../../test-results/desktop-workspace-font-size.png') });
     await save.click();
     await expect.poll(entryFontSize).toBe('18px');
@@ -113,6 +114,7 @@ test('explorer can switch between list and icon views and browse folders as icon
     await expect.poll(entryFontSize).toBe('18px');
     await page.locator('.workspace-settings-toggle').click();
     await dialog.getByRole('button', { name: '恢复默认' }).click();
+    await expect.poll(entryFontSize).toBe('16px');
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
     await expect.poll(entryFontSize).toBe('18px');

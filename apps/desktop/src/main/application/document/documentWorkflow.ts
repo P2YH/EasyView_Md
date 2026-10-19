@@ -41,6 +41,7 @@ import {
   runInWindowContext,
 } from '../host/desktopRuntime';
 import { DesktopDocumentAdapter } from './desktopDocumentAdapter';
+import { flushDesktopEditors } from './flushDesktopEditors';
 import { recentFolderStore } from '../workspace/recentFolders';
 import type { DocumentSession } from './DocumentSessionService';
 import { toOperationResult } from './DocumentSessionService';
@@ -643,6 +644,11 @@ export async function openFromMenu(): Promise<void> {
 }
 
 export async function saveFromMenu(saveAs: boolean): Promise<void> {
+  const pending = activeSession();
+  if (!pending) return;
+  // The menu accelerator (Cmd/Ctrl+S) reaches main before the renderer's debounced edits do;
+  // pull them in first, or the save writes the content from before the last keystrokes.
+  await flushDesktopEditors(getWindowContext(), [pending]).catch(() => undefined);
   const session = activeSession();
   if (!session) return;
   const result = saveAs

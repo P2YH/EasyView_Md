@@ -3,7 +3,24 @@
 Every top-toolbar button of every file type, mapped to a test that asserts its **effect** (not just that it is clickable).
 Desktop e2e specs live in `apps/desktop/e2e/`; run them with `npm run test:e2e --workspace @easyview/desktop`.
 
-**VS Code extension.** The extension renders the same `@easyview/editor-core` file header and `@easyview/preview-ui` viewers/toolbars as the desktop app. The desktop e2e therefore exercises the shared components for both. Extension-specific wiring that has no Electron equivalent is covered by unit tests (see the last section).
+**VS Code extension.** The extension renders the same `@easyview/editor-core` file header and `@easyview/preview-ui` viewers/toolbars as the desktop app. The desktop e2e therefore exercises the shared components for both. Extension-specific wiring is covered by its own tests, listed in the next section.
+
+## VS Code extension
+Only Save and Theme cross the webview → extension boundary. Print, Export/download and the sidebar toggle run entirely inside the webview, so they are asserted in real VS Code.
+
+| Button | Asserted effect | Test |
+|---|---|---|
+| Save (xlsx) | bold, fill, border, merge, freeze and filter re-read from disk with ExcelJS | real VS Code e2e `tests/e2e/vscode-extension/toolbar.spec.ts`; unit `apps/vscode-extension/src/preview/filePreviewBridge.test.ts` (real `LazyWorkbook` serialiser → `writeBytes` handler → disk) |
+| Save (docx) | `<w:b/>` written to `word/document.xml` | real VS Code e2e |
+| Save, error paths | empty payload and read-only routes rejected, disk untouched; error surfaced in the webview | `filePreviewBridge.test.ts`, `previewWebviewBridge.test.ts` |
+| Save, webview host | base64 payload, reply matched by id, descriptor size/mtime updated | `apps/vscode-extension/src/preview/previewWebviewBridge.test.ts` |
+| Theme (per file) | `writePreviewFileTheme` persisted in workspaceState and restored on reopen; invalid modes ignored; the product-theme broadcast rethemes the document | both unit tests; real VS Code e2e (light → gray → dark → light) |
+| Print | opens the print window and calls print() | real VS Code e2e (docx) |
+| Export (download) | a `.docx` download is triggered | real VS Code e2e |
+| Toggle sidebar | `data-preview-sidebar` toggles | real VS Code e2e |
+| xlsx toolbar centre line | icon centres ≤ 0.5px off the toolbar centre (measured 0.00) | real VS Code e2e |
+
+Run the VS Code e2e with: `npm run build --workspace easyview-md`, then `VSCODE_EXECUTABLE_PATH=… npx playwright test -c apps/vscode-extension/playwright.toolbar.config.ts`. Set `EASYVIEW_SCREENSHOT_DIR` to also capture screenshots. The desktop counterpart is `apps/desktop/e2e/toolbar-screenshots.spec.ts`.
 
 ## Markdown (`toolbar-markdown.spec.ts`)
 | Button | Asserted effect | Test |
@@ -67,3 +84,4 @@ Code files (`.ts` etc.) open in the Markdown/code editor and are covered by the 
 - `packages/preview-ui/tests/spreadsheetToolbarReserve.test.ts`: `reserveToolbarChrome` width reservation, detach behaviour, idempotency, and resize re-layout.
 - `packages/preview-ui/tests/lazyWorkbookToolbarRoundTrip.test.ts`: x-spreadsheet style ↔ workbook round-trip.
 - `packages/editor-core/src/ui/FileHeader.lifecycle.test.ts`: file header lifecycle.
+- `apps/vscode-extension/src/preview/filePreviewBridge.test.ts` and `previewWebviewBridge.test.ts`: the extension Save/Theme bridge (see the VS Code section).

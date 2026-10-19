@@ -1765,9 +1765,9 @@ html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-
 }
 
 .preview-word-editor [data-testid='formatting-bar'] .ep-toolbar-toggle,
-.preview-word-editor [data-testid='formatting-bar'] button,
+.preview-word-editor [data-testid='formatting-bar'] button:where(:not(.docx-color-picker-dropdown *)),
 .preview-word-editor [data-testid='formatting-bar'] [role='combobox'],
-.preview-word-editor [data-testid='formatting-bar'] input,
+.preview-word-editor [data-testid='formatting-bar'] input:where(:not(.docx-color-picker-dropdown *)),
 .preview-word-editor [data-testid='formatting-bar'] .bg-doc-bg-input,
 .preview-word-editor [data-testid='font-size-display'],
 .preview-word-editor [data-testid='font-size-input'] {
@@ -1784,7 +1784,7 @@ html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-
 }
 
 .preview-word-editor [data-testid='formatting-bar'] [role='combobox'],
-.preview-word-editor [data-testid='formatting-bar'] input,
+.preview-word-editor [data-testid='formatting-bar'] input:where(:not(.docx-color-picker-dropdown *)),
 .preview-word-editor [data-testid='font-size-display'],
 .preview-word-editor [data-testid='font-size-input'] {
   padding-left: 6px !important;
@@ -1792,7 +1792,7 @@ html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-
 }
 
 .preview-word-editor [data-testid='formatting-bar'] .ep-toolbar-toggle:hover,
-.preview-word-editor [data-testid='formatting-bar'] button:hover:not(:disabled),
+.preview-word-editor [data-testid='formatting-bar'] button:where(:not(.docx-color-picker-dropdown *)):hover:not(:disabled),
 .preview-word-editor [data-testid='formatting-bar'] [role='combobox']:hover,
 .preview-word-editor [data-testid='font-size-display']:hover {
   border-color: var(--file-viewer-toolbar-border) !important;
@@ -1801,7 +1801,7 @@ html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-
 }
 
 .preview-word-editor [data-testid='formatting-bar'] .ep-toolbar-toggle[data-active='true'],
-.preview-word-editor [data-testid='formatting-bar'] button[aria-pressed='true'] {
+.preview-word-editor [data-testid='formatting-bar'] button:where(:not(.docx-color-picker-dropdown *))[aria-pressed='true'] {
   background: var(--file-viewer-button-hover-bg) !important;
   color: var(--file-viewer-button-color) !important;
 }
@@ -1959,17 +1959,17 @@ body.easyview-desktop .preview-word-editor [data-testid='editor-toolbar'] {
 }
 /* Word: square icon buttons (library uses 28px), compact dropdowns, narrow split carets.
  * EasyView's own embedded chrome keeps its rules above. */
-.preview-word-editor [data-testid='formatting-bar'] svg:not(.preview-document-chrome svg) {
+.preview-word-editor [data-testid='formatting-bar'] svg:not(.preview-document-chrome svg):where(:not(.docx-color-picker-dropdown *)) {
   width: var(--preview-toolbar-icon-size) !important;
   height: var(--preview-toolbar-icon-size) !important;
 }
-.preview-word-editor [data-testid='formatting-bar'] :is(button, [role='combobox']):not(.preview-document-chrome *) {
+.preview-word-editor [data-testid='formatting-bar'] :is(button, [role='combobox']):where(:not(.docx-color-picker-dropdown *)):not(.preview-document-chrome *) {
   width: auto !important;
   min-width: var(--preview-toolbar-item-height) !important;
   padding: 0 !important;
   gap: 2px !important;
 }
-.preview-word-editor [data-testid='formatting-bar'] :is(button, [role='combobox']):not(.preview-document-chrome *):has(> span) {
+.preview-word-editor [data-testid='formatting-bar'] :is(button, [role='combobox']):where(:not(.docx-color-picker-dropdown *)):not(.preview-document-chrome *):has(> span) {
   padding: 0 2px 0 5px !important;
 }
 /* Paragraph style: fixed to fit "Heading 1" / "标题 1" + chevron, so it does not jump per style. */
@@ -2086,4 +2086,109 @@ body.easyview-desktop .preview-word-editor [data-testid='editor-toolbar'] {
 }
 .preview-word-editor [data-testid='formatting-bar'] :is([aria-label='Zoom out'], [aria-label='Decrease font size']) {
   --preview-stepper-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.5 1.25 5 4.75l3.5-3.5'/%3E%3C/svg%3E");
+}
+
+/*
+ * Word toolbar midline. DocxEditor's colour pickers sit in a block wrapper whose split row
+ * stretches to the 32px group, so the apply/caret buttons hugged its top edge (~5px high).
+ * Pin every wrapper to the item height and centre its contents.
+ */
+.preview-word-editor [data-testid='formatting-bar'],
+.preview-word-editor [data-testid='formatting-bar'] > [role='group'] {
+  align-items: center !important;
+}
+.preview-word-editor [data-testid='formatting-bar'] :is(.docx-color-picker, .docx-color-picker-split) {
+  display: inline-flex !important;
+  align-items: center !important;
+  height: var(--preview-toolbar-item-height) !important;
+  vertical-align: middle;
+}
+.preview-word-editor.preview-word-editor [data-testid='formatting-bar'] .docx-color-picker-apply {
+  height: var(--preview-toolbar-item-height) !important;
+  padding: 0 !important;
+  justify-content: center !important;
+}
+.preview-word-editor [data-testid='formatting-bar'] :is(button, [role='combobox']):where(:not(.docx-color-picker-dropdown *)) {
+  vertical-align: middle;
+  line-height: 1 !important;
+}
+
+/*
+ * Value controls (zoom and font-size steppers, paragraph style, font family) read as
+ * outlined inputs. --vscode-input-border is re-pointed at the per-file EasyView theme by
+ * previewThemeCssVars, so it is tried first; then the IDE dropdown/panel tokens, then grey.
+ */
+.preview-word-editor {
+  --preview-toolbar-field-border: var(--vscode-input-border, var(--vscode-dropdown-border, var(--vscode-panel-border, rgba(128, 128, 128, .45))));
+}
+.preview-word-editor.preview-word-editor [data-testid='formatting-bar'] :is(
+  [aria-label='Select paragraph style'],
+  [aria-label='Select font family'],
+  div:has(> [aria-label='Zoom out']):has(> [aria-label='Zoom in']),
+  div:has(> [aria-label='Decrease font size']):has(> [aria-label='Increase font size'])
+) {
+  box-sizing: border-box !important;
+  height: var(--preview-toolbar-item-height) !important;
+  border: 1px solid var(--preview-toolbar-field-border) !important;
+  border-radius: 4px !important;
+}
+.preview-word-editor.preview-word-editor [data-testid='formatting-bar'] :is([aria-label='Select paragraph style'], [aria-label='Select font family']):hover {
+  border-color: var(--vscode-focusBorder, var(--preview-toolbar-field-border)) !important;
+}
+.preview-word-editor.preview-word-editor [data-testid='formatting-bar'] :is(
+  div:has(> [aria-label='Zoom out']):has(> [aria-label='Zoom in']),
+  div:has(> [aria-label='Decrease font size']):has(> [aria-label='Increase font size'])
+):hover {
+  border-color: var(--vscode-focusBorder, var(--preview-toolbar-field-border)) !important;
+}
+/* Stepper arrows: a hairline splits the value from the chevron column. */
+.preview-word-editor.preview-word-editor [data-testid='formatting-bar'] :is([aria-label='Zoom in'], [aria-label='Zoom out'], [aria-label='Increase font size'], [aria-label='Decrease font size']) {
+  border-left: 1px solid var(--preview-toolbar-field-border) !important;
+}
+
+/* Leading sidebar toggle (portaled by DocViewer) before undo, with one divider after it. */
+.preview-word-editor [data-testid='formatting-bar'] > .preview-word-leading-actions {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: var(--preview-toolbar-item-height);
+  margin-right: 4px;
+  padding-right: 6px;
+  border-right: 1px solid var(--file-viewer-toolbar-border, var(--vscode-panel-border, rgba(128, 128, 128, .35)));
+}
+.preview-word-editor [data-testid='formatting-bar'] > .preview-word-leading-actions:empty {
+  display: none;
+}
+
+/*
+ * Bordered steppers: every child stays inside the 1px border. The value spans the full inner
+ * height; each chevron is exactly half of it (desktop's control min-height would otherwise
+ * push them 24px tall and over the border).
+ */
+.preview-word-editor.preview-word-editor [data-testid='formatting-bar'] :is(
+  div:has(> [aria-label='Zoom out']):has(> [aria-label='Zoom in']),
+  div:has(> [aria-label='Decrease font size']):has(> [aria-label='Increase font size'])
+) {
+  grid-template-rows: repeat(2, calc((var(--preview-toolbar-item-height) - 2px) / 2));
+  overflow: hidden;
+}
+.preview-word-editor.preview-word-editor [data-testid='formatting-bar'] :is(
+  div:has(> [aria-label='Zoom out']):has(> [aria-label='Zoom in']),
+  div:has(> [aria-label='Decrease font size']):has(> [aria-label='Increase font size'])
+) > :is([aria-label='Zoom in'], [aria-label='Zoom out'], [aria-label='Increase font size'], [aria-label='Decrease font size']) {
+  height: calc((var(--preview-toolbar-item-height) - 2px) / 2) !important;
+  min-height: 0 !important;
+  max-height: calc((var(--preview-toolbar-item-height) - 2px) / 2) !important;
+  width: var(--stepper-arrow-w) !important;
+  min-width: var(--stepper-arrow-w) !important;
+}
+.preview-word-editor.preview-word-editor [data-testid='formatting-bar'] :is(
+  div:has(> [aria-label='Zoom out']):has(> [aria-label='Zoom in']),
+  div:has(> [aria-label='Decrease font size']):has(> [aria-label='Increase font size'])
+) > :not(button), 
+.preview-word-editor.preview-word-editor [data-testid='formatting-bar'] div:has(> [aria-label='Zoom in']) > [aria-label^='Zoom:'],
+.preview-word-editor.preview-word-editor [data-testid='formatting-bar'] div:has(> [aria-label='Increase font size']) > div > * {
+  height: calc(var(--preview-toolbar-item-height) - 2px) !important;
+  min-height: 0 !important;
+  max-height: calc(var(--preview-toolbar-item-height) - 2px) !important;
 }

@@ -1,6 +1,7 @@
 // oxlint-disable-next-line typescript/triple-slash-reference
 /// <reference path="../css-modules.d.ts" />
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import type { DocxEditorRef } from '@eigenpal/docx-editor-react';
 import type { PreviewWriteResult } from '@easyview/contracts';
 import type { PreviewHost } from '../types';
@@ -293,15 +294,6 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
     h(React.Fragment, null,
       h('button', {
         type: 'button',
-        className: 'preview-chrome-btn preview-chrome-btn--icon preview-word-outline-toggle',
-        title: tPreview('toolbar.toggleSidebar'),
-        'aria-label': tPreview('toolbar.toggleSidebar'),
-        'aria-pressed': !sidebarHidden,
-        onClick: toggleSidebar,
-        dangerouslySetInnerHTML: { __html: PREVIEW_SIDEBAR_ICON },
-      }),
-      h('button', {
-        type: 'button',
         className: 'preview-chrome-btn preview-chrome-btn--icon',
         title: tPreview('word.exportDocx'),
         'aria-label': tPreview('word.export'),
@@ -323,7 +315,54 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
         },
       }, h(DocumentPrintIcon, null)),
     )
-  ), [buffer, exportDocx, printDoc, saving, sidebarHidden, toggleSidebar]);
+  ), [buffer, exportDocx, printDoc, saving]);
+
+  // Sidebar toggle leads the formatting bar (before undo), like installPreviewSidebarToggle does
+  // for @file-viewer toolbars. DocxEditor only appends toolbarExtra, so the button is portaled
+  // into a slot kept as the bar's first child.
+  const [leadingSlot, setLeadingSlot] = React.useState<HTMLElement | null>(null);
+  const editorReady = !loading && !!DocxEditor && !!buffer;
+  React.useEffect(() => {
+    const mount = mountRef.current;
+    if (!pinnedOpen || !editorReady || !mount) return;
+    const slot = document.createElement('span');
+    slot.className = 'preview-word-leading-actions';
+    let bar: HTMLElement | null = null;
+    const place = (): void => {
+      const next = mount.querySelector<HTMLElement>('[data-testid="formatting-bar"]');
+      if (next && next !== bar) {
+        bar = next;
+        // Bar found: stop watching the (busy) document subtree; the bar observer keeps the slot first.
+        mountObserver.disconnect();
+        barObserver.disconnect();
+        barObserver.observe(next, { childList: true });
+      }
+      if (bar && bar.firstElementChild !== slot) bar.prepend(slot);
+    };
+    const barObserver = new MutationObserver(place);
+    const mountObserver = new MutationObserver(place);
+    mountObserver.observe(mount, { childList: true, subtree: true });
+    place();
+    setLeadingSlot(slot);
+    return () => {
+      mountObserver.disconnect();
+      barObserver.disconnect();
+      slot.remove();
+      setLeadingSlot(null);
+    };
+  }, [pinnedOpen, editorReady]);
+
+  const sidebarToggle = leadingSlot
+    ? createPortal(h('button', {
+        type: 'button',
+        className: 'preview-chrome-btn preview-chrome-btn--icon preview-word-outline-toggle',
+        title: tPreview('toolbar.toggleSidebar'),
+        'aria-label': tPreview('toolbar.toggleSidebar'),
+        'aria-pressed': !sidebarHidden,
+        onClick: toggleSidebar,
+        dangerouslySetInnerHTML: { __html: PREVIEW_SIDEBAR_ICON },
+      }), leadingSlot)
+    : null;
 
   const toolbarExtra = React.useMemo(() => (
     pinnedOpen
@@ -361,6 +400,7 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
           ref: mountRef,
           'data-preview-sidebar': sidebarHidden ? 'hidden' : 'visible',
         },
+          sidebarToggle,
           h(DocxEditor, {
             ref: editorRef,
             key: `docx-${descriptor.sessionId}`,

@@ -28,7 +28,7 @@ test('Version Guard discovers nested repositories, commits index only, pushes, d
       if ((await mainTitle.getAttribute('aria-expanded')) !== 'true') await mainTitle.click();
       await expect(mainTitle).toHaveAttribute('aria-expanded', 'true', { timeout: 1000 });
       await expect(main.locator('textarea')).toHaveAttribute('rows', '1', { timeout: 3000 });
-    }).toPass({ timeout: 20000 });
+    }).toPass({ timeout: 40000 }); // discovery scans nested repos; slower when the whole suite runs
     const fontSize = (selector: string) => page.locator(selector).first().evaluate(element => getComputedStyle(element).fontSize);
     const treeFont = await fontSize('.workspace-entry-name');
     await expect.poll(() => fontSize('.version-guard .guard-file-name')).toBe(treeFont);

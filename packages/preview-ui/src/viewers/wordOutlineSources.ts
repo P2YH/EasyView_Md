@@ -12,7 +12,7 @@ import type { WordOutlineSource } from './wordOutlinePane';
 
 const REVEAL_MARGIN = 12;
 
-function topIn(scroller: HTMLElement, el: Element): number {
+function topIn(scroller: HTMLElement, el: Element | Range): number {
   return el.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
 }
 
@@ -150,13 +150,27 @@ export function createDocxEditorOutlineSource(
 
 /* ---------- Read-only renderers (@file-viewer: .doc and .docm/.dotm) ---------- */
 
+/** Where a heading sits in the rendered DOM: its paragraph, or a line inside one. */
+export type OutlineAnchor = Element | Range;
+
 interface DomOutline {
   headings: WordOutlineHeading[];
-  elements: Element[];
+  elements: OutlineAnchor[];
+}
+
+function anchorConnected(anchor: OutlineAnchor | undefined): anchor is OutlineAnchor {
+  if (!anchor) return false;
+  return anchor instanceof Element ? anchor.isConnected : anchor.startContainer.isConnected;
+}
+
+function anchorElement(anchor: OutlineAnchor): Element | null {
+  if (anchor instanceof Element) return anchor;
+  const node = anchor.startContainer;
+  return node instanceof Element ? node : node.parentElement;
 }
 
 function createDomOutlineSource(root: HTMLElement, contentSelector: string, read: (content: Element) => DomOutline | null): WordOutlineSource {
-  let elements: Element[] = [];
+  let elements: OutlineAnchor[] = [];
   const content = (): Element | null => root.querySelector(contentSelector);
   const scroller = (): HTMLElement | null => {
     const el = content();
@@ -174,14 +188,14 @@ function createDomOutlineSource(root: HTMLElement, contentSelector: string, read
     scroller,
     tops(headings, scrollEl) {
       return headings.map((heading) => {
-        const el = elements[heading.index];
-        return el && el.isConnected ? topIn(scrollEl, el) : null;
+        const anchor = elements[heading.index];
+        return anchorConnected(anchor) ? topIn(scrollEl, anchor) : null;
       });
     },
     reveal(heading, scrollEl) {
-      const el = elements[heading.index];
-      if (!el || !el.isConnected) return;
-      if (!revealAt(scrollEl, scrollEl ? topIn(scrollEl, el) : null)) el.scrollIntoView({ block: 'start' });
+      const anchor = elements[heading.index];
+      if (!anchorConnected(anchor)) return;
+      if (!revealAt(scrollEl, scrollEl ? topIn(scrollEl, anchor) : null)) anchorElement(anchor)?.scrollIntoView({ block: 'start' });
     },
     observe(onChange) {
       // Re-renders (theme, zoom) replace the document root; ignore toolbar and page churn.
@@ -233,23 +247,85 @@ export function msdocStyleLevel(el: Element): number | null {
   return null;
 }
 
+function styleOf(el: Element | null): { bold: boolean; fontSize: number | null } {
+  const style = el ? el.ownerDocument.defaultView?.getComputedStyle(el) : null;
+  if (!style) return { bold: false, fontSize: null };
+  const weight = Number.parseInt(style.fontWeight, 10) || (style.fontWeight === 'bold' ? 700 : 400);
+  const px = Number.parseFloat(style.fontSize);
+  return { bold: weight >= 600, fontSize: px > 0 ? Math.round(px * 0.75 * 2) / 2 : null };
+}
+
+interface MsdocLine {
+  text: string;
+  anchor: Range;
+  styleEl: Element | null;
+}
+
+/**
+ * Some .doc files (typically written by converters) carry a single paragraph-property run for
+ * the whole story, so @file-viewer/doc renders every paragraph inside one `<p>` separated by
+ * line breaks. Split those back into lines, each anchored by a DOM range at its first character.
+ */
+export function splitMsdocLines(p: Element): MsdocLine[] | null {
+  if (!/[\r\n]/.test(p.textContent ?? '')) return null;
+  const doc = p.ownerDocument;
+  const walker = doc.createTreeWalker(p, 4 /* NodeFilter.SHOW_TEXT */);
+  const lines: MsdocLine[] = [];
+  let current: { text: string; node: Text; offset: number; styleEl: Element | null } | null = null;
+  const finish = (): void => {
+    if (current && current.text.trim()) {
+      const range = doc.createRange();
+      range.setStart(current.node, current.offset);
+      range.setEnd(current.node, Math.min(current.offset + 1, current.node.length));
+      lines.push({ text: current.text, anchor: range, styleEl: current.styleEl });
+    }
+    current = null;
+  };
+  for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+    const value = node.nodeValue ?? '';
+    let offset = 0;
+    for (const part of value.split(/(\r\n|\r|\n)/)) {
+      if (/^(\r\n|\r|\n)$/.test(part)) {
+        finish();
+      } else if (part) {
+        if (!current) {
+          const lead = part.length - part.trimStart().length;
+          current = { text: '', node, offset: offset + Math.min(lead, part.length - 1), styleEl: node.parentElement };
+        }
+        current.text += part;
+      }
+      offset += part.length;
+    }
+  }
+  finish();
+  return lines;
+}
+
 /** Legacy binary .doc rendered by @file-viewer/doc as `p.msdoc-paragraph` blocks. */
 export function readMsdocOutline(content: Element): DomOutline {
   const paragraphs = Array.from(content.querySelectorAll('p.msdoc-paragraph'));
   const levels = paragraphs.map(msdocStyleLevel);
   // Formatting only feeds the inference fallback, so skip the style reads when headings are styled.
   const styled = levels.some(level => level != null);
-  const samples: WordParagraphSample[] = paragraphs.map((p, i) => {
+  const samples: WordParagraphSample[] = [];
+  const anchors: OutlineAnchor[] = [];
+  paragraphs.forEach((p, i) => {
+    const excluded = !!p.closest('table');
+    const lines = splitMsdocLines(p);
+    if (lines && lines.length > 1) {
+      lines.forEach((line, n) => {
+        const style = styled ? { bold: false, fontSize: null } : styleOf(line.styleEl);
+        // The merged paragraph carries only its first paragraph's style.
+        samples.push({ text: line.text, styleLevel: n === 0 ? levels[i] : null, bold: style.bold, fontSize: style.fontSize, excluded });
+        anchors.push(line.anchor);
+      });
+      return;
+    }
     const style = styled ? { bold: false, fontSize: null } : textStyle(p);
-    return {
-      text: p.textContent ?? '',
-      styleLevel: levels[i],
-      bold: style.bold,
-      fontSize: style.fontSize,
-      excluded: !!p.closest('table'),
-    };
+    samples.push({ text: p.textContent ?? '', styleLevel: levels[i], bold: style.bold, fontSize: style.fontSize, excluded });
+    anchors.push(p);
   });
-  return { headings: extractWordHeadings(samples), elements: paragraphs };
+  return { headings: extractWordHeadings(samples), elements: anchors };
 }
 
 export function createMsdocOutlineSource(root: HTMLElement): WordOutlineSource {
@@ -268,7 +344,7 @@ export async function readDocxPackageHeadings(data: ArrayBuffer): Promise<WordOu
 
 /** Pairs package headings with rendered paragraphs in document order by their text. */
 export function matchHeadingsToParagraphs(headings: readonly WordOutlineHeading[], paragraphs: readonly Element[]): DomOutline {
-  const elements: Element[] = [];
+  const elements: OutlineAnchor[] = [];
   const matched: WordOutlineHeading[] = [];
   let cursor = 0;
   for (const heading of headings) {

@@ -6,6 +6,7 @@ import {
   msdocStyleLevel,
   readDocxPackageHeadings,
   readMsdocOutline,
+  splitMsdocLines,
   samplesFromPmDoc,
 } from '../src/viewers/wordOutlineSources';
 
@@ -21,7 +22,7 @@ it('reads .doc headings from msdoc style classes', () => {
   </div>`;
   const outline = readMsdocOutline(document.querySelector('.msdoc-root')!);
   expect(outline.headings.map(h => [h.level, h.text, h.inferred])).toEqual([[1, '第一章 总则', false], [2, '1.1 范围', false]]);
-  expect(outline.elements[outline.headings[1].index].textContent).toBe('1.1 范围');
+  expect((outline.elements[outline.headings[1].index] as Element).textContent).toBe('1.1 范围');
   expect(msdocStyleLevel(document.querySelector('.msdoc-style-normal')!)).toBeNull();
 });
 
@@ -95,4 +96,41 @@ it('samples ProseMirror paragraphs with outline levels, marks and positions', ()
     ['第二章 总则', null, true, 14, false],
     ['cell', null, true, null, true],
   ]);
+});
+
+// Rendered DOM of the original 样例文件/中文/示例旧版文档.doc: the file has a single paragraph-property
+// run, so @file-viewer/doc puts all 31 paragraphs in one <p> separated by line breaks (all 12pt regular).
+const MERGED_SAMPLE_LINES = [
+  '示例项目文档', '1. 概述',
+  '本文件为演示用途的虚构内容，不包含任何真实组织、人员或业务信息。', '这里用于展示标题、段落、列表与表格在预览器中的渲染效果。',
+  '示例文本：Lorem ipsum dolor sit amet, consectetur adipiscing elit.', '示例要点一', '示例要点二',
+  '2. 功能说明',
+  '本文件为演示用途的虚构内容，不包含任何真实组织、人员或业务信息。', '这里用于展示标题、段落、列表与表格在预览器中的渲染效果。',
+];
+
+it('splits a merged .doc paragraph into lines with their own anchors', () => {
+  document.body.innerHTML = `<div class="msdoc-root"><p class="msdoc-paragraph msdoc-style-normal" style="text-align:left"><span style="font-size:12pt;font-family:'Times',sans-serif;white-space:break-spaces">${MERGED_SAMPLE_LINES.join('\r')}</span></p></div>`;
+  const lines = splitMsdocLines(document.querySelector('p')!)!;
+  expect(lines.map(line => line.text)).toEqual(MERGED_SAMPLE_LINES);
+  const anchor = lines[7].anchor;
+  expect(anchor.startContainer.nodeValue!.slice(anchor.startOffset, anchor.startOffset + 7)).toBe('2. 功能说明');
+  expect(splitMsdocLines(Object.assign(document.createElement('p'), { textContent: '单行' }))).toBeNull();
+  // Plain 12pt numbered lines stay body text: the inference rules are not loosened for merged runs.
+  expect(readMsdocOutline(document.querySelector('.msdoc-root')!).headings).toEqual([]);
+});
+
+it('infers headings per line when a merged .doc paragraph mixes heading and body formatting', () => {
+  const body = '这是一段足够长的正文内容，用于确定正文字号，它不会被识别为标题。';
+  const span = (text: string, css: string) => `<span style="${css}">${text}</span>`;
+  document.body.innerHTML = `<div class="msdoc-root"><p class="msdoc-paragraph msdoc-style-heading-1">${[
+    span('第一章 概述', 'font-weight:700;font-size:22pt'), '\n', span(body, 'font-size:12pt'), '\n',
+    span('第二章 功能说明', 'font-weight:700;font-size:22pt'), '\n', span(body, 'font-size:12pt'),
+  ].join('')}</p></div>`;
+  const outline = readMsdocOutline(document.querySelector('.msdoc-root')!);
+  // Only the first line keeps the merged paragraph's heading style; the rest is inferred.
+  expect(outline.headings.map(h => [h.level, h.text])).toEqual([[1, '第一章 概述']]);
+  document.querySelector('p')!.className = 'msdoc-paragraph msdoc-style-normal';
+  const inferred = readMsdocOutline(document.querySelector('.msdoc-root')!);
+  expect(inferred.headings.map(h => [h.level, h.text, h.inferred])).toEqual([[1, '第一章 概述', true], [1, '第二章 功能说明', true]]);
+  expect((inferred.elements[inferred.headings[1].index] as Range).startContainer.nodeValue).toBe('第二章 功能说明');
 });

@@ -81,9 +81,11 @@ WonderXY-ART 原有部署 secrets 仍需有效：`DEPLOY_SSH_KEY`、`DEPLOY_HOST
 
 ## 以后发版的三步操作
 
-1. 完成变更并确定桌面版本。用 `npm version X.Y.Z --workspace @easyview/desktop --no-git-tag-version` 更新桌面 package 与锁文件，检查 diff 后提交；扩展需要发新版时，另行修改 `apps/vscode-extension/package.json` 的版本并一起提交。将对应提交推送到主分支。
+1. 完成变更并确定桌面版本。打 tag 前在本地运行 `npm run verify:release`（verify:quick + 桌面与扩展全部 e2e）。用 `npm version X.Y.Z --workspace @easyview/desktop --no-git-tag-version` 更新桌面 package 与锁文件，检查 diff 后提交；扩展需要发新版时，另行修改 `apps/vscode-extension/package.json` 的版本并一起提交。将对应提交推送到主分支。
 2. 在要发布的提交上创建 tag：`git tag vX.Y.Z`。
 3. 推送这个 tag：`git push origin vX.Y.Z`。
+
+发布流程的第一个 job `ci-gate` 会检查被 tag 的提交在 `ci.yml`、`extension-e2e.yml`、`desktop-build.yml` 上都已有成功运行（只读 Actions API，不重跑测试；仍在运行时最多等 50 分钟；失败或缺失则立即终止发布）。所以第 3 步之前应等主分支上这三个 workflow 全绿，可用 `npm run check:release-gate -- --sha <提交>` 在本地做同样检查。紧急情况下手动 **Run workflow** 时勾选 `skip_ci_gate` 可跳过（会留下警告）。
 
 随后检查 EasyView 的 **Desktop Release** 运行成功、GitHub Release 附件齐全、WonderXY-ART 的 **Deploy** 成功，以及官网版本文字和下载文件校验值一致。主分支推送本身只执行日常 CI，不创建 Release。
 

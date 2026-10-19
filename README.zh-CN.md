@@ -32,8 +32,9 @@ packages/editor-core    纯浏览器编辑器、扩展、控制器和 UI
 packages/markdown-core  平台无关的 Markdown 解析、模型和转换
 packages/contracts      跨端消息、能力接口、结果和运行校验契约
 packages/node-runtime   Git、终端、导出、转换和文件 Node 运行时
-tests/e2e               编辑器、扩展宿主和桌面运行测试
-tests/fixtures          两端共用测试文档与样本
+packages/editor-sync    平台无关的 Markdown 规范化同步
+packages/preview-ui     共用文件预览与文档工具栏
+tests/fixtures          两端共用测试文档与样本（单元测试与代码同目录，e2e 在 apps/*/e2e，见 docs/testing）
 resources               公共品牌、演示、字体和运行样式源文件
 tooling                  架构、维护和品牌资源工具
 ```

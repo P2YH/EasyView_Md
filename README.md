@@ -46,8 +46,9 @@ packages/editor-core    Browser-only editor, extensions, controllers and UI
 packages/markdown-core  Platform-neutral Markdown parsing, models and transforms
 packages/contracts      Cross-platform messages, capabilities and result contracts
 packages/node-runtime   Node runtime for Git, terminal, export, conversion and files
-tests/e2e               Editor, extension-host and desktop runtime tests
-tests/fixtures          Shared test documents and samples
+packages/editor-sync    Platform-neutral canonical Markdown synchronization
+packages/preview-ui     Shared file previewers and document toolbars
+tests/fixtures          Shared test documents and samples (unit tests sit next to code; e2e in apps/*/e2e, see docs/testing)
 resources               Shared brand, demo, font and runtime-style sources
 tooling                  Architecture, maintenance and brand tooling
 ```

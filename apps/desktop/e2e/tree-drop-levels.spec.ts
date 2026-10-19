@@ -61,16 +61,17 @@ test('dropping below a nested folder\'s last child uses the pointer X to choose 
     // A tree refresh (e.g. a late file-watcher event, common on Windows) rebuilds the tree and drops the
     // indicator. A real drag repeats dragover continuously; the synthetic one fires once, so repeat it.
     const indicator = page.locator('.workspace-drop-indicator.is-visible');
-    const lineOffset = async (source: string, offsetX: number) => {
-      let offset = Number.NaN;
+    // The measurement is asserted inside toPass: on Windows a refresh between dragover and the read can
+    // leave a freshly built indicator at offset 0 for a frame, so a single sample is not reliable.
+    const expectLineOffset = async (source: string, offsetX: number, expected: number) => {
       await expect(async () => {
         await dragToTopEdge(page, source, '项目管理', offsetX, false);
         const rowLeft = await page.locator('.workspace-entry[data-relative-path="项目管理"]').evaluate((row) => row.getBoundingClientRect().left, undefined, { timeout: 1000 });
-        offset = Math.round(await indicator.evaluate((line) => line.getBoundingClientRect().left, undefined, { timeout: 1000 }) - rowLeft);
+        const offset = Math.round(await indicator.evaluate((line) => line.getBoundingClientRect().left, undefined, { timeout: 1000 }) - rowLeft);
+        expect(offset).toBe(expected);
       }).toPass({ timeout: 20000 });
-      return offset;
     };
-    expect(await lineOffset('功能设计/b-接口管理模块', 120)).toBe(40);
+    await expectLineOffset('功能设计/b-接口管理模块', 120, 40);
     await page.screenshot({ path: join(appDir, '../../test-results/desktop-tree-drop-nested.png') });
 
     await dragToTopEdge(page, '功能设计/b-接口管理模块', '项目管理', 120, true);
@@ -79,7 +80,7 @@ test('dropping below a nested folder\'s last child uses the pointer X to choose 
     ]);
 
     // Pointer at the far left: the line starts at the root level and the folder moves out before 项目管理.
-    expect(await lineOffset('功能设计/c-仪表盘功能', 4)).toBe(24);
+    await expectLineOffset('功能设计/c-仪表盘功能', 4, 24);
     await dragToTopEdge(page, '功能设计/c-仪表盘功能', '项目管理', 4, true);
     await expect.poll(() => treeOrder(page)).toEqual([
       '功能设计', '功能设计/a-平台UI', '功能设计/b-接口管理模块', 'c-仪表盘功能', '项目管理', 'notes.md',

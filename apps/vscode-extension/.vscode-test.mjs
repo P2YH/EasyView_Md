@@ -1,3 +1,5 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from '@vscode/test-cli';
@@ -6,9 +8,10 @@ const extensionDirectory = path.dirname(fileURLToPath(import.meta.url));
 const vscodeExecutablePath = process.env.VSCODE_EXECUTABLE_PATH;
 
 export default defineConfig({
-  files: '../../tests/e2e/vscode-extension/**/*.test.js',
+  files: 'e2e/**/*.test.js',
   extensionDevelopmentPath: extensionDirectory,
-  workspaceFolder: '/Users/zhangxy/Downloads/00-数据安全管控能力基线原型 2',
+  // Each run gets an empty workspace; the suites create their own fixtures.
+  workspaceFolder: mkdtempSync(path.join(tmpdir(), 'easyview-vscode-e2e-')),
   launchArgs: [
     '--disable-workspace-trust',
     '--skip-welcome',

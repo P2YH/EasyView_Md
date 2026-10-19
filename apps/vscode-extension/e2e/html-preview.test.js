@@ -3,8 +3,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vscode = require('vscode');
 
-const htmlRoot = '/Users/zhangxy/Downloads/00-数据安全管控能力基线原型 2';
+const os = require('node:os');
+
+// Self-contained fixture: a prototype shell page plus a sibling page it loads in an iframe.
+const htmlRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'easyview-html-preview-'));
 const htmlFile = path.join(htmlRoot, '数据安全管控能力基线.html');
+fs.mkdirSync(path.join(htmlRoot, 'dsmp', 'DataAssetMangerment'), { recursive: true });
+fs.writeFileSync(htmlFile, '<!doctype html><html><head><meta charset="utf-8"><title>数据安全管控能力基线</title></head><body><h1>数据安全管控能力基线</h1><nav><a href="dsmp/DataAssetMangerment/文件服务管理原型.html" target="content">文件服务管理</a></nav><p>请从左侧菜单选择功能</p><iframe name="content"></iframe></body></html>');
+fs.writeFileSync(path.join(htmlRoot, 'dsmp', 'DataAssetMangerment', '文件服务管理原型.html'), '<!doctype html><html><head><meta charset="utf-8"><title>文件服务管理</title></head><body><h1>文件服务管理</h1></body></html>');
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -22,6 +28,7 @@ async function waitForPreviewState(predicate, timeoutMs = 15000) {
 }
 
 suite('EasyView HTML preview in VS Code', () => {
+  suiteTeardown(() => fs.rmSync(htmlRoot, { recursive: true, force: true }));
   test('renders the local shell and a sibling iframe page', async () => {
     assert.ok(fs.existsSync(htmlFile), `missing fixture: ${htmlFile}`);
 

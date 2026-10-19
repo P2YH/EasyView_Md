@@ -19,6 +19,11 @@ on:
         required: false
         type: boolean
         default: false
+      skip_ci_gate:
+        description: 'EMERGENCY ONLY: release without green CI / Extension E2E / Desktop Build runs on the tagged commit'
+        required: false
+        type: boolean
+        default: false
 
 # All versions share one queue because the website uses fixed download names.
 concurrency:
@@ -29,7 +34,30 @@ permissions:
   contents: read
 
 jobs:
+  # Layer 3: the tagged commit must already have green layer-1/2 runs. Reads the Actions API only;
+  # nothing is re-run. Waits (bounded) for runs that are still in progress.
+  ci-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          persist-credentials: false
+      - name: Require green CI, Extension E2E and Desktop Build on the tagged commit
+        if: github.event_name != 'workflow_dispatch' || !inputs.skip_ci_gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tooling/release/check-ci-gate.mjs --sha "$(git rev-parse HEAD)" --timeout-minutes 50
+      - name: CI gate skipped by workflow_dispatch input
+        if: github.event_name == 'workflow_dispatch' && inputs.skip_ci_gate
+        run: echo "::warning::Release CI gate skipped (skip_ci_gate=true) for $(git rev-parse HEAD)"
+
   version:
+    needs: ci-gate
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.version.outputs.tag }}

@@ -6,7 +6,7 @@ const vscode = require('vscode');
 const { buildSync } = require('esbuild');
 
 // Exercise the production rename entry point against the real extension host.
-const source = path.resolve(__dirname, '../../../apps/vscode-extension/src/application/document/renameMarkdownResource.ts');
+const source = path.resolve(__dirname, '../src/application/document/renameMarkdownResource.ts');
 const compiled = buildSync({ entryPoints: [source], bundle: true, platform: 'node', format: 'cjs', external: ['vscode'], write: false });
 const renameModule = { exports: {} };
 new Function('require', 'module', 'exports', compiled.outputFiles[0].text)(require, renameModule, renameModule.exports);

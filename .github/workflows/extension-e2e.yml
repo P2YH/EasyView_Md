@@ -1,0 +1,43 @@
+# Layer 2: VS Code extension e2e under xvfb. Runs the vscode-test suites (apps/vscode-extension/e2e/*.test.js)
+# and the Playwright suites that drive a real VS Code window (e2e/*.spec.ts), then packages
+# and verifies the VSIX.
+name: Extension E2E
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: extension-e2e-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  extension:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: VS Code e2e (vscode-test + Playwright)
+        run: xvfb-run -a npm run test:e2e:vscode
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: extension-e2e-results
+          path: apps/vscode-extension/test-results
+          if-no-files-found: ignore
+      - run: npm run package:vscode
+      - run: npm run verify:vscode-package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: easyview-vsix
+          path: apps/vscode-extension/easyview-md-*.vsix

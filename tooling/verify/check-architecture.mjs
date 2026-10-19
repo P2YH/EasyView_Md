@@ -126,8 +126,7 @@ for (const required of [
   'packages/node-runtime/src/git',
   'packages/node-runtime/src/image',
   'packages/node-runtime/src/terminal',
-  'tests/e2e/editor',
-  'tests/e2e/vscode-extension',
+  'apps/vscode-extension/e2e',
   'apps/desktop/e2e',
   'tests/fixtures/editor',
 ]) await requirePath(required);

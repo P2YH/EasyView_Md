@@ -25,12 +25,12 @@ suite('EasyView workspace reveal after restore', () => {
         window: { tabGroups: vscode.window.tabGroups, get activeTextEditor() { return vscode.window.activeTextEditor; }, onDidChangeActiveTextEditor: vscode.window.onDidChangeActiveTextEditor, onDidChangeWindowState: vscode.window.onDidChangeWindowState, showErrorMessage: vscode.window.showErrorMessage, registerWebviewViewProvider: (_id, value) => { provider = value; return new vscode.Disposable(() => {}); } },
         commands: { executeCommand: vscode.commands.executeCommand, registerCommand: () => new vscode.Disposable(() => {}) },
       };
-      const source = path.resolve(__dirname, '../../../apps/vscode-extension/src/workspace/workspaceExplorerHost.ts');
+      const source = path.resolve(__dirname, '../src/workspace/workspaceExplorerHost.ts');
       const compiled = buildSync({ entryPoints: [source], bundle: true, platform: 'node', format: 'cjs', external: ['vscode', 'node-pty'], write: false });
       const module = { exports: {} };
       new Function('require', 'module', 'exports', compiled.outputFiles[0].text)((name) => name === 'vscode' ? host : require(name), module, module.exports);
       await vscode.commands.executeCommand('vscode.openWith', first, 'easyviewMd.markdownEditor', { preview: false });
-      subscription = module.exports.registerWorkspaceExplorer({ extensionUri: vscode.Uri.file(path.resolve(__dirname, '../../../apps/vscode-extension')), globalStorageUri: vscode.Uri.file(path.join(directory, 'data', 'User', 'globalStorage', 'easyview')) });
+      subscription = module.exports.registerWorkspaceExplorer({ extensionUri: vscode.Uri.file(path.resolve(__dirname, '..')), globalStorageUri: vscode.Uri.file(path.join(directory, 'data', 'User', 'globalStorage', 'easyview')) });
       const events = [];
       provider.resolveWebviewView({ visible: true, webview: { options: {}, asWebviewUri: (uri) => uri, onDidReceiveMessage: () => new vscode.Disposable(() => {}), postMessage: async (event) => { events.push(event); return true; }, html: '' }, onDidChangeVisibility: () => new vscode.Disposable(() => {}), onDidDispose: () => new vscode.Disposable(() => {}) }, {}, {});
       await provider.dispatchRequest({ type: 'ready' });

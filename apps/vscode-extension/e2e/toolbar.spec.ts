@@ -3,12 +3,12 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import ExcelJS from 'exceljs';
-import { terminateElectron } from '../../../apps/desktop/e2e/support/electronApp';
+import { terminateElectron } from '../../desktop/e2e/support/electronApp';
 
 /**
  * Real VS Code + development extension: xlsx toolbar edits must reach disk through the
  * webview → extension `writeBytes` bridge, and the toolbar icons must sit on one centre line.
- * Run: npm run build --workspace easyview-md && VSCODE_EXECUTABLE_PATH=... npx playwright test -c apps/vscode-extension/playwright.toolbar.config.ts
+ * Run via npm run test:e2e:vscode (apps/vscode-extension/scripts/run-e2e.mjs)
  */
 const cell = (col: number, row: number) => ({ x: 60 + col * 100 + 50, y: 25 + row * 25 + 12 });
 const shots = process.env.EASYVIEW_SCREENSHOT_DIR;
@@ -32,8 +32,8 @@ async function launch(file: 'book.xlsx' | 'doc.docx') {
   for (let r = 1; r <= 6; r += 1) for (let c = 1; c <= 4; c += 1) sheet.getCell(r, c).value = r * 10 + c;
   await book.xlsx.writeFile(join(workspace, 'book.xlsx'));
   const { copyFile } = await import('node:fs/promises');
-  await copyFile(resolve(__dirname, '../../fixtures/preview/sample.docx'), join(workspace, 'doc.docx'));
-  const application = await electron.launch({ executablePath, args: [`--user-data-dir=${join(temporary, 'data')}`, `--extensions-dir=${join(temporary, 'extensions')}`, `--extensionDevelopmentPath=${resolve(__dirname, '../../../apps/vscode-extension')}`, '--disable-workspace-trust', '--skip-welcome', '--skip-release-notes', workspace, join(workspace, file)], timeout: 60_000 });
+  await copyFile(resolve(__dirname, '../../../tests/fixtures/preview/sample.docx'), join(workspace, 'doc.docx'));
+  const application = await electron.launch({ executablePath, args: [`--user-data-dir=${join(temporary, 'data')}`, `--extensions-dir=${join(temporary, 'extensions')}`, `--extensionDevelopmentPath=${resolve(__dirname, '..')}`, '--disable-workspace-trust', '--skip-welcome', '--skip-release-notes', workspace, join(workspace, file)], timeout: 60_000 });
   const page = await application.firstWindow();
   await application.evaluate(({ BrowserWindow }) => { const win = BrowserWindow.getAllWindows()[0]; win.setBounds({ x: 0, y: 0, width: 1700, height: 1000 }); });
   return { application, page, workspace, temporary };

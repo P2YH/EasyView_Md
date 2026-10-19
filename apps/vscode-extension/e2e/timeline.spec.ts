@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { terminateElectron } from '../../../apps/desktop/e2e/support/electronApp';
+import { terminateElectron } from '../../desktop/e2e/support/electronApp';
 test('VS Code development extension opens Timeline versions in a read-only Change tab', async()=>{
   test.setTimeout(120000);
   const temporary=await mkdtemp(join(tmpdir(),'easyview-timeline-vscode-')),workspace=join(temporary,'workspace');await mkdir(workspace);
@@ -13,7 +13,7 @@ test('VS Code development extension opens Timeline versions in a read-only Chang
   await writeFile(join(workspace,'notes.md'),'# Original\n');git('add','.');git('commit','-qm','Initial version');await writeFile(join(workspace,'notes.md'),'# Updated\n');git('add','.');git('commit','-qm','Updated version');
   const executablePath = process.env.VSCODE_EXECUTABLE_PATH;
   if (!executablePath) throw new Error('Set VSCODE_EXECUTABLE_PATH to the VS Code executable before running this test');
-  const application=await electron.launch({executablePath,args:[`--user-data-dir=${join(temporary,'data')}`,`--extensions-dir=${join(temporary,'extensions')}`,`--extensionDevelopmentPath=${resolve(__dirname,'../../../apps/vscode-extension')}`,'--disable-workspace-trust','--skip-welcome','--skip-release-notes',workspace],timeout:60000});
+  const application=await electron.launch({executablePath,args:[`--user-data-dir=${join(temporary,'data')}`,`--extensions-dir=${join(temporary,'extensions')}`,`--extensionDevelopmentPath=${resolve(__dirname,'..')}`,'--disable-workspace-trust','--skip-welcome','--skip-release-notes',workspace],timeout:60000});
   try{
     const page=await application.firstWindow();
     let sidebar:Frame|undefined;
@@ -23,7 +23,7 @@ test('VS Code development extension opens Timeline versions in a read-only Chang
     },{timeout:60000}).toBe(true);
     await sidebar!.locator('.workspace-entry-name',{hasText:'notes.md'}).click();
     await expect(sidebar!.locator('.easyview-timeline-entry')).toHaveCount(2);
-    await expect(sidebar!.locator('.easyview-timeline-header')).toHaveText('⌄  TIMELINE');
+    await expect(sidebar!.locator('.easyview-timeline-header')).toHaveText('TIMELINE'); await expect(sidebar!.locator('.easyview-timeline-header')).toHaveAttribute('aria-expanded','true'); await expect(sidebar!.locator('.easyview-timeline-chevron.is-expanded svg')).toHaveCount(1);
     const filter = sidebar!.getByRole('button', { name: 'Filter Sources', exact: true });
     await filter.click();
     const sourceOptions = sidebar!.getByRole('menuitemcheckbox');

@@ -3,6 +3,7 @@ import { promises as fs, watch, type FSWatcher } from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fingerprintFiles } from '../filesystem/file-fingerprint';
+import { retryIndexLock, serialRepo } from './repo-lock';
 import type { GuardRepository, GuardFile, GuardStatus, GuardHistory, GuardComparison, GuardRequest, GuardBranch } from '@easyview/contracts';
 
 // One limiter per host process, shared across windows and repositories.
@@ -16,14 +17,12 @@ async function slot<T>(operation: () => Promise<T>): Promise<T> {
   try { return await operation(); }
   finally { guardDiagnostics.active--; const next = waiting.shift(); if (next) next(); else running--; }
 }
-const writes = new Map<string, Promise<unknown>>();
-function serial<T>(key: string, action: () => Promise<T>): Promise<T> {
-  const result = (writes.get(key) ?? Promise.resolve()).then(action);
-  const settled = result.then(() => undefined, () => undefined); writes.set(key, settled);
-  void settled.then(() => { if (writes.get(key) === settled) writes.delete(key); });
-  return result;
-}
+// Writers share the per-repository queue with the file-header git service (see repo-lock.ts).
+const serial = serialRepo;
 export function guardGit(root: string, args: string[], signal?: AbortSignal): Promise<string> {
+  return retryIndexLock(() => guardGitOnce(root, args, signal));
+}
+function guardGitOnce(root: string, args: string[], signal?: AbortSignal): Promise<string> {
   return slot(() => new Promise((resolve, reject) => {
     signal?.throwIfAborted(); guardDiagnostics.commands++;
     execFile('git', ['--no-optional-locks', '-C', root, ...args], {

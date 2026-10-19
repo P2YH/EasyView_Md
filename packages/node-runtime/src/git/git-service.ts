@@ -1,4 +1,5 @@
 import { execFile as execFileCallback } from "node:child_process";
+import { isReadOnlyGit, retryIndexLock, serialRepo } from "./repo-lock";
 import { realpath, stat } from "node:fs/promises";
 import * as path from "node:path";
 import { promisify } from "node:util";
@@ -92,11 +93,13 @@ async function runGit(
   args: readonly string[],
 ): Promise<string> {
   try {
-    const result = await execFile("git", ["-C", repositoryPath, ...args], {
+    // Reads never take index.lock; writers queue behind Version Guard on the same repository.
+    const readOnly = isReadOnlyGit(args);
+    const run = async () => (await execFile("git", [...(readOnly ? ["--no-optional-locks"] : []), "-C", repositoryPath, ...args], {
       windowsHide: true,
       maxBuffer: 4 * 1024 * 1024,
-    });
-    return result.stdout;
+    })).stdout;
+    return await (readOnly ? run() : serialRepo(repositoryPath, () => retryIndexLock(run)));
   } catch (error) {
     throw new GitServiceError(
       "COMMAND_FAILED",

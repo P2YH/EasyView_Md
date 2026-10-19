@@ -9,7 +9,7 @@ import { tTimeline } from './timeline.i18n';
 export function historyGit(root: string, args: string[], signal?: AbortSignal): Promise<string> {
   signal?.throwIfAborted();
   return gitQueue.run(() => new Promise<string>((resolve, reject) => {
-    execFile('git', ['-C', root, ...args], { signal, windowsHide: true, maxBuffer: 32 * 1024 * 1024 }, (error, stdout, stderr) => {
+    execFile('git', ['--no-optional-locks', '-C', root, ...args], { signal, windowsHide: true, maxBuffer: 32 * 1024 * 1024 }, (error, stdout, stderr) => {
       if (error) reject(new Error(signal?.aborted ? tTimeline('error.cancelled') : stderr.trim() || error.message));
       else resolve(stdout);
     });

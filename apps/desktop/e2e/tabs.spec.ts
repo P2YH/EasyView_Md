@@ -189,7 +189,25 @@ test('keeps Markdown dirty content while preview tabs occupy the central surface
     await secondParagraph.click();
     await page.keyboard.press('End');
     await page.keyboard.type(' Second saved.');
-    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+S' : 'Control+S');
+    // Under CI load the save shortcut can fire before the edit reaches the document model.
+    await expect(page.locator('.desktop-editor-session:not([hidden]) .ProseMirror')).toContainText('Second saved.');
+    await expect(page.locator('.desktop-tab.active .desktop-tab-dirty')).toHaveCount(1);
+    // Save through File > Save: a CDP-synthesized Cmd/Ctrl+S reaches the renderer first and is only
+    // sometimes forwarded to the menu accelerator (flaky on CI and on busy desktops). The shortcut
+    // itself is still exercised by the second save below.
+    await launched.application.evaluate(({ Menu }) => {
+      const find = (items: Electron.MenuItem[]): Electron.MenuItem | undefined => {
+        for (const item of items) {
+          if (item.accelerator === 'CmdOrCtrl+S') return item;
+          const nested = item.submenu ? find(item.submenu.items) : undefined;
+          if (nested) return nested;
+        }
+        return undefined;
+      };
+      const save = find(Menu.getApplicationMenu()?.items ?? []);
+      if (!save?.enabled) throw new Error('File > Save is not available');
+      save.click();
+    });
     await expect.poll(async () => readFile(secondMarkdownPath, 'utf8')).toContain('Second saved.');
     await page.locator('.desktop-tab', { hasText: 'notes.md' }).locator('.desktop-tab-activate').click();
     await expect(page.locator('.desktop-editor-session:not([hidden]) .ProseMirror')).toContainText('Unsaved tab content.');

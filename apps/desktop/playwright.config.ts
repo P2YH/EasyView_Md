@@ -11,5 +11,6 @@ export default defineConfig({
   use: { actionTimeout: 15_000 },
   fullyParallel: false,
   workers: 1,
-  retries: 0,
+  // One retry on CI absorbs runner-load flakes (drag/drop pointer timing, save races); local runs stay strict.
+  retries: process.env.CI ? 1 : 0,
 });

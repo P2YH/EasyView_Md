@@ -10,8 +10,11 @@ import type { EditorToHostMessage } from '@easyview/contracts/protocol';
 import { createEditorDomContext, type EditorDomContext } from '../runtime/editorDomContext';
 import { escapeHtml } from './escapeHtml';
 import { tFileHeader } from './fileHeader.i18n';
+import { AI_CHAT_ICON_HTML } from './aiChatIcon';
 
 export interface FileHeaderDeps {
+  /** Desktop document name already lives in the tab strip. */
+  toolbarOnly?: boolean;
   dom?: EditorDomContext;
   appearance?: EditorAppearanceStore;
   postMessage: (msg: EditorToHostMessage) => void;
@@ -598,6 +601,7 @@ function ensureCommitModalStyles(): void {
 
 export interface FileHeader {
   el: HTMLElement;
+  getName(): string;
   setName: (name: string) => void;
   setCollapseHandler: (handler: () => void) => void;
   setTocHandler: (handler: () => void) => void;
@@ -675,6 +679,8 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
 
   const bar = document.createElement('div');
   bar.className = 'file-header-bar';
+  let moreMenu: HTMLElement | null = null;
+  let toolbarResizeObserver: ResizeObserver | null = null;
 
   let shortcutConfig = readStoredShortcuts();
   let shortcutChangeHandler: ((config: ToolbarShortcutConfig) => void) | null = null;
@@ -716,6 +722,7 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
 
   const setTitleWithShortcut = (element: HTMLElement, text: string, action?: ToolbarShortcutAction): void => {
     element.title = action ? `${text} (${shortcutLabel(action)})` : text;
+    if (deps.toolbarOnly) element.setAttribute('aria-label', text);
   };
 
   const syncTocButton = (visible: boolean): void => {
@@ -873,7 +880,7 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
   const aiChatBtn = document.createElement('button');
   aiChatBtn.className = 'file-header-btn';
   aiChatBtn.title = tFileHeader('aiChat.toggle');
-  aiChatBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+  aiChatBtn.innerHTML = AI_CHAT_ICON_HTML;
   if (capabilities.aiChat) rightGroup.appendChild(aiChatBtn);
 
   const stickyNoteBtn = document.createElement('button');
@@ -1146,7 +1153,10 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
   function syncAccentTheme(theme: EasyViewAccentTheme) {
     const selected = accentThemes.find((item) => item.value === theme) ?? accentThemes[0];
     accentLabel.textContent = selected.label;
-    accentSelect.style.color = accentOptionColor(theme);
+    const selectedColor = accentOptionColor(theme);
+    // Desktop toolbar styles force control colours with !important.
+    if (selectedColor) accentLabel.style.setProperty('color', selectedColor, 'important');
+    else accentLabel.style.removeProperty('color');
     for (const item of accentThemes) {
       const optionEl = accentOptionEls.get(item.value);
       if (!optionEl) continue;
@@ -1414,6 +1424,7 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
 
   const onDocumentKeydown = (e: KeyboardEvent): void => {
     if (e.key === 'Escape') {
+      moreMenu?.classList.remove('open');
       exportDropdown.classList.remove('open');
       accentMenu.classList.remove('open');
       closeShortcutModal();
@@ -1431,6 +1442,7 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
 
   // Close dropdown on outside click
   const onDocumentClick = (): void => {
+    moreMenu?.classList.remove('open');
     exportDropdown.classList.remove('open');
     accentMenu.classList.remove('open');
   };
@@ -1466,12 +1478,109 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
 
   refreshShortcutAwareTitles();
 
-  bar.appendChild(leftGroup);
-  bar.appendChild(nameEl);
-  bar.appendChild(rightGroup);
+  if (deps.toolbarOnly) {
+    bar.classList.add('file-header-toolbar');
+    bar.setAttribute('role', 'toolbar');
+    bar.setAttribute('aria-label', tFileHeader('toolbar.label'));
+    const label = (button: HTMLElement, key: Parameters<typeof tFileHeader>[0]): void => {
+      button.setAttribute('aria-label', button.title || tFileHeader(key));
+    };
+    label(tocBtn, 'toolbar.outline');
+    label(sourceBtn, 'toolbar.source');
+    label(widthBtn, 'toolbar.fullWidth');
+    label(tableWrapBtn, 'toolbar.tableWrap');
+    label(collapseBtn, 'toolbar.collapse');
+    label(historyBtn, 'toolbar.history');
+    label(stickyNoteBtn, 'toolbar.stickyNote');
+    label(viewChangesBtn, 'viewChanges');
+    label(exportBtn, 'export');
+    const mounted = new Set<Element>([...leftGroup.children, ...rightGroup.children, zoomGroup]);
+    // Lower priority groups move into the overflow menu first; priority 0 groups always stay inline.
+    const groupSpecs: Array<{ name: string; priority: number; items: HTMLElement[] }> = [
+      { name: 'view', priority: 0, items: [tocBtn, sourceBtn, widthBtn, tableWrapBtn, collapseBtn] },
+      { name: 'zoom', priority: 4, items: [zoomGroup] },
+      { name: 'navigate', priority: 2, items: [scrollTopBtn, scrollBottomBtn] },
+      { name: 'git', priority: 5, items: [viewChangesBtn, stageBtn, commitBtn] },
+      { name: 'tools', priority: 3, items: [terminalBtn, historyBtn, stickyNoteBtn, externalFollowBtn] },
+      { name: 'output', priority: 6, items: [exportWrapper, themeWrap] },
+      { name: 'preferences', priority: 1, items: [accentWrap, settingsBtn] },
+    ];
+    const groups = groupSpecs
+      .map((spec) => {
+        const items = spec.items.filter((item) => mounted.has(item));
+        if (!items.length) return null;
+        const el = document.createElement('div');
+        el.className = 'file-header-group';
+        el.dataset.group = spec.name;
+        el.append(...items);
+        return { el, priority: spec.priority };
+      })
+      .filter((group): group is { el: HTMLDivElement; priority: number } => group !== null);
+    leftGroup.replaceChildren();
+    rightGroup.replaceChildren();
+    const more = document.createElement('div');
+    more.className = 'file-header-export-wrapper file-header-more';
+    const moreButton = document.createElement('button');
+    moreButton.type = 'button';
+    moreButton.className = 'file-header-btn';
+    moreButton.title = tFileHeader('toolbar.more');
+    moreButton.setAttribute('aria-label', moreButton.title);
+    moreButton.setAttribute('aria-haspopup', 'true');
+    moreButton.textContent = '···';
+    moreMenu = document.createElement('div');
+    moreMenu.className = 'file-header-dropdown';
+    for (const group of groups) {
+      for (const button of group.el.querySelectorAll<HTMLElement>('.file-header-btn')) {
+        if (button.title && !button.closest('.file-header-zoom')) button.dataset.label = button.title.replace(/\s*\([^)]*\)$/, '');
+      }
+    }
+    moreButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      exportDropdown.classList.remove('open');
+      moreMenu!.classList.toggle('open');
+    });
+    moreMenu.addEventListener('click', (event) => event.stopPropagation());
+    more.append(moreButton, moreMenu);
+    more.hidden = true;
+    bar.append(...groups.map((group) => group.el), more);
+
+    const contentWidth = (): number => {
+      const style = getComputedStyle(bar);
+      const gap = parseFloat(style.columnGap) || 0;
+      const visible = Array.from(bar.children).filter((child) => !(child as HTMLElement).hidden);
+      const width = visible.reduce((sum, child) => sum + child.getBoundingClientRect().width, 0);
+      return width + gap * Math.max(0, visible.length - 1);
+    };
+    const fitToolbar = (): void => {
+      const style = getComputedStyle(bar);
+      const available = bar.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
+      if (available <= 0) return;
+      for (const group of groups) bar.insertBefore(group.el, more);
+      moreMenu!.classList.remove('open');
+      more.hidden = true;
+      if (contentWidth() <= available) return;
+      more.hidden = false;
+      const movable = groups.filter((group) => group.priority > 0).sort((a, b) => a.priority - b.priority);
+      for (const group of movable) {
+        moreMenu!.appendChild(group.el);
+        if (contentWidth() <= available) break;
+      }
+      const overflowed = groups.filter((group) => group.el.parentElement === moreMenu).map((group) => group.el);
+      moreMenu!.replaceChildren(...overflowed);
+    };
+    if (typeof ResizeObserver !== 'undefined') {
+      toolbarResizeObserver = new ResizeObserver(() => fitToolbar());
+      toolbarResizeObserver.observe(bar);
+    }
+  } else {
+    bar.appendChild(leftGroup);
+    bar.appendChild(nameEl);
+    bar.appendChild(rightGroup);
+  }
 
   return {
     el: bar,
+    getName: () => nameEl.textContent?.trim() || '',
     setName(name: string) { nameEl.textContent = name; },
     setCollapseHandler(handler: () => void) {
       collapseBtn.addEventListener('click', () => {
@@ -1684,6 +1793,7 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
       if (destroyed) return;
       destroyed = true;
       appearanceSubscription.unsubscribe();
+      toolbarResizeObserver?.disconnect();
       if (depthCloseTimer != null) {
         window.clearTimeout(depthCloseTimer);
         depthCloseTimer = null;

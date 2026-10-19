@@ -36,12 +36,15 @@ export interface PersistedEditorTab {
   id: string;
   kind: 'editor';
   filePath: string;
+  /** Pinned tabs lead their group and survive Close Others / Close All. */
+  pinned?: boolean;
 }
 
 export interface PersistedPreviewTab {
   id: string;
   kind: 'preview';
   relativePath: string;
+  pinned?: boolean;
 }
 
 export type PersistedDesktopTab = PersistedEditorTab | PersistedPreviewTab;
@@ -69,6 +72,8 @@ export interface DesktopHistoryTab {
   relativePath: string;
   baseLabel: string;
   contentLabel: string;
+  /** History comparisons are transient and never pinned. */
+  pinned?: never;
 }
 export type DesktopTab = DesktopEditorTab | DesktopPreviewTab | DesktopHistoryTab;
 
@@ -246,6 +251,8 @@ export type DesktopTabContextCommand =
   | 'close'
   | 'closeOthers'
   | 'closeAll'
+  | 'pin'
+  | 'unpin'
   | 'copyPath'
   | 'copyRelativePath'
   | 'revealInIndexArea'

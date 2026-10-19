@@ -46,6 +46,12 @@ export interface EasyViewDesktopApi {
   };
   window: {
     requestClose(): Promise<OperationResult<boolean>>;
+    /** macOS: applies the system "double-click a window's title bar" action (zoom or minimize). */
+    titleBarDoubleClick(): Promise<OperationResult<boolean>>;
+    /** Pops up the application menu at a point in the renderer's CSS pixels. */
+    popupAppMenu(x: number, y: number): Promise<OperationResult<boolean>>;
+    /** Windows / Linux: recolours the native window-control overlay to match the renderer's top row. */
+    setTitleBarOverlay(color: string, symbolColor: string): Promise<OperationResult<boolean>>;
   };
   external: {
     open(url: string): Promise<OperationResult<boolean>>;

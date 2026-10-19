@@ -15,6 +15,7 @@ import { tAiChat } from './aiChat.i18n';
 import { escapeHtml } from './escapeHtml';
 import { openSettingsDialog, settingsCheckbox, settingsFieldWithHint, type SettingsDialogHandle } from './SettingsDialog';
 import { maxPanelWidth, PANEL_WIDTH_SANITY_MAX } from '../runtime/panelWidth';
+import { AI_CHAT_ICON_HTML } from './aiChatIcon';
 
 const PANEL_WIDTH_STORAGE_KEY = 'easyview-ai-chat-width';
 const MODEL_STORAGE_KEY = 'easyview-ai-chat-model';
@@ -159,10 +160,10 @@ function ensureAiChatPanelStyles(): void {
       opacity: 0.85;
       cursor: default;
     }
-    .ai-chat-panel-icon svg {
+    .ai-chat-panel-icon .ai-chat-icon {
       display: block;
-      width: 15px;
-      height: 15px;
+      width: 16px;
+      height: 16px;
     }
     .ai-chat-icon-btn {
       width: 24px;
@@ -507,15 +508,12 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
   root.innerHTML = `
     <div class="ai-chat-resizer" title="${tHtml('resize')}"></div>
     <div class="ai-chat-header">
-      <span class="ai-chat-panel-icon" role="img" title="${tHtml('title')}" aria-label="${tHtml('title')}"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M3.25 2.25h9.5A1.75 1.75 0 0 1 14.5 4v5.75a1.75 1.75 0 0 1-1.75 1.75H8l-3.25 2.75V11.5h-1.5A1.75 1.75 0 0 1 1.5 9.75V4a1.75 1.75 0 0 1 1.75-1.75z"/><path d="M8 4.4l.75 1.6 1.6.75-1.6.75L8 9.1l-.75-1.6-1.6-.75 1.6-.75z" fill="currentColor" stroke-width=".6"/></svg></span>
+      <span class="ai-chat-panel-icon" role="img" title="${tHtml('title')}" aria-label="${tHtml('title')}">${AI_CHAT_ICON_HTML}</span>
       <button class="ai-chat-icon-btn" data-action="settings" type="button" title="${tHtml('settings')}">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
       <button class="ai-chat-icon-btn" data-action="clear" type="button" title="${tHtml('clear')}">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-      </button>
-      <button class="ai-chat-icon-btn" data-action="close" type="button" title="${tHtml('close')}">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g transform="rotate(40 12 12)"><path d="M12 3v8M8.5 11h7l2.5 9H6l2.5-9Z"/><path d="m10 15-1 5m5-5 1 5"/></g></svg>
       </button>
     </div>
     <div class="ai-chat-messages"></div>
@@ -1360,9 +1358,6 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
     if (!button) return;
     const action = button.dataset.action;
     switch (action) {
-      case 'close':
-        close();
-        break;
       case 'clear':
         messages = [];
             persistSession();

@@ -81,6 +81,7 @@ import { createFileHeader, type EasyViewAccentTheme, type ToolbarShortcutAction,
 export type { EasyViewAccentTheme } from './ui/FileHeader';
 import type { EditorAppearanceStore } from './ui/EditorAppearance';
 export { EditorAppearanceStore, applyEditorAppearance, type EditorAppearanceState } from './ui/EditorAppearance';
+export { AI_CHAT_ICON_HTML } from './ui/aiChatIcon';
 import { HistoryPanel } from './ui/HistoryPanel';
 import { createStickyNoteModal } from './ui/StickyNoteModal';
 import { createLazyTerminalModal, type TerminalAppearance } from './ui/lazyTerminalModal';
@@ -1415,6 +1416,7 @@ function initEditor() {
   // 2. Create UI components
   const tUI = performance.now();
   const fileHeader = createFileHeader({
+    toolbarOnly: uiMode === 'desktop',
     dom,
     appearance,
     capabilities: host.capabilities,
@@ -1458,7 +1460,7 @@ function initEditor() {
     changeViewController.toggle();
   });
   const editorBody = dom.getById('editor-body');
-  if (editorBody && uiMode === 'standard') {
+  if (editorBody) {
     editorBody.parentElement?.insertBefore(fileHeader.el, editorBody);
   }
   const toolbar = new FloatingToolbar(createToolbarButtons((view) => linkEditPopup.toggle(view)), dom);

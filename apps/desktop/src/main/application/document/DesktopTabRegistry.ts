@@ -243,12 +243,28 @@ export class DesktopTabRegistry {
     return this.active();
   }
 
+  /**
+   * Pinning moves the tab to the end of its group's pinned run; unpinning moves it to the
+   * first unpinned slot, matching VS Code.
+   */
+  setPinned(tabId: string, pinned: boolean): DesktopTab | null {
+    const group = this.mutableGroupForTab(tabId);
+    const tab = group?.tabs.find((candidate) => candidate.id === tabId);
+    if (!group || !tab || tab.kind === 'history') return null;
+    group.tabs = group.tabs.filter((candidate) => candidate !== tab);
+    if (pinned) tab.pinned = true;
+    else delete tab.pinned;
+    group.tabs.splice(pinnedCount(group.tabs), 0, tab);
+    return cloneTab(tab);
+  }
+
   closeOthers(tabId: string): DesktopTab[] {
     const group = this.mutableGroupForTab(tabId);
     if (!group) return [];
-    const removed = group.tabs.filter((tab) => tab.id !== tabId).map(cloneTab);
-    group.tabs = group.tabs.filter((tab) => tab.id === tabId);
-    group.activeTabId = group.tabs[0]?.id ?? null;
+    const closing = (tab: DesktopTab): boolean => tab.id !== tabId && !tab.pinned;
+    const removed = group.tabs.filter(closing).map(cloneTab);
+    group.tabs = group.tabs.filter((tab) => !closing(tab));
+    group.activeTabId = tabId;
     this.activeGroupId = group.id;
     return removed;
   }
@@ -256,9 +272,9 @@ export class DesktopTabRegistry {
   closeAllInGroup(tabId: string): DesktopTab[] {
     const group = this.mutableGroupForTab(tabId);
     if (!group) return [];
-    const removed = group.tabs.map(cloneTab);
-    group.tabs = [];
-    group.activeTabId = null;
+    const removed = group.tabs.filter((tab) => !tab.pinned).map(cloneTab);
+    group.tabs = group.tabs.filter((tab) => tab.pinned);
+    if (!group.tabs.some((tab) => tab.id === group.activeTabId)) group.activeTabId = group.tabs[0]?.id ?? null;
     this.removeEmptyGroup(group.id);
     return removed;
   }
@@ -270,6 +286,7 @@ export class DesktopTabRegistry {
     if (!sourceGroup || !sourceTab) return null;
     const duplicate = cloneTab(sourceTab);
     duplicate.id = newTabId;
+    delete duplicate.pinned;
     const group: EditorGroupState = { id: newGroupId, tabs: [duplicate], activeTabId: duplicate.id };
     this.groups.set(group.id, group);
     this.layout = insertSplit(this.layout, sourceGroup.id, group.id, direction);
@@ -329,6 +346,10 @@ function closeFromGroup(group: EditorGroupState, tabId: string): void {
   if (group.activeTabId === tabId) group.activeTabId = group.tabs[index]?.id ?? group.tabs[index - 1]?.id ?? null;
 }
 
+function pinnedCount(tabs: readonly DesktopTab[]): number {
+  const index = tabs.findIndex((tab) => !tab.pinned);
+  return index < 0 ? tabs.length : index;
+}
 function cloneTab<T extends DesktopTab>(tab: T): T { return { ...tab }; }
 function cloneGroup(group: EditorGroupState): DesktopEditorGroupSnapshot {
   return { id: group.id, tabs: group.tabs.map(cloneTab), activeTabId: group.activeTabId };
@@ -339,9 +360,10 @@ function cloneLayout(layout: DesktopEditorGroupLayout): DesktopEditorGroupLayout
     : { kind: 'split', orientation: layout.orientation, first: cloneLayout(layout.first), second: cloneLayout(layout.second) };
 }
 function toPersisted(tab: DesktopTab): PersistedDesktopTab {
+  const pinned = tab.pinned ? { pinned: true } : {};
   return tab.kind === 'editor'
-    ? { id: tab.id, kind: 'editor', filePath: tab.filePath }
-    : { id: tab.id, kind: 'preview', relativePath: tab.relativePath };
+    ? { id: tab.id, kind: 'editor', filePath: tab.filePath, ...pinned }
+    : { id: tab.id, kind: 'preview', relativePath: tab.relativePath, ...pinned };
 }
 function insertSplit(layout: DesktopEditorGroupLayout, sourceId: string, newId: string, direction: DesktopSplitDirection): DesktopEditorGroupLayout {
   if (layout.kind === 'group') {

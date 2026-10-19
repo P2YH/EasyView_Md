@@ -7,7 +7,7 @@ import type { TimelineUiState } from '@easyview/contracts';
 import type { HostToEditorMessage, EditorToHostMessage } from '@easyview/contracts';
 import { readLocalProductTheme } from '@easyview/contracts';
 import { applyDesktopProductAppearance } from './productThemeControl';
-import { createEasyViewEditor, createLazyAiChatPanel, EditorAppearanceStore, type AiChatPanel, type EasyViewEditorInstance } from '@easyview/editor-core';
+import { AI_CHAT_ICON_HTML, createEasyViewEditor, createLazyAiChatPanel, EditorAppearanceStore, type AiChatPanel, type EasyViewEditorInstance } from '@easyview/editor-core';
 import { defaultDesktopPanelLayout, isDesktopAppearanceCommand, normalizeDesktopPanelLayout } from '../contracts';
 import type { DesktopAppearanceMode, DesktopEditorTab, DesktopPanelLayout, DesktopTab, DesktopTabSnapshot, DesktopThemeMode } from '../contracts';
 import { applyTitleBarToggles, applyWorkbenchPanelLayout, installPanelDock, type PanelDockElements, type TitleBarToggleElements } from './panelDock';
@@ -20,6 +20,13 @@ import { ActiveViewController } from './ActiveViewController';
 import { TabController } from './TabController';
 import { WelcomePage } from './WelcomePage';
 import { tDesktop } from './desktopRenderer.i18n';
+import { readToolbarPinned, subscribeToolbarVisibility } from '@easyview/preview-ui/toolbar';
+import { installWindowChrome } from './windowChrome';
+import { installAppMenuButton } from './appMenuButton';
+import { installTitleBarDoubleClick } from './titleBarDoubleClick';
+import { installTitleBarOverlaySync } from './titleBarOverlaySync';
+import { installToolbarWheelScroll } from './toolbarWheelScroll';
+import '@easyview/preview-ui/toolbar-styles';
 
 interface WindowWithDesktopApi extends Window {
   easyViewDesktop: EasyViewDesktopApi;
@@ -67,6 +74,7 @@ window.__easyviewPdfFonts = {
 
 function localizeShell(): void {
   const aiChatToggleButton = document.getElementById('ai-chat-toggle');
+  if (aiChatToggleButton) aiChatToggleButton.innerHTML = AI_CHAT_ICON_HTML;
   aiChatToggleButton?.setAttribute('title', tDesktop('shell.aiChatToggle'));
   aiChatToggleButton?.setAttribute('aria-label', tDesktop('shell.aiChat'));
   document.getElementById('desktop-tab-bar')?.setAttribute('aria-label', tDesktop('shell.openTabs'));
@@ -79,8 +87,7 @@ function localizeShell(): void {
 }
 localizeShell();
 
-const titleName = document.getElementById('desktop-document-name')!;
-// Page zoom changes the CSS viewport, which fires resize; the title bar cancels it out (see desktop.css).
+// Keep native window controls and the tab strip aligned when the document UI is zoomed.
 const syncTitleBarZoom = (): void => {
   document.documentElement.style.setProperty('--desktop-page-zoom', String(api.app.getZoomFactor()));
 };
@@ -288,14 +295,6 @@ function syncWelcome(snapshot: DesktopTabSnapshot): void {
   syncAiChatToggle(aiChatVisible);
   welcomePage.setVisible(showWelcome);
   applyGuardVisibility();
-  renderTitle();
-}
-
-function renderTitle(): void {
-  const tab = welcomeCoversWorkspace ? null : currentTab;
-  titleName.textContent = tab ? tab.fileName : 'EasyView_Md';
-  if (tab?.kind === 'editor') titleName.dataset.filePath = tab.filePath;
-  else titleName.removeAttribute('data-file-path');
 }
 
 function dismissStartupWelcome(): void {
@@ -445,14 +444,42 @@ function publishMenuState(): void {
 }
 
 document.getElementById('workspace-toggle')?.addEventListener('click', () => workspaceExplorer.toggle());
+function syncToolbarVisibility(): void {
+  const visible = readToolbarPinned();
+  document.body.classList.toggle('desktop-toolbar-hidden', !visible);
+}
+const unsubscribeToolbarVisibility = subscribeToolbarVisibility(syncToolbarVisibility);
+syncToolbarVisibility();
+const disposeAppMenuButton = document.body.classList.contains('desktop-platform-other')
+  ? installAppMenuButton({ container: titleBarToggleElements.left, label: tDesktop('shell.appMenu'), popup: api.window.popupAppMenu })
+  : () => undefined;
+const disposeTitleBarOverlaySync = document.body.classList.contains('desktop-platform-other')
+  ? installTitleBarOverlaySync({
+    source: titleBarToggleElements.right,
+    apply: api.window.setTitleBarOverlay,
+    subscribe: (listener) => {
+      const subscription = productAppearance.subscribe(listener);
+      return () => subscription.unsubscribe();
+    },
+  })
+  : () => undefined;
+const disposeTitleBarDoubleClick = document.body.classList.contains('desktop-platform-other')
+  ? () => undefined
+  : installTitleBarDoubleClick({
+    root: document.getElementById('desktop-root')!,
+    chromeHeight: () => 32 / (Number(document.documentElement.style.getPropertyValue('--desktop-page-zoom')) || 1),
+    onDoubleClick: () => { void api.window.titleBarDoubleClick(); },
+  });
+const disposeToolbarWheelScroll = installToolbarWheelScroll(document);
+const disposeWindowChrome = installWindowChrome({
+  workbench: document.getElementById('desktop-workbench')!,
+  leading: titleBarToggleElements.left,
+  trailing: titleBarToggleElements.right,
+});
 const aiChatToggle = document.getElementById('ai-chat-toggle');
 aiChatToggle?.addEventListener('click', toggleAiChat);
 api.document.onChanged((documentState) => {
   if (currentTab?.kind !== 'editor') return;
-  if (!welcomeCoversWorkspace) {
-    titleName.textContent = documentState.fileName;
-    titleName.dataset.filePath = documentState.filePath;
-  }
   workspaceExplorer.setActiveDocument(documentState.filePath);
   publishMenuState();
 });
@@ -486,7 +513,7 @@ api.menu.onCommand((command) => {
     return;
   }
   if (command === 'rename') {
-    const currentName = titleName.textContent ?? '';
+    const currentName = currentTab?.fileName ?? '';
     const nextName = window.prompt(tDesktop('rename.prompt'), currentName);
     if (nextName?.trim() && currentTab?.kind === 'editor') {
       void api.document.rename(nextName.trim(), currentTab.id);
@@ -542,6 +569,12 @@ window.addEventListener('unload', () => {
   appearanceSubscription.unsubscribe();
   editorStateSubscription?.unsubscribe();
   disposePanelDock();
+  disposeWindowChrome();
+  disposeAppMenuButton();
+  disposeTitleBarOverlaySync();
+  disposeTitleBarDoubleClick();
+  disposeToolbarWheelScroll();
+  unsubscribeToolbarVisibility();
   guardPanel.dispose();
   tabController.dispose();
   workspaceExplorer.dispose();

@@ -2,6 +2,15 @@ import { defineMessages } from '@easyview/contracts/i18n';
 
 export const tFileHeader = defineMessages({
   'zh-CN': {
+    'toolbar.label': 'Markdown 工具栏',
+    'toolbar.outline': '大纲',
+    'toolbar.source': '源码',
+    'toolbar.fullWidth': '全宽',
+    'toolbar.tableWrap': '表格换行',
+    'toolbar.collapse': '折叠标题',
+    'toolbar.history': '历史',
+    'toolbar.stickyNote': '便签',
+    'toolbar.more': '更多操作',
     'shortcut.openWithEasyView': '使用 EasyView_Md 打开',
     'shortcut.toggleToc': '切换目录',
     'shortcut.toggleFullWidth': '切换全宽',
@@ -80,6 +89,15 @@ export const tFileHeader = defineMessages({
     'commit.committing': '正在提交当前文件…',
   },
   en: {
+    'toolbar.label': 'Markdown Toolbar',
+    'toolbar.outline': 'Outline',
+    'toolbar.source': 'Source',
+    'toolbar.fullWidth': 'Full Width',
+    'toolbar.tableWrap': 'Wrap Cells',
+    'toolbar.collapse': 'Fold Headings',
+    'toolbar.history': 'History',
+    'toolbar.stickyNote': 'Note',
+    'toolbar.more': 'More Actions',
     'shortcut.openWithEasyView': 'Open with EasyView_Md',
     'shortcut.toggleToc': 'Toggle TOC',
     'shortcut.toggleFullWidth': 'Toggle full width',

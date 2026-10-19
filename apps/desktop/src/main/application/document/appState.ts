@@ -14,8 +14,6 @@ export interface DesktopAppState {
   windowBounds?: WindowBounds;
   /** Electron zoomLevel (0 = 100%). Same scale as VS Code window.zoomLevel. */
   zoomLevel?: number;
-  /** Windows / Linux only. When false the menu bar auto-hides and Alt reveals it. */
-  menuBarVisible?: boolean;
   recentFiles: string[];
   workspace: DesktopWorkspaceState;
 }
@@ -32,11 +30,9 @@ export interface AppStateStore {
   getRecentFiles(): string[];
   getWindowBounds(): WindowBounds | undefined;
   getZoomLevel(): number;
-  getMenuBarVisible(): boolean;
   rememberRecentFile(filePath: string): void;
   setWindowBounds(bounds: WindowBounds): void;
   setZoomLevel(level: number): void;
-  setMenuBarVisible(visible: boolean): void;
   getWorkspace(): DesktopWorkspaceState;
   setWorkspace(workspace: DesktopWorkspaceState): void;
   dispose(): void;
@@ -84,7 +80,6 @@ class DesktopAppStateStore implements AppStateStore {
           : [],
         windowBounds: normalizeWindowBounds(parsed.windowBounds),
         zoomLevel: normalizeZoomLevel(parsed.zoomLevel),
-        ...(parsed.menuBarVisible === false ? { menuBarVisible: false } : {}),
         workspace: normalizeWorkspaceState(parsed.workspace),
       };
     } catch {
@@ -114,16 +109,6 @@ class DesktopAppStateStore implements AppStateStore {
 
   getZoomLevel(): number {
     return this.state.zoomLevel ?? 0;
-  }
-
-  getMenuBarVisible(): boolean {
-    return this.state.menuBarVisible !== false;
-  }
-
-  setMenuBarVisible(visible: boolean): void {
-    if (visible) delete this.state.menuBarVisible;
-    else this.state.menuBarVisible = false;
-    this.scheduleSave();
   }
 
   rememberRecentFile(filePath: string): void {
@@ -232,11 +217,12 @@ function normalizeOpenTabs(value: unknown): DesktopWorkspaceState['openTabs'] {
   const result: DesktopWorkspaceState['openTabs'] = [];
   for (const item of value) {
     if (!isRecord(item) || typeof item.id !== 'string' || !item.id || seen.has(item.id)) continue;
+    const pinned = item.pinned === true ? { pinned: true } : {};
     if (item.kind === 'editor' && typeof item.filePath === 'string' && item.filePath) {
-      result.push({ id: item.id, kind: 'editor', filePath: item.filePath });
+      result.push({ id: item.id, kind: 'editor', filePath: item.filePath, ...pinned });
       seen.add(item.id);
     } else if (item.kind === 'preview' && typeof item.relativePath === 'string' && item.relativePath) {
-      result.push({ id: item.id, kind: 'preview', relativePath: item.relativePath });
+      result.push({ id: item.id, kind: 'preview', relativePath: item.relativePath, ...pinned });
       seen.add(item.id);
     }
   }

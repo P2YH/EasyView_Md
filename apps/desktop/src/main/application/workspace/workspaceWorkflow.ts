@@ -170,6 +170,11 @@ export async function executeTabContextCommand(tabId: string, command: DesktopTa
   }
   if (command === 'closeOthers') return closeOtherTabs(tabId);
   if (command === 'closeAll') return closeGroupTabs(tabId);
+  if (command === 'pin' || command === 'unpin') {
+    if (!tabRegistry.setPinned(tabId, command === 'pin')) return failure('INVALID_ARGUMENT', tWorkspace('tabs.notPinnable'));
+    syncTabState();
+    return success(tabSnapshot());
+  }
   if (command === 'copyPath' || command === 'copyRelativePath') {
     const paths = tabResourcePaths(tab);
     if (!paths) return failure('INVALID_ARGUMENT', tWorkspace('tabs.noCopyablePath'));
@@ -477,6 +482,12 @@ export function showTabContextMenu(sender: Electron.WebContents, tabId: string):
     { type: 'separator' },
     { label: tWorkspace('tabMenu.revealInIndexArea'), click: () => run('revealInIndexArea') },
     { type: 'separator' },
+    ...(tab.kind === 'history' ? [] : [
+      tab.pinned
+        ? { label: tWorkspace('tabMenu.unpin'), click: () => run('unpin') }
+        : { label: tWorkspace('tabMenu.pin'), click: () => run('pin') },
+      { type: 'separator' as const },
+    ]),
     { label: tWorkspace('tabMenu.splitAndMove'), submenu: [
       { label: tWorkspace('tabMenu.splitUp'), enabled: splitEnabled, click: () => run('splitUp') },
       { label: tWorkspace('tabMenu.splitDown'), enabled: splitEnabled, click: () => run('splitDown') },

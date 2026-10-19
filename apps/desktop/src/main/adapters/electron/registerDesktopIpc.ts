@@ -3,7 +3,7 @@ import { handleVersionGuard } from '../../application/version-guard/desktopVersi
 import { handleDesktopTimeline, getHistoryComparison, desktopTimelineDiagnostics } from '../../application/timeline/desktopTimeline';
 import { getHistorySettings, setHistorySettings } from '../../application/document/desktopHistory';
 import type { TimelineRequestMessage } from '@easyview/contracts';
-import { clipboard, dialog, ipcMain, nativeTheme, shell } from 'electron';
+import { clipboard, dialog, ipcMain, Menu, nativeTheme, shell, systemPreferences } from 'electron';
 import path from 'node:path';
 import { isEditorToHostMessage } from '@easyview/contracts';
 import { DESKTOP_ACCENTS, DESKTOP_APPEARANCE_MODES, normalizeDesktopPanelLayout } from '../../../contracts';
@@ -103,6 +103,12 @@ function registerEvent<TArgs extends unknown[]>(
   });
 }
 
+const CSS_COLOR = /^(#[0-9a-f]{3,8}|rgba?\(\s*\d{1,3}(\s*,\s*\d{1,3}){2}(\s*,\s*(0|1|0?\.\d+))?\s*\))$/i;
+
+function isCssColor(value: unknown): value is string {
+  return typeof value === 'string' && CSS_COLOR.test(value);
+}
+
 function decodePreviewBytes(bytes: unknown, encoding: unknown): Buffer | null {
   if (encoding === 'base64' && typeof bytes === 'string' && bytes.length > 0) {
     try {
@@ -181,6 +187,39 @@ export function registerDesktopIpc(): void {
     const denied = assertTrustedRenderer(event);
     if (denied) return denied;
     return success(await confirmCloseAll());
+  });
+
+  registerHandle('window.setTitleBarOverlay', (event, color: unknown, symbolColor: unknown) => {
+    const denied = assertTrustedRenderer(event);
+    if (denied) return denied;
+    if (!isCssColor(color) || !isCssColor(symbolColor)) return failure('INVALID_ARGUMENT', tIpc('window.invalidOverlayColor'));
+    const owner = rendererWindow(event.sender);
+    if (process.platform === 'darwin' || !owner || owner.isDestroyed()) return success(false);
+    owner.setTitleBarOverlay({ color, symbolColor });
+    return success(true);
+  });
+
+  registerHandle('window.titleBarDoubleClick', (event) => {
+    const denied = assertTrustedRenderer(event);
+    if (denied) return denied;
+    const owner = rendererWindow(event.sender);
+    if (process.platform !== 'darwin' || !owner || owner.isDestroyed() || owner.isFullScreen()) return success(false);
+    const action = systemPreferences.getUserDefault('AppleActionOnDoubleClick', 'string');
+    if (action === 'None') return success(false);
+    if (action === 'Minimize') owner.minimize();
+    else if (owner.isMaximized()) owner.unmaximize();
+    else owner.maximize();
+    return success(true);
+  });
+
+  registerHandle('window.popupAppMenu', (event, x: unknown, y: unknown) => {
+    const denied = assertTrustedRenderer(event);
+    if (denied) return denied;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return failure('INVALID_ARGUMENT', tIpc('window.invalidMenuPosition'));
+    const menu = Menu.getApplicationMenu();
+    if (!menu) return success(false);
+    menu.popup({ window: rendererWindow(event.sender) ?? undefined, x: Math.round(x as number), y: Math.round(y as number) });
+    return success(true);
   });
 
   registerHandle('external.open', async (event, value: unknown) => {

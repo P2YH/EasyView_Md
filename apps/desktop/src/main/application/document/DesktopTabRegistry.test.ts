@@ -53,6 +53,54 @@ describe('DesktopTabRegistry', () => {
       documentId: 'document-a',
     });
   });
+
+  it('moves pinned tabs to the front and unpinned tabs right after them', () => {
+    const registry = new DesktopTabRegistry();
+    registry.openEditor(p('/tmp/a.md'), 'a.md', 'a');
+    registry.openEditor(p('/tmp/b.md'), 'b.md', 'b');
+    registry.openPreview('c.pdf', 'c.pdf', 'pdf', 'c');
+    registry.openEditor(p('/tmp/d.md'), 'd.md', 'd');
+    const order = (): string[] => registry.snapshot().tabs.map((tab) => `${tab.id}${tab.pinned ? '*' : ''}`);
+
+    registry.setPinned('c', true);
+    registry.setPinned('d', true);
+    expect(order()).toEqual(['c*', 'd*', 'a', 'b']);
+
+    registry.setPinned('c', false);
+    expect(order()).toEqual(['d*', 'c', 'a', 'b']);
+    expect(registry.persisted()).toEqual([
+      { id: 'd', kind: 'editor', filePath: p('/tmp/d.md'), pinned: true },
+      { id: 'c', kind: 'preview', relativePath: 'c.pdf' },
+      { id: 'a', kind: 'editor', filePath: p('/tmp/a.md') },
+      { id: 'b', kind: 'editor', filePath: p('/tmp/b.md') },
+    ]);
+    registry.openEditor(p('/tmp/e.md'), 'e.md', 'e');
+    expect(order()).toEqual(['d*', 'c', 'a', 'b', 'e']);
+  });
+
+  it('keeps pinned tabs through close-others and close-all', () => {
+    const registry = new DesktopTabRegistry();
+    registry.openEditor(p('/tmp/a.md'), 'a.md', 'a');
+    registry.openEditor(p('/tmp/b.md'), 'b.md', 'b');
+    registry.openEditor(p('/tmp/c.md'), 'c.md', 'c');
+    registry.setPinned('a', true);
+
+    expect(registry.closeOthers('c').map((tab) => tab.id)).toEqual(['b']);
+    expect(registry.snapshot()).toMatchObject({ activeTabId: 'c' });
+    expect(registry.closeAllInGroup('c').map((tab) => tab.id)).toEqual(['c']);
+    expect(registry.snapshot()).toMatchObject({ activeTabId: 'a' });
+    expect(registry.snapshot().tabs.map((tab) => tab.id)).toEqual(['a']);
+  });
+
+  it('does not pin history tabs or carry pins into split copies', () => {
+    const registry = new DesktopTabRegistry();
+    registry.openEditor(p('/tmp/a.md'), 'a.md', 'a');
+    registry.setPinned('a', true);
+    const split = registry.split('a', 'right', 'group-2', 'a-split');
+
+    expect(split?.tabs[0].pinned).toBeUndefined();
+    expect(registry.setPinned('missing', true)).toBeNull();
+  });
 });
 
 describe('DesktopTabRegistry editor groups', () => {

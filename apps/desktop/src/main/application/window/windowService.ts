@@ -134,19 +134,6 @@ export function resetWindowZoom(): void {
   applyWindowZoomLevel(0);
 }
 
-/** Windows / Linux: a hidden menu bar auto-hides and reappears while Alt is pressed. macOS has no window menu bar. */
-function applyMenuBarVisibility(window: BrowserWindow | null | undefined = getMainWindow()): void {
-  if (process.platform === 'darwin' || !window || window.isDestroyed()) return;
-  const visible = getAppStateStore().getMenuBarVisible();
-  window.setAutoHideMenuBar(!visible);
-  window.setMenuBarVisibility(visible);
-}
-
-function setMenuBarVisible(visible: boolean): void {
-  getAppStateStore().setMenuBarVisible(visible);
-  applyMenuBarVisibility();
-}
-
 let restartRequest: Promise<boolean> | undefined;
 export async function restartApp(): Promise<void> {
   if (restartRequest) { await restartRequest; return; }
@@ -342,12 +329,6 @@ export function createMenu(): void {
         },
         { type: 'separator' },
         { label: 'IndexArea', type: 'checkbox', checked: getWorkspaceState().explorerVisible, click: inContext(() => publishMenuCommand('toggleExplorer')) },
-        ...(process.platform === 'darwin' ? [] : [{
-          label: tMenu('view.menuBar'),
-          type: 'checkbox' as const,
-          checked: getAppStateStore().getMenuBarVisible(),
-          click: (item: Electron.MenuItem) => runInWindowContext(context, () => setMenuBarVisible(item.checked)),
-        }]),
         { type: 'separator' },
         { label: tMenu('view.zoomIn'), accelerator: 'CmdOrCtrl+=', registerAccelerator: true, click: inContext(() => zoomWindowBy(1)) },
         { label: tMenu('view.zoomIn'), accelerator: 'CmdOrCtrl+Plus', visible: false, acceleratorWorksWhenHidden: true, click: inContext(() => zoomWindowBy(1)) },
@@ -416,8 +397,11 @@ export function createWindow(context: DesktopWindowContext = getWindowContext())
     minWidth: 960,
     minHeight: 640,
     show: false,
-    // Traffic lights are centered on the 32px renderer title bar (#desktop-title-bar in desktop.css).
-    ...(process.platform === 'darwin' ? { titleBarStyle: 'hidden' as const, trafficLightPosition: { x: 12, y: 8 } } : {}),
+    // Native window controls share the renderer's top tab row.
+    titleBarStyle: 'hidden',
+    ...(process.platform === 'darwin'
+      ? { trafficLightPosition: { x: 12, y: 8 } }
+      : { titleBarOverlay: { height: 32, color: nativeTheme.shouldUseDarkColors ? '#272727' : '#f3f3f3', symbolColor: nativeTheme.shouldUseDarkColors ? '#cccccc' : '#333333' } }),
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#1e1e1e' : '#ffffff',
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
@@ -433,7 +417,6 @@ export function createWindow(context: DesktopWindowContext = getWindowContext())
     },
   });
   setMainWindow(window);
-  applyMenuBarVisibility(window);
 
   const webContentsId = window.webContents.id;
   windowSessions.register(window.webContents, context);

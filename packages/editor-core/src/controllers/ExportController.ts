@@ -227,7 +227,7 @@ export class ExportController {
   }
 
   private title(): string {
-    return this.deps.fileHeader.el.querySelector('.file-header-name')?.textContent?.trim() || 'Document';
+    return this.deps.fileHeader.getName() || 'Document';
   }
 
   private markdown(): string {

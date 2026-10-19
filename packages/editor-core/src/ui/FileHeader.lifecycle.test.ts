@@ -16,7 +16,7 @@ const DEFAULT_CAPABILITIES = {
   shortcutPersistence: true,
 };
 
-function createHeader(capabilities: Partial<typeof DEFAULT_CAPABILITIES> = {}, options: Pick<FileHeaderDeps, 'dom' | 'appearance'> = {}) {
+function createHeader(capabilities: Partial<typeof DEFAULT_CAPABILITIES> = {}, options: Pick<FileHeaderDeps, 'dom' | 'appearance' | 'toolbarOnly'> = {}) {
   return createFileHeader({
     postMessage: vi.fn(),
     getState: () => ({
@@ -242,6 +242,47 @@ describe('FileHeader lifecycle', () => {
     expect(document.querySelector('[data-action="exportDocx"]')).toBeNull();
     expect(document.querySelector('.file-header-dropdown')?.textContent).toContain('Export HTML');
     expect(document.querySelector('.file-header-dropdown')?.textContent).toContain('Export PDF');
+  });
+
+  it('shows every toolbar action inline in ordered groups', () => {
+    const header = createHeader({}, { toolbarOnly: true });
+    document.body.appendChild(header.el);
+
+    const groups = Array.from(header.el.querySelectorAll<HTMLElement>(':scope > .file-header-group'));
+    expect(groups.map((group) => group.dataset.group)).toEqual(['view', 'zoom', 'navigate', 'git', 'tools', 'output', 'preferences']);
+    const more = header.el.querySelector<HTMLElement>(':scope > .file-header-more');
+    expect(more?.hidden).toBe(true);
+    expect(more?.querySelector('.file-header-dropdown')?.children).toHaveLength(0);
+    for (const action of ['stageFile', 'commitFile', 'toggleViewChanges', 'toggleTerminal', 'toggleExternalFollow']) {
+      expect(header.el.querySelector(`.file-header-group [data-action="${action}"]`)).not.toBeNull();
+    }
+    expect(header.el.querySelector('.file-header-group .file-header-accent-select')).not.toBeNull();
+    header.destroy();
+  });
+
+  it('colours only the accent selector label with the selected accent, overriding toolbar colours', () => {
+    const header = createHeader({}, { toolbarOnly: true });
+    document.body.appendChild(header.el);
+    const select = header.el.querySelector('.file-header-accent-select') as HTMLButtonElement;
+    const label = select.querySelector('span') as HTMLSpanElement;
+
+    header.setAccentTheme('cherryRed');
+    expect(label.textContent).toBe('Cherry red');
+    expect(label.style.getPropertyValue('color')).not.toBe('');
+    expect(label.style.getPropertyPriority('color')).toBe('important');
+    expect(select.style.getPropertyValue('color')).toBe('');
+
+    header.setAccentTheme('default');
+    expect(label.style.getPropertyValue('color')).toBe('');
+    header.destroy();
+  });
+
+  it('omits empty toolbar groups when the host lacks Git', () => {
+    const header = createHeader({ git: false }, { toolbarOnly: true });
+    document.body.appendChild(header.el);
+
+    expect(header.el.querySelector('.file-header-group[data-group="git"]')).toBeNull();
+    header.destroy();
   });
 
 });

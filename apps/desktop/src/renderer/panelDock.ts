@@ -66,7 +66,7 @@ export interface TitleBarToggleElements {
  */
 export function applyTitleBarToggles(layout: DesktopPanelLayout, { left, right, toggles }: TitleBarToggleElements): void {
   for (const [container, ids] of [[left, layout.left], [right, layout.right]] as const) {
-    let previous: Element | null = null;
+    let previous: Element | null = container.querySelector(':scope > [data-chrome-pinned]');
     for (const toggle of ids.map((id) => toggles[id])) {
       const current: Element | null = previous ? previous.nextElementSibling : container.firstElementChild;
       if (current !== toggle) {

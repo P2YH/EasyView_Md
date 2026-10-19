@@ -92,6 +92,16 @@ const api: EasyViewDesktopApi = {
   },
   window: {
     requestClose: () => ipcRenderer.invoke('window.requestClose') as Promise<OperationResult<boolean>>,
+    titleBarDoubleClick: () => ipcRenderer.invoke('window.titleBarDoubleClick') as Promise<OperationResult<boolean>>,
+    popupAppMenu: (x, y) => {
+      const zoom = webFrame.getZoomFactor();
+      return ipcRenderer.invoke('window.popupAppMenu', x * zoom, y * zoom) as Promise<OperationResult<boolean>>;
+    },
+    setTitleBarOverlay: (color, symbolColor) => {
+      assertString(color, 'color');
+      assertString(symbolColor, 'symbolColor');
+      return ipcRenderer.invoke('window.setTitleBarOverlay', color, symbolColor) as Promise<OperationResult<boolean>>;
+    },
   },
   external: {
     open: (url) => {

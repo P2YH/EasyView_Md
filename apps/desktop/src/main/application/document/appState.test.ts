@@ -110,6 +110,28 @@ describe('AppStateStore', () => {
     store.dispose();
   });
 
+  it('keeps only a boolean pinned flag on restored tabs', async () => {
+    const userDataPath = await createTemporaryUserDataPath();
+    await fs.writeFile(path.join(userDataPath, 'desktop-state.json'), JSON.stringify({
+      workspace: {
+        rootPath: '/workspace',
+        openTabs: [
+          { id: 'a', kind: 'editor', filePath: '/workspace/a.md', pinned: true },
+          { id: 'b', kind: 'preview', relativePath: 'b.pdf', pinned: 'yes' },
+        ],
+      },
+    }));
+
+    const store = createAppStateStore(userDataPath);
+    await store.load();
+
+    expect(store.getWorkspace().openTabs).toEqual([
+      { id: 'a', kind: 'editor', filePath: '/workspace/a.md', pinned: true },
+      { id: 'b', kind: 'preview', relativePath: 'b.pdf' },
+    ]);
+    store.dispose();
+  });
+
   it('persists deferred changes after the save delay', async () => {
     const userDataPath = await createTemporaryUserDataPath();
     const store = createAppStateStore(userDataPath, { saveDelayMs: 10 });
@@ -161,21 +183,5 @@ describe('AppStateStore', () => {
     await store.load();
     expect(store.getWorkspace().panelLayout).toEqual({ left: ['aiChat', 'versionGuard'], right: ['explorer'], outline: 'left' });
     store.dispose();
-  });
-
-  it('shows the menu bar by default and persists hiding it', async () => {
-    const userDataPath = await createTemporaryUserDataPath();
-    const store = createAppStateStore(userDataPath);
-    expect(store.getMenuBarVisible()).toBe(true);
-    store.setMenuBarVisible(false);
-    await store.save();
-    store.dispose();
-
-    const reloaded = createAppStateStore(userDataPath);
-    await reloaded.load();
-    expect(reloaded.getMenuBarVisible()).toBe(false);
-    reloaded.setMenuBarVisible(true);
-    expect(reloaded.getMenuBarVisible()).toBe(true);
-    reloaded.dispose();
   });
 });

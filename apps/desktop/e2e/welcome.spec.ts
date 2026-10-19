@@ -57,12 +57,12 @@ test('welcome page covers restored tabs at launch until the user resumes or open
     page = await application.firstWindow();
     await expect(page.locator('#desktop-welcome [data-action="resume"]')).toBeVisible();
     await expect(page.locator('#workspace-explorer')).toBeHidden();
-    await expect(page.locator('#desktop-document-name')).toHaveText('EasyView_Md');
+    await expect(page.locator('#desktop-document-name')).toHaveCount(0);
     await expect(page.locator('#desktop-welcome .desktop-welcome-badge', { hasText: '当前' })).toHaveCount(0);
     await page.locator('#desktop-welcome [data-action="resume"]').click();
     await expect(page.locator('#desktop-welcome')).toBeHidden();
     await expect(page.locator('#workspace-explorer')).toBeVisible();
-    await expect(page.locator('#desktop-document-name')).toHaveText('notes.md');
+    await expect(page.locator('.desktop-tab.active .desktop-tab-label')).toHaveText('notes.md');
     await page.locator('.workspace-entry-name', { hasText: 'other.md' }).click();
     await expect(page.locator('.desktop-tab')).toHaveCount(2);
   } finally {

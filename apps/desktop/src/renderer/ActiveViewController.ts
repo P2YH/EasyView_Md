@@ -6,6 +6,8 @@ import type {
 } from '../contracts';
 import type { EasyViewDesktopApi } from '../preload/desktopApi';
 import { renderDesktopTabBar } from './renderDesktopTabBar';
+import { readToolbarPinned, subscribeToolbarVisibility, writeToolbarPinned } from '@easyview/preview-ui/toolbar';
+import { tDesktop } from './desktopRenderer.i18n';
 
 export type ActiveWorkspaceView =
   | { kind: 'empty' }
@@ -34,6 +36,7 @@ interface GroupPane {
   tabBar: HTMLElement;
   editorMount: HTMLElement;
   previewRoot: HTMLElement;
+  toolbarToggle: HTMLButtonElement;
 }
 
 /** Owns every visible editor/preview pane, including split groups. */
@@ -46,10 +49,14 @@ export class ActiveViewController {
   private previewRequest = 0;
   private snapshot: DesktopTabSnapshot | null = null;
   private renderedLayoutKey: string | null = null;
+  private readonly unsubscribeToolbarVisibility: () => void;
 
   constructor(private readonly options: ActiveViewControllerOptions) {
     this.adoptPrimaryPane();
     this.hidePane(this.requirePrimaryPane(), false);
+    this.unsubscribeToolbarVisibility = subscribeToolbarVisibility(() => {
+      for (const pane of this.panes.values()) this.syncToolbarButton(pane.toolbarToggle);
+    });
   }
 
   getState(): ActiveWorkspaceView { return this.state; }
@@ -73,6 +80,7 @@ export class ActiveViewController {
         onActivate: (tabId) => { void this.options.api.tabs.activate(tabId); },
         onClose: (tabId) => { void this.options.api.tabs.close(tabId); },
         onContextMenu: (tabId) => { void this.options.api.tabs.showContextMenu(tabId); },
+        onUnpin: (tabId) => { void this.options.api.tabs.executeContextCommand(tabId, 'unpin'); },
       });
       pane.root.classList.toggle('active', group.id === snapshot.activeGroupId);
       const tab = group.tabs.find((item) => item.id === group.activeTabId) ?? null;
@@ -91,6 +99,7 @@ export class ActiveViewController {
   }
 
   dispose(): void {
+    this.unsubscribeToolbarVisibility();
     for (const entry of this.historyViews.values()) entry.view.dispose();
     this.historyViews.clear();
     for (const island of this.islands.values()) island.dispose();
@@ -109,6 +118,7 @@ export class ActiveViewController {
       tabBar: this.options.tabBar,
       editorMount: this.options.editorBody,
       previewRoot: this.options.previewBody,
+      toolbarToggle: this.createToolbarButton(root),
     };
     this.bindPaneFocus(pane);
     this.panes.set(groupId, pane);
@@ -126,6 +136,30 @@ export class ActiveViewController {
 
   private requirePrimaryPane(): GroupPane {
     return this.panes.get('group-1') ?? [...this.panes.values()][0];
+  }
+
+  private createToolbarButton(root: HTMLElement): HTMLButtonElement {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'desktop-title-button desktop-document-toolbar-toggle';
+    button.hidden = true;
+    button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path></path></svg>';
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      writeToolbarPinned(!readToolbarPinned());
+    });
+    this.syncToolbarButton(button);
+    (root.querySelector('.desktop-group-content') ?? root).append(button);
+    return button;
+  }
+
+  private syncToolbarButton(button: HTMLButtonElement): void {
+    const visible = readToolbarPinned();
+    const label = tDesktop(visible ? 'toolbar.hide' : 'toolbar.show');
+    button.title = label;
+    button.setAttribute('aria-label', label);
+    button.setAttribute('aria-expanded', String(visible));
+    button.querySelector('path')!.setAttribute('d', visible ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6');
   }
 
   private isAdopted(pane: GroupPane): boolean {
@@ -186,7 +220,7 @@ export class ActiveViewController {
     surface.append(editorMount, previewRoot);
     content.append(surface);
     root.append(tabBar, content);
-    const pane = { groupId, root, tabBar, editorMount, previewRoot };
+    const pane = { groupId, root, tabBar, editorMount, previewRoot, toolbarToggle: this.createToolbarButton(root) };
     this.bindPaneFocus(pane);
     return pane;
   }
@@ -223,6 +257,7 @@ export class ActiveViewController {
   }
 
   private async showPaneTab(pane: GroupPane, tab: DesktopTab | null, request: number): Promise<void> {
+    pane.toolbarToggle.hidden = !tab || tab.kind === 'history';
     const history = this.historyViews.get(pane.groupId);
     if (history && history.tabId !== tab?.id) { history.view.dispose(); this.historyViews.delete(pane.groupId); }
     if (tab?.kind === 'history') {
@@ -257,6 +292,7 @@ export class ActiveViewController {
   }
 
   private hidePane(pane: GroupPane, notify: boolean): void {
+    pane.toolbarToggle.hidden = true;
     pane.editorMount.hidden = true;
     pane.previewRoot.hidden = true;
     if (notify) this.options.onViewChanged(this.state);

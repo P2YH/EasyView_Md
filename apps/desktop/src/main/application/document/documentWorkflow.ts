@@ -502,7 +502,8 @@ export async function closeTabIds(tabIds: string[]): Promise<boolean> {
 export async function closeOtherTabs(tabId: string): Promise<OperationResult<DesktopTabSnapshot>> {
   const group = tabRegistry.groupForTab(tabId);
   if (!group) return failure('NOT_FOUND', tDocument('tabs.notFound'));
-  if (!(await closeTabIds(group.tabs.filter((tab) => tab.id !== tabId).map((tab) => tab.id)))) return failure('CANCELLED', tDocument('tabs.closeOthersCancelled'));
+  const closing = group.tabs.filter((tab) => tab.id !== tabId && !tab.pinned).map((tab) => tab.id);
+  if (!(await closeTabIds(closing))) return failure('CANCELLED', tDocument('tabs.closeOthersCancelled'));
   tabRegistry.activate(tabId);
   syncTabState();
   const active = tabRegistry.active();
@@ -513,7 +514,7 @@ export async function closeOtherTabs(tabId: string): Promise<OperationResult<Des
 export async function closeGroupTabs(tabId: string): Promise<OperationResult<DesktopTabSnapshot>> {
   const group = tabRegistry.groupForTab(tabId);
   if (!group) return failure('NOT_FOUND', tDocument('tabs.notFound'));
-  if (!(await closeTabIds(group.tabs.map((tab) => tab.id)))) return failure('CANCELLED', tDocument('tabs.closeAllCancelled'));
+  if (!(await closeTabIds(group.tabs.filter((tab) => !tab.pinned).map((tab) => tab.id)))) return failure('CANCELLED', tDocument('tabs.closeAllCancelled'));
   return success(tabSnapshot());
 }
 
@@ -553,28 +554,28 @@ export async function restoreWorkspace(): Promise<void> {
       for (const tab of group.openTabs) {
         if (tab.kind === 'editor') {
           await loadEditorTab(tab.filePath, tab.id, false, group.id);
-          continue;
+        } else if (rootPath) {
+          try {
+            await registerPreviewTab(tab.relativePath, tab.id, false, group.id);
+          } catch {
+            // Missing or unsupported restored preview tabs are intentionally skipped.
+          }
         }
-        if (!rootPath) continue;
-        try {
-          await registerPreviewTab(tab.relativePath, tab.id, false, group.id);
-        } catch {
-          // Missing or unsupported restored preview tabs are intentionally skipped.
-        }
+        if (tab.pinned) tabRegistry.setPinned(tab.id, true);
       }
     }
   } else {
     for (const tab of current.openTabs) {
       if (tab.kind === 'editor') {
         await loadEditorTab(tab.filePath, tab.id, false);
-        continue;
+      } else if (rootPath) {
+        try {
+          await registerPreviewTab(tab.relativePath, tab.id, false);
+        } catch {
+          // Missing or unsupported restored preview tabs are intentionally skipped.
+        }
       }
-      if (!rootPath) continue;
-      try {
-        await registerPreviewTab(tab.relativePath, tab.id, false);
-      } catch {
-        // Missing or unsupported restored preview tabs are intentionally skipped.
-      }
+      if (tab.pinned) tabRegistry.setPinned(tab.id, true);
     }
   }
 

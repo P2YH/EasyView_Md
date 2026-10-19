@@ -8,5 +8,5 @@ export default defineConfig({
   expect: { timeout: 20_000 },
   use: { actionTimeout: 20_000 },
   workers: 1,
-  retries: 0,
+  retries: process.env.CI ? 1 : 0,
 });

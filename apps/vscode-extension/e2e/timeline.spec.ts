@@ -50,7 +50,8 @@ test('VS Code development extension opens Timeline versions in a read-only Chang
     await sidebar!.getByRole('button', { name: 'Refresh Timeline', exact: true }).click();
     await expect(selectedVersion).toHaveAttribute('aria-pressed', 'true');
     await page.mouse.move(0, 0);
-    expect(await selectedVersion.evaluate(row => getComputedStyle(row).backgroundColor)).toBe(selectionFill);
+    // The list re-renders after selection; poll so a detached row (computed style "") isn't sampled.
+    await expect.poll(() => selectedVersion.evaluate(row => getComputedStyle(row).backgroundColor)).toBe(selectionFill);
 
     await page.screenshot({ path: '/tmp/easyview-timeline-vscode-preview.png' });
     await expect(sidebar!.locator('.easyview-timeline-entry')).toHaveCount(2);

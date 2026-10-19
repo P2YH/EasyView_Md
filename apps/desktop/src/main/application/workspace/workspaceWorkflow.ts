@@ -1,4 +1,5 @@
 import { migrateRenamedHistory } from '@easyview/node-runtime';
+import { DESKTOP_TAB_CLOSE_SHORTCUT } from '../../../contracts';
 import { captureDesktopHistoryPath, desktopHistory } from '../document/desktopHistory';
 import { isTimelineMarkdown } from '@easyview/contracts';
 import { Menu, clipboard, dialog, shell } from 'electron';
@@ -473,7 +474,7 @@ export function showTabContextMenu(sender: Electron.WebContents, tabId: string):
   };
   const splitEnabled = tabSnapshot().splitRenderingAvailable;
   Menu.buildFromTemplate([
-    { label: tWorkspace('tabMenu.close'), click: () => run('close') },
+    { label: tWorkspace('tabMenu.close'), accelerator: DESKTOP_TAB_CLOSE_SHORTCUT.accelerator, registerAccelerator: false, click: () => run('close') },
     { label: tWorkspace('tabMenu.closeOthers'), click: () => run('closeOthers') },
     { label: tWorkspace('tabMenu.closeAll'), click: () => run('closeAll') },
     { type: 'separator' },

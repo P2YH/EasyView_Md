@@ -90,6 +90,7 @@ export class EditorCore {
   private _currentContent = '';
   private _syncTimer: ReturnType<typeof setTimeout> | null = null;
   private _suppressHistory = false;
+  private _initializing = false;
   private readonly incrementalSerializer = new IncrementalMarkdownSerializer();
 
   constructor(config: EditorCoreConfig) {
@@ -148,11 +149,15 @@ export class EditorCore {
 
   // ── Lifecycle ──
 
-  init(element: HTMLElement): void {
+  init(element: HTMLElement, content = ''): void {
     const t0 = performance.now();
-    const state = this.createState('');
+    this._currentContent = content.replace(/\r\n/g, '\n');
+    this._initializing = true;
+    this._isUpdatingFromExtension = true;
+    this._suppressHistory = true;
+    const state = this.createState(this._currentContent);
     console.log(
-      `[EasyView_Md perf]   createState(empty): ${(performance.now() - t0).toFixed(1)}ms`,
+      `[EasyView_Md perf]   createState(initial): ${(performance.now() - t0).toFixed(1)}ms`,
     );
 
     const t1 = performance.now();
@@ -190,6 +195,12 @@ export class EditorCore {
 
     const t3 = performance.now();
     this.manager.initAll(this._view);
+    // Composition finishes in this task; let initial NodeView corrections settle without edits or undo entries.
+    queueMicrotask(() => { this._initializing = false; });
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      this._suppressHistory = false;
+      this._isUpdatingFromExtension = false;
+    }));
     console.log(
       `[EasyView_Md perf]   extensions.initAll: ${(performance.now() - t3).toFixed(1)}ms`,
     );
@@ -556,7 +567,8 @@ export class EditorCore {
   // ── Private: State creation ──
 
   private createState(content: string): EditorState {
-    const doc = parseMarkdown(content || '', this.parser);
+    const parsed = parseMarkdown(content || '', this.parser);
+    const doc = parsed ? this.imageManager.convertImagePaths(parsed) : parsed;
     let initSelection;
     try {
       initSelection = TextSelection.atStart(doc!);
@@ -728,7 +740,7 @@ export class EditorCore {
       _isMouseDragging = false;
 
       // UI callback
-      this.config.onDispatch?.(this._view, tr, oldState);
+      if (!this._initializing) this.config.onDispatch?.(this._view, tr, oldState);
 
       // Content sync — debounced to avoid race conditions with VS Code applyEdit
       if (!this._isUpdatingFromExtension && tr.docChanged) {

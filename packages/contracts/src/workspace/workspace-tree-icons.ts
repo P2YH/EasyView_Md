@@ -100,27 +100,27 @@ function officeIcon(back: string, tile: string, mark: string): string {
 const whiteMark = (d: string, transform?: string) =>
   `<path fill="#fff" fill-rule="evenodd"${transform ? ` transform="${transform}"` : ''} d="${d}"/>`;
 
-const LETTER = {
+const LETTER = /* @__PURE__ */ (() => ({
   W: whiteMark('M4 11.5h2.3l1 5.5 1.4-5.5h1.6l1.4 5.5 1-5.5H15l-2 9h-2.1l-1.4-5.2-1.4 5.2H6z'),
   X: whiteMark('M5 11.5h2.8l1.7 2.6 1.7-2.6H14l-3 4.5 3 4.5h-2.8l-1.7-2.6-1.7 2.6H5l3-4.5z'),
   P: whiteMark('M6.5 11.5h4a3.2 3.2 0 0 1 0 6.4H9v2.6H6.5zM9 13.6v2.2h1.4a1.1 1.1 0 0 0 0-2.2z'),
   M: whiteMark('M5 20.5v-9h2.4l2.1 3.5 2.1-3.5H14v9h-2.2v-5l-2.3 3.5-2.3-3.5v5z'),
   Z: whiteMark('M5 11.5h9v2.1l-5.7 4.8H14v2.1H5v-2.1l5.7-4.8H5z'),
-};
+}))();
 
 /** Seti's Acrobat swirl (32×32), scaled into the tile. */
-const PDF_MARK = whiteMark(icons.pdf?.match(/ d="([^"]+)"/)?.[1] ?? '', 'translate(.9 7.4) scale(.54)');
-const MIND_MAP_MARK = whiteMark(
+const PDF_MARK = /* @__PURE__ */ (() => whiteMark(icons.pdf?.match(/ d="([^"]+)"/)?.[1] ?? '', 'translate(.9 7.4) scale(.54)'))();
+const MIND_MAP_MARK = /* @__PURE__ */ whiteMark(
   'M5 14.5h2.6a.8.8 0 0 1 .8.8v1.4a.8.8 0 0 1-.8.8H5a.8.8 0 0 1-.8-.8v-1.4a.8.8 0 0 1 .8-.8z'
     + 'M8.4 15.5h1.2v1H8.4zM9.6 12.4h1v7.2h-1zM10.6 12.4h.6v1h-.6zm0 3.1h.6v1h-.6zm0 3.1h.6v1h-.6z'
     + 'M11.8 11.7h2.2a.6.6 0 0 1 .6.6v1.2a.6.6 0 0 1-.6.6h-2.2a.6.6 0 0 1-.6-.6v-1.2a.6.6 0 0 1 .6-.6z'
     + 'M11.8 14.8h2.2a.6.6 0 0 1 .6.6v1.2a.6.6 0 0 1-.6.6h-2.2a.6.6 0 0 1-.6-.6v-1.2a.6.6 0 0 1 .6-.6z'
     + 'M11.8 17.9h2.2a.6.6 0 0 1 .6.6v1.2a.6.6 0 0 1-.6.6h-2.2a.6.6 0 0 1-.6-.6v-1.2a.6.6 0 0 1 .6-.6z',
 );
-const IMAGE_MARK = whiteMark('M4.5 20.5 8 15.8l2.4 3 1.9-2.3 3.2 4zM12.3 11.4a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2z');
+const IMAGE_MARK = /* @__PURE__ */ whiteMark('M4.5 20.5 8 15.8l2.4 3 1.9-2.3 3.2 4zM12.3 11.4a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2z');
 
 /** Full-colour glyphs that are inserted as-is instead of being painted with the Seti colour. */
-const FULL_COLOR_ICONS: Record<string, string> = {
+const FULL_COLOR_ICONS: Record<string, string> = /* @__PURE__ */ (() => ({
   word: officeIcon(bandedSheet(['#41A5EE', '#2B7CD3', '#185ABD', '#103F91']), '#11479E', LETTER.W),
   xls: officeIcon(
     bandedSheet(['#21A366', '#107C41', '#185C37', '#185C37'])
@@ -138,10 +138,10 @@ const FULL_COLOR_ICONS: Record<string, string> = {
     LETTER.P,
   ),
   markdown: officeIcon(
-    '<path fill="#607D8B" d="M11 3h13l6 6v18a2 2 0 0 1-2 2H11a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/>'
-      + '<path fill="#B0BEC5" d="m24 3 6 6h-4a2 2 0 0 1-2-2z"/>'
-      + '<path fill="#ECEFF1" d="M23 11.5h3v5.5h2.5L24.5 22l-4-5H23z"/>',
-    '#24496E',
+    '<path fill="#24465C" d="M11 3h13l6 6v18a2 2 0 0 1-2 2H11a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/>'
+      + '<path fill="#53798E" d="m24 3 6 6h-4a2 2 0 0 1-2-2z"/>'
+      + '<path fill="#66D3E2" d="M23 11.5h3v5.5h2.5L24.5 22l-4-5H23z"/>',
+    '#286AA0',
     LETTER.M,
   ),
   xmind: officeIcon(bandedSheet(['#F8A5C2', '#F06292', '#E04381', '#C2185B']), '#AD1457', MIND_MAP_MARK),
@@ -155,7 +155,7 @@ const FULL_COLOR_ICONS: Record<string, string> = {
     '#5E35B1',
     IMAGE_MARK,
   ),
-};
+}))();
 
 /** Single-colour Seti-style glyphs for formats missing from the upstream Seti icon font. */
 const CUSTOM_ICONS: Record<string, string> = {

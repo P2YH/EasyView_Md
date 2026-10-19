@@ -10,6 +10,7 @@ import { ensureNativeMarkdownEditorFont } from '../../native-editor/nativeEditor
 import { suppressConflictingMarkdownInlineDecorations } from '../../native-editor/conflictingExtensions';
 import { consumePendingCursorForUri } from './openCursorContext';
 import { logOpenWithDebug } from './openWithDebug';
+import { markOpenTiming, markWebviewBootTiming } from './openTiming';
 import { disposeTerminalForPanel, openTerminalForPanel, resizeTerminalForPanel, writeTerminalInput } from '../terminal/terminalSessionManager';
 import type { EditorToHostMessage } from '@easyview/contracts/protocol';
 import type { VscodeEditorHostActionMessage } from '../../adapters/vscode/vscodeProtocol';
@@ -583,6 +584,7 @@ export async function handleWebviewMessage(
     }
 
     case 'ready': {
+      markOpenTiming(diskFsPath(document), 'readyReceived');
       ctx.postSnapshot('initial');
       break;
     }
@@ -635,6 +637,10 @@ export async function handleWebviewMessage(
     case 'openWithDebugLog': {
       const stage = typeof message.stage === 'string' ? message.stage : 'webview.unknown';
       const meta = typeof message.meta === 'object' && message.meta ? message.meta : {};
+      if (stage === 'bootTiming') {
+        markWebviewBootTiming(diskFsPath(document), meta as Record<string, unknown>);
+        break;
+      }
       logOpenWithDebug(`webview.${stage}`, {
         path: diskFsPath(document),
         ...(meta as Record<string, unknown>),

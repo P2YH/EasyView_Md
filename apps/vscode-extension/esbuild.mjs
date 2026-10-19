@@ -1,4 +1,5 @@
 import esbuild from 'esbuild';
+import { createHash } from 'node:crypto';
 import { cp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -136,7 +137,15 @@ await cp(path.join(appDir, '../../resources/brand'), path.join(distDir, 'brand')
   const { theme, files } = buildWorkspaceFileIconTheme();
   const iconThemeDir = path.join(distDir, 'icon-theme');
   await mkdir(path.join(iconThemeDir, 'icons'), { recursive: true });
-  await Promise.all(Object.entries(files).map(([file, svg]) => writeFile(path.join(iconThemeDir, file), svg)));
+  // Native editor tabs cache icon URLs; change the URL whenever its SVG content changes.
+  const iconPaths = new Map(Object.entries(files).map(([file, svg]) => [
+    file,
+    file.replace(/\.svg$/u, `-${createHash('sha256').update(svg).digest('hex').slice(0, 12)}.svg`),
+  ]));
+  await Promise.all(Object.entries(files).map(([file, svg]) => writeFile(path.join(iconThemeDir, iconPaths.get(file)), svg)));
+  for (const definition of Object.values(theme.iconDefinitions)) {
+    definition.iconPath = `./${iconPaths.get(definition.iconPath.slice(2))}`;
+  }
   await writeFile(path.join(iconThemeDir, 'easyview-icon-theme.json'), JSON.stringify(theme));
 }
 await mkdir(path.join(distDir, 'media'), { recursive: true });

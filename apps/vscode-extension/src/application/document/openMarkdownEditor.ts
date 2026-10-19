@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { createHash } from 'node:crypto';
 import * as path from 'node:path';
 import { logOpenWithDebug } from './openWithDebug';
+import { markOpenTiming } from './openTiming';
 import {
   isEasyViewMarkdownUri,
   toDiskFileUri,
@@ -32,8 +33,10 @@ export async function openMarkdownInEasyViewEditor(
     : vscode.Uri.file(rawUri.fsPath));
 
   const primaryUri = toEasyViewMarkdownUri(diskUri);
+  markOpenTiming(diskUri.fsPath, 'request');
   try {
     const document = await vscode.workspace.openTextDocument(primaryUri);
+    markOpenTiming(diskUri.fsPath, 'textDocumentOpened');
     logOpenWithDebug('openMarkdown.primaryScheme', {
       path: diskUri.fsPath,
       openUri: document.uri.toString(true),
@@ -42,6 +45,7 @@ export async function openMarkdownInEasyViewEditor(
       preserveFocus: options.preserveFocus === true,
     });
     await vscode.commands.executeCommand('vscode.openWith', document.uri, VIEW_TYPE, options);
+    markOpenTiming(diskUri.fsPath, 'openWithResolved');
     return document.uri;
   } catch (primaryError) {
     logOpenWithDebug('openMarkdown.primarySchemeFailed', {

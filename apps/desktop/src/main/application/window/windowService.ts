@@ -22,6 +22,7 @@ import {
 } from '../document/appState';
 import {
   confirmCloseAll,
+  closeTab,
   importDocument,
   openFromMenu,
   requestOpenDocument,
@@ -60,7 +61,7 @@ import {
 } from '../host/desktopRuntime';
 import type { DesktopWindowContext } from '../host/windowContext';
 import { createDesktopWindowContext } from '../host/windowContext';
-import { DESKTOP_ACCENTS, DESKTOP_APPEARANCE_MODES, DESKTOP_LOCALE_ARGUMENT_PREFIX as LOCALE_ARGUMENT_PREFIX, DESKTOP_OPENED_FILE_AT_LAUNCH_ARGUMENT, DESKTOP_THEME_DEPTH_STEPS } from '../../../contracts';
+import { DESKTOP_ACCENTS, DESKTOP_APPEARANCE_MODES, DESKTOP_LOCALE_ARGUMENT_PREFIX as LOCALE_ARGUMENT_PREFIX, DESKTOP_OPENED_FILE_AT_LAUNCH_ARGUMENT, DESKTOP_THEME_DEPTH_STEPS, DESKTOP_TAB_CLOSE_SHORTCUT } from '../../../contracts';
 import type { DesktopAccent, DesktopAppearanceMode, DesktopMenuCommand, DesktopThemeDepthStep } from '../../../contracts';
 import { getLocale, type LocalePreference } from '@easyview/contracts';
 import { getSelectedLanguagePreference, saveLanguagePreference } from '../settings/languageSettings';
@@ -235,6 +236,10 @@ export function createMenu(): void {
   const recentFiles = getAppStateStore().getRecentFiles();
   const recentFolders = recentFolderStore().snapshot();
   const isMac = process.platform === 'darwin';
+  const closeActiveTab = inContext(() => {
+    const tab = tabRegistry.active();
+    if (tab) void closeTab(tab.id).then(showOperationError);
+  });
   const appItems: Electron.MenuItemConstructorOptions[] = [
     { label: tMenu('file.restart'), click: inContext(() => { void restartApp(); }) },
     { label: tMenu('file.newWindow'), click: () => { void createNewWindow(); } },
@@ -277,6 +282,8 @@ export function createMenu(): void {
         { label: tMenu('file.importPdf'), click: inContext(() => { void importDocument(['pdf'], tMenu('file.pdfFilter')); }) },
         { label: tMenu('file.save'), accelerator: 'CmdOrCtrl+S', enabled: menuState.hasActiveDocument, click: inContext(() => { void saveFromMenu(false); }) },
         { label: tMenu('file.saveAs'), accelerator: 'CmdOrCtrl+Shift+S', enabled: menuState.hasActiveDocument, click: inContext(() => { void saveFromMenu(true); }) },
+        { label: tMenu('file.closeTab'), accelerator: DESKTOP_TAB_CLOSE_SHORTCUT.accelerator, enabled: !!tabRegistry.active(), click: closeActiveTab },
+        ...(process.platform === 'win32' ? [{ label: tMenu('file.closeTab'), accelerator: DESKTOP_TAB_CLOSE_SHORTCUT.windowsSecondary, visible: false, acceleratorWorksWhenHidden: true, enabled: !!tabRegistry.active(), click: closeActiveTab }] : []),
         ...(isMac ? [] : [
           { type: 'separator' as const },
           ...appItems,

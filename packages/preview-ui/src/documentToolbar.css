@@ -317,3 +317,60 @@ body.easyview-desktop .is-toolbar-collapsed :is(
   .preview-basic-toolbar
 ),
 body.easyview-desktop .file-viewer-web-toolbar[hidden] { display: none !important; }
+
+/* Mind-map navigation uses the same per-file theme as the document chrome. */
+body.easyview-desktop .preview-universal-viewer .xmind-viewer {
+  --xmind-outline-text: var(--easyview-preview-foreground);
+  --xmind-outline-hover-bg: var(--easyview-preview-hover-bg);
+  --xmind-outline-hover-text: var(--easyview-preview-foreground);
+  --xmind-outline-active-bg: color-mix(in srgb, var(--vscode-focusBorder) 14%, var(--easyview-preview-panel-bg));
+  --xmind-outline-active-text: var(--easyview-preview-foreground);
+  background: var(--file-viewer-bg);
+  color: var(--easyview-preview-foreground);
+}
+body.easyview-desktop .preview-universal-viewer :is(.xmind-sidebar, .xmind-tabs) {
+  background: var(--easyview-preview-panel-bg);
+  color: var(--easyview-preview-foreground);
+  border-color: var(--easyview-preview-border);
+}
+body.easyview-desktop .preview-universal-viewer .xmind-stats { display: none; }
+body.easyview-desktop .preview-universal-viewer .xmind-outline button:focus-visible {
+  outline-color: var(--vscode-focusBorder);
+}
+body.easyview-desktop .preview-universal-viewer .xmind-body { order: 1; }
+body.easyview-desktop .preview-universal-viewer .xmind-tabs {
+  order: 2;
+  flex: 0 0 26px;
+  height: 26px;
+  min-height: 26px;
+  max-height: 26px;
+  gap: 0;
+  padding: 0 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-top: 1px solid var(--easyview-preview-border);
+  border-bottom: 0;
+  scrollbar-width: none;
+}
+body.easyview-desktop .preview-universal-viewer .xmind-tabs::-webkit-scrollbar { display: none; }
+body.easyview-desktop .preview-universal-viewer .xmind-tabs button {
+  height: 24px;
+  min-height: 24px;
+  padding: 0 12px;
+  border: 0;
+  border-right: 1px solid var(--easyview-preview-border);
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--easyview-preview-muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 22px;
+  box-shadow: none;
+}
+body.easyview-desktop .preview-universal-viewer .xmind-tabs button:hover { background: var(--easyview-preview-hover-bg); }
+body.easyview-desktop .preview-universal-viewer .xmind-tabs button.active {
+  border-bottom-color: var(--vscode-focusBorder);
+  background: var(--file-viewer-bg);
+  color: var(--easyview-preview-foreground);
+}

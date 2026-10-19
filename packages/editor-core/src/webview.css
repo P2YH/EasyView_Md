@@ -209,6 +209,16 @@ body.mdpre-light{color-scheme:light;--vscode-editor-background:#ffffff;--vscode-
 .easyview-change-kind-bar-modified {
   background: var(--vscode-gitDecoration-modifiedResourceForeground, #f59e0b);
 }
+/* The document owns its scrollbar surface even when the surrounding app/IDE is dark. */
+#editor-scroll-area {
+  background: var(--vscode-editor-background);
+  scrollbar-color: var(--vscode-scrollbarSlider-background) var(--vscode-editor-background);
+}
+#editor-scroll-area::-webkit-scrollbar-track,
+#editor-scroll-area::-webkit-scrollbar-corner {
+  background: var(--vscode-editor-background);
+}
+
 /* Overlay scrollbars in VS Code / Cursor ignore ::-webkit-scrollbar width.
    Keep a persistent 10px custom vertical overlay; hide native bars.
    overflow-x still allows trackpad / Shift+wheel horizontal panning. */

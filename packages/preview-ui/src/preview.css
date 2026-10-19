@@ -215,6 +215,18 @@ body.easyview-desktop .preview-universal-viewer {
   max-width: 100% !important;
   margin-left: 0 !important;
 }
+.preview-universal-viewer .preview-sidebar-toggle[hidden] { display: none !important; }
+.preview-universal-viewer .xmind-body {
+  position: relative;
+  grid-template-columns: var(--preview-sidebar-width, 168px) minmax(0, 1fr);
+}
+.preview-universal-viewer .xmind-sidebar { display: block; min-width: 0; }
+.preview-universal-viewer .xmind-body > .preview-sidebar-resize-handle {
+  left: calc(var(--preview-sidebar-width, 168px) - 3px);
+  right: auto;
+}
+.preview-universal-viewer[data-preview-sidebar='hidden'] .xmind-body { grid-template-columns: minmax(0, 1fr); }
+.preview-universal-viewer[data-preview-sidebar='hidden'] :is(.xmind-sidebar, .xmind-body > .preview-sidebar-resize-handle) { display: none !important; }
 .preview-universal-viewer .pdf-nav-head { display: none !important; }
 /* Outline first, then pages. */
 .preview-universal-viewer .pdf-nav-pane .pdf-nav-tabs button:nth-child(2) { order: -1; }

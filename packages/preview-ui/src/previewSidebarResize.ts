@@ -31,7 +31,9 @@ function clampWidth(width: number): number {
 function attachResizeHandle(pane: HTMLElement, root: HTMLElement, getWidth: () => number, setWidth: (width: number) => void): () => void {
   const doc = pane.ownerDocument;
   const win = doc.defaultView ?? window;
-  if (pane.querySelector(':scope > .preview-sidebar-resize-handle')) {
+  // XMind scrolls and rebuilds its sidebar contents; keep its handle on the surrounding layout.
+  const handleHost = pane.matches('.xmind-sidebar') ? pane.parentElement! : pane;
+  if (handleHost.querySelector(':scope > .preview-sidebar-resize-handle')) {
     return () => undefined;
   }
   const handle = doc.createElement('div');
@@ -39,7 +41,7 @@ function attachResizeHandle(pane: HTMLElement, root: HTMLElement, getWidth: () =
   handle.setAttribute('role', 'separator');
   handle.setAttribute('aria-orientation', 'vertical');
   handle.setAttribute('aria-label', 'Resize sidebar');
-  pane.append(handle);
+  handleHost.append(handle);
 
   let dragging = false;
   let startX = 0;
@@ -95,7 +97,7 @@ function attachResizeHandle(pane: HTMLElement, root: HTMLElement, getWidth: () =
 }
 
 /**
- * Draggable edge on PDF, PPTX and Word preview sidebars. Width is stored on the viewer root and
+ * Draggable edge on PDF, PPTX, Word and mind-map preview sidebars. Width is stored on the viewer root and
  * persisted in localStorage so thumbnails and the main pane relayout together.
  */
 export function installPreviewSidebarResize(root: HTMLElement): () => void {
@@ -127,7 +129,7 @@ export function installPreviewSidebarResize(root: HTMLElement): () => void {
 
   const scan = (): void => {
     const panes = new Set<HTMLElement>();
-    Array.from(root.querySelectorAll<HTMLElement>('.pdf-nav-pane:not([hidden]), .preview-pptx-thumbs:not([hidden]), .preview-word-outline:not([hidden])')).forEach((pane) => {
+    Array.from(root.querySelectorAll<HTMLElement>('.pdf-nav-pane:not([hidden]), .preview-pptx-thumbs:not([hidden]), .preview-word-outline:not([hidden]), .xmind-sidebar')).forEach((pane) => {
       panes.add(pane);
     });
     for (const pane of paneCleanups.keys()) {

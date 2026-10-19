@@ -179,6 +179,8 @@ export class EditorAppearanceStore {
 }
 
 export function applyEditorAppearance(root: HTMLElement, state: Readonly<EditorAppearanceState>): void {
+  // Embedded editors may use a different theme from the desktop/IDE that owns their native scrollbars.
+  root.style.colorScheme = state.mode === 'dark' ? 'dark' : 'light';
   root.classList.toggle('mdpre-light', state.mode === 'light');
   root.classList.toggle('mdpre-gray', state.mode === 'gray');
   root.classList.toggle('mdpre-dark', state.mode === 'dark');

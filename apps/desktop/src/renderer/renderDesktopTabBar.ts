@@ -1,4 +1,5 @@
 import { resolveWorkspaceTreeIcon } from '@easyview/contracts';
+import { DESKTOP_TAB_CLOSE_SHORTCUT } from '../contracts';
 import type { DesktopTab } from '../contracts';
 import { tDesktop } from './desktopRenderer.i18n';
 
@@ -153,7 +154,8 @@ export function renderDesktopTabBar(
       action.textContent = '×';
     }
     const actionLabel = tDesktop(tab.pinned ? 'tab.unpin' : 'tab.close', { name: tab.fileName });
-    action.title = actionLabel;
+    const closeShortcut = navigator.platform.toLowerCase().includes('mac') ? DESKTOP_TAB_CLOSE_SHORTCUT.macLabel : DESKTOP_TAB_CLOSE_SHORTCUT.otherLabel;
+    action.title = tab.pinned ? actionLabel : `${actionLabel} (${closeShortcut})`;
     action.setAttribute('aria-label', actionLabel);
     action.addEventListener('click', (event) => {
       event.stopPropagation();

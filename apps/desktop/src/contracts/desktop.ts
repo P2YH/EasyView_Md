@@ -15,6 +15,13 @@ import type {
 
 export type DesktopThemeMode = 'light' | 'dark';
 
+export const DESKTOP_TAB_CLOSE_SHORTCUT = {
+  accelerator: 'CmdOrCtrl+W',
+  macLabel: '⌘W',
+  otherLabel: 'Ctrl+W',
+  windowsSecondary: 'Ctrl+F4',
+} as const;
+
 export interface DesktopTheme {
   mode: DesktopThemeMode;
   editorBackground: string;

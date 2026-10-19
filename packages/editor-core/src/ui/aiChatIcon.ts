@@ -1,6 +1,2 @@
-import aiChatImage from '../../../../resources/editor/icons/ai-chat.png';
-
-/** One generated PNG shared by the chat header and every entry point.
- * Its alpha mask follows currentColor in light/dark themes and active buttons.
- */
-export const AI_CHAT_ICON_HTML = `<span class="ai-chat-icon" aria-hidden="true" style="display:inline-block;width:16px;height:16px;flex:0 0 16px;background-color:currentColor;-webkit-mask:url('${aiChatImage}') center/125% no-repeat;mask:url('${aiChatImage}') center/125% no-repeat"></span>`;
+/** Shared vector mark: speech bubble, two message lines and three sparkles. */
+export const AI_CHAT_ICON_HTML = '<svg class="ai-chat-icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4H7a4 4 0 0 0-4 4v8a3 3 0 0 0 3 3h1v3l4-3h6a4 4 0 0 0 4-4v-3M7 9h6M7 13h8"/><path fill="currentColor" stroke="none" d="m18 1 1 3 3 1-3 1-1 3-1-3-3-1 3-1Zm4 5 .5 1.5L24 8l-1.5.5L22 10l-.5-1.5L20 8l1.5-.5Zm0-6 .4 1.1 1.1.4-1.1.4L22 3l-.4-1.1-1.1-.4 1.1-.4Z"/></svg>';

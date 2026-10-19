@@ -1300,6 +1300,7 @@ function toggleAllHeadings(view: EditorView, collapse: boolean): void {
 
 function initEditor() {
   const tInit = performance.now();
+  const initialSnapshot = initialMessage?.type === 'documentSnapshot' ? initialMessage : undefined;
   console.log('[EasyView_Md perf] initEditor START');
 
   const editorElement = dom.getById('editor');
@@ -1642,7 +1643,9 @@ function initEditor() {
       if (isSourceMode && sourceEditor) {
         sourceEditor.setContent(content);
       } else {
-        editor.setContent(content, isInit, isInit ? undefined : { externalChange: true, addToHistory: false, scrollIntoView: false });
+        if (!(isInit && initialSnapshot?.content === content)) {
+          editor.setContent(content, isInit, isInit ? undefined : { externalChange: true, addToHistory: false, scrollIntoView: false });
+        }
       }
       canPostEditsToHost = true;
       updateTocStatusBar();
@@ -1961,7 +1964,8 @@ function initEditor() {
   };
   // 4. Initialize editor
   const tEditorInit = performance.now();
-  editor.init(editorElement);
+  if (initialSnapshot?.imagePathMap) editor.setImagePathMap(initialSnapshot.imagePathMap);
+  editor.init(editorElement, initialSnapshot?.content);
   console.log(`[EasyView_Md perf] editor.init(): ${(performance.now() - tEditorInit).toFixed(1)}ms`);
 
   const view = editor.view!;

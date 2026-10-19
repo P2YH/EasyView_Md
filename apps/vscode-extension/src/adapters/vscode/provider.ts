@@ -6,6 +6,7 @@ import { registerNativeOutlineNavigationGuard } from '../../native-editor/native
 import { productThemeBootstrapScript, readProductTheme } from '../../theme/productThemeBridge';
 import { resolveMarkdownDiskUri } from '../../application/document/openMarkdownEditor';
 import { MarkdownEditorSession } from '../../application/document/markdownEditorSession';
+import { markOpenTiming } from '../../application/document/openTiming';
 import {
   sameMarkdownResource,
   toDiskFileUri,
@@ -194,6 +195,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
     _token: vscode.CancellationToken
   ): Promise<void> {
     const diskUri = resolveMarkdownDiskUri(document.uri);
+    markOpenTiming(diskUri.fsPath, 'resolveCustomEditor');
     const documentDir = vscode.Uri.file(path.dirname(diskUri.fsPath));
     const workspaceFolder = vscode.workspace.getWorkspaceFolder(diskUri);
     const localResourceRoots = [

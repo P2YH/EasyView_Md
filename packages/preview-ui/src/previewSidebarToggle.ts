@@ -1,6 +1,6 @@
 const STORAGE_KEY = 'easyview.previewSidebarHidden';
-/** Viewers that render a left navigation pane: PDF pages/outline, the PPTX thumbnail rail and the Word outline. */
-const SIDEBAR_SELECTOR = '.pdf-shell:not(.pdf-shell--nav-hidden), .file-viewer-web-shell.has-pptx-thumbs, .file-viewer-web-shell.has-word-outline';
+/** Viewers that render a left navigation pane. */
+const SIDEBAR_SELECTOR = '.pdf-shell:not(.pdf-shell--nav-hidden), .file-viewer-web-shell.has-pptx-thumbs, .file-viewer-web-shell.has-word-outline, .xmind-sidebar';
 export const PREVIEW_SIDEBAR_ICON = '<svg class="preview-toolbar-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M9.5 4.5v15M5.75 8.5h1.5M5.75 11.5h1.5"/></svg>';
 
 /** Shared show/hide state of preview sidebars; viewers with their own toolbar (Word editor) reuse it. */

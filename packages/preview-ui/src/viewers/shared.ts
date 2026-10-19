@@ -537,7 +537,7 @@ export function UniversalFilePreview({ descriptor, loadingLabel = tPreview('comm
   usePdfOutlineFirst(rootRef, descriptor.route === 'pdf' && !!Viewer);
   usePdfPageNavEnhance(rootRef, descriptor.route === 'pdf' && !!Viewer);
   useWordOutline(rootRef, descriptor.route === 'word' && !!Viewer, descriptor.contentUrl, descriptor.fileName);
-  usePreviewSidebarResize(rootRef, !!Viewer && (descriptor.route === 'pdf' || descriptor.route === 'powerpoint' || descriptor.route === 'word'));
+  usePreviewSidebarResize(rootRef, !!Viewer && (descriptor.route === 'pdf' || descriptor.route === 'powerpoint' || descriptor.route === 'word' || extension(descriptor.fileName) === '.xmind'));
 
   React.useEffect(() => {
     setThemeMode(resolvePreviewThemeMode(themeStorage, descriptor.relativePath));

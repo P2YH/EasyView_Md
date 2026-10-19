@@ -16,6 +16,7 @@ import { registerMarkdownThemePanel, readProductTheme } from '../../theme/produc
 import { createPanelAiChatHost } from '../ai/createPanelAiChatHost';
 import { disposeTerminalForPanel } from '../terminal/terminalSessionManager';
 import { VscodeCanonicalDocumentAdapter } from './vscodeCanonicalDocumentAdapter';
+import { markOpenTiming } from './openTiming';
 
 export interface MarkdownEditorSessionOptions {
   context: vscode.ExtensionContext;
@@ -28,6 +29,10 @@ export interface MarkdownEditorSessionOptions {
   onActive: () => void;
   setTableFirstRowStickyDefault: (value: boolean) => Promise<void>;
   getHtml: (webview: vscode.Webview) => string;
+}
+
+function markDocumentTiming(document: vscode.TextDocument | undefined, stage: string): void {
+  if (document?.uri) markOpenTiming(resolveMarkdownDiskUri(document.uri).fsPath, stage);
 }
 
 function terminalAppearance(): { fontFamily: string; fontSize: number; lineHeight: number; fontWeight: string; fontWeightBold: string; letterSpacing: number } {
@@ -109,6 +114,7 @@ export class MarkdownEditorSession implements vscode.Disposable {
       if (result.applied) this.sync.applySnapshot(result.content, this.sync.snapshot.revision + 1);
     }
     panel.webview.html = this.options.getHtml(panel.webview);
+    markDocumentTiming(this.document, 'htmlAssigned');
     this.options.onActive();
     void this.registerGitRepositoryListener();
   }
@@ -157,6 +163,7 @@ export class MarkdownEditorSession implements vscode.Disposable {
         this.lastConflictReason = 'Snapshot acknowledgement mismatch';
         this.post({ type: 'resyncRequired', documentId: this.documentId, revision: this.sync.snapshot.revision, reason: this.lastConflictReason });
       } else if (!this.initialGitReady) {
+        markDocumentTiming(this.document, 'snapshotApplied');
         this.initialGitReady = true;
         void this.scheduleGit(0);
       }
@@ -314,6 +321,7 @@ export class MarkdownEditorSession implements vscode.Disposable {
       uiState: { ...this.uiState, viewChanges: this.uiState.viewChanges ?? settings.viewChanges ?? false },
       reason,
     });
+    if (reason === 'initial') markDocumentTiming(this.document, 'snapshotPosted');
     this.post({ type: 'setProductTheme', mode: readProductTheme(this.options.context) });
   }
 

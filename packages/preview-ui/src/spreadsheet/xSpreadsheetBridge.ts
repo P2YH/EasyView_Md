@@ -129,8 +129,17 @@ export function worksheetToXsSheet(worksheet: ExcelJS.Worksheet, workbook: Excel
     rows[sri] = row;
   }
 
+  const view = (worksheet.views || [])[0] as { state?: string; xSplit?: number; ySplit?: number } | undefined;
+  const freeze = view?.state === 'frozen' && ((view.xSplit ?? 0) > 0 || (view.ySplit ?? 0) > 0)
+    ? `${columnLetters(view.xSplit ?? 0)}${(view.ySplit ?? 0) + 1}`
+    : undefined;
+  const filter = worksheet.autoFilter;
+  const filterRef = typeof filter === 'string' ? filter : undefined;
+
   return {
     name: worksheet.name,
+    ...(freeze ? { freeze } : {}),
+    ...(filterRef ? { autofilter: { ref: filterRef, filters: [] } } : {}),
     styles,
     merges,
     cols,
@@ -249,6 +258,10 @@ function cellToXsStyle(cell: ExcelJS.Cell, workbook: ExcelJS.Workbook): XsStyle 
     style.valign = alignment.vertical;
   }
   if (alignment.wrapText) style.textwrap = true;
+  const border = cellBorderToXs(cell.border);
+  if (border) style.border = border;
+  const format = numFmtToXsFormat(cell.numFmt);
+  if (format) style.format = format;
   if (fill?.type === 'pattern' && fill.pattern !== 'none') {
     const bg = colorToCss(fill.fgColor, workbook) || colorToCss(fill.bgColor, workbook);
     // Leave near-white fills to defaultStyle so theme surface can follow EasyView palette.
@@ -278,6 +291,8 @@ export function applyXsStyleToCell(style: XsStyle, cell: ExcelJS.Cell): void {
       wrapText: style.textwrap,
     };
   }
+  if (style.border) cell.border = xsBorderToCell(style.border);
+  if (style.format && style.format in XS_NUMBER_FORMATS) cell.numFmt = XS_NUMBER_FORMATS[style.format];
   if (style.bgcolor) {
     cell.fill = {
       type: 'pattern',
@@ -285,6 +300,59 @@ export function applyXsStyleToCell(style: XsStyle, cell: ExcelJS.Cell): void {
       fgColor: { argb: cssToArgb(style.bgcolor) },
     };
   }
+}
+
+/** x-spreadsheet number-format keys ↔ Excel format codes (the editor's "Normal ▾" menu). */
+const XS_NUMBER_FORMATS: Record<string, string> = {
+  normal: 'General',
+  text: '@',
+  number: '#,##0.00',
+  percent: '0.00%',
+  rmb: '"￥"#,##0.00',
+  usd: '"$"#,##0.00',
+  eur: '"€"#,##0.00',
+  date: 'yyyy-mm-dd',
+  time: 'hh:mm:ss',
+  datetime: 'yyyy-mm-dd hh:mm:ss',
+  duration: '[h]:mm:ss',
+};
+
+function numFmtToXsFormat(numFmt: string | undefined): string | undefined {
+  if (!numFmt || numFmt === 'General') return undefined;
+  return Object.entries(XS_NUMBER_FORMATS).find(([, code]) => code === numFmt)?.[0];
+}
+
+type XsBorder = NonNullable<XsStyle['border']>;
+const XS_BORDER_SIDES = ['top', 'right', 'bottom', 'left'] as const;
+const XS_LINE_STYLES = new Set(['thin', 'medium', 'thick', 'dashed', 'dotted', 'double']);
+
+function cellBorderToXs(border: Partial<ExcelJS.Borders> | undefined): XsBorder | undefined {
+  if (!border) return undefined;
+  const out: XsBorder = {};
+  for (const side of XS_BORDER_SIDES) {
+    const edge = border[side];
+    if (!edge?.style) continue;
+    const argb = (edge.color as { argb?: string } | undefined)?.argb;
+    const color = typeof argb === 'string' ? `#${(argb.length === 8 ? argb.slice(2) : argb).toLowerCase()}` : '#000000';
+    out[side] = [XS_LINE_STYLES.has(edge.style) ? edge.style : 'thin', color];
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+function xsBorderToCell(border: XsBorder): Partial<ExcelJS.Borders> {
+  const out: Partial<ExcelJS.Borders> = {};
+  for (const side of XS_BORDER_SIDES) {
+    const edge = border[side];
+    if (!edge?.[0]) continue;
+    out[side] = { style: edge[0] as ExcelJS.BorderStyle, color: { argb: cssToArgb(edge[1] || '#000000') } };
+  }
+  return out;
+}
+
+function columnLetters(index: number): string {
+  let n = index + 1, out = '';
+  while (n > 0) { const r = (n - 1) % 26; out = String.fromCharCode(65 + r) + out; n = Math.floor((n - 1) / 26); }
+  return out;
 }
 
 function styleKeyFor(cell: ExcelJS.Cell, workbook: ExcelJS.Workbook): string | null {
@@ -336,7 +404,8 @@ function applyTint(cssHex: string, tint: number): string {
 }
 
 function cssToArgb(css: string): string {
-  const hex = css.replace('#', '').trim();
+  let hex = css.replace('#', '').trim();
+  if (/^[0-9a-fA-F]{3}$/.test(hex)) hex = hex.replace(/./g, (ch) => ch + ch);
   if (/^[0-9a-fA-F]{6}$/.test(hex)) return `FF${hex.toUpperCase()}`;
   if (/^[0-9a-fA-F]{8}$/.test(hex)) return hex.toUpperCase();
   return 'FF000000';

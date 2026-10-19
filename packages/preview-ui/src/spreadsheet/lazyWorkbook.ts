@@ -4,10 +4,13 @@ import { worksheetToXsSheet, applyXsStyleToCell, validateSheetXml } from './xSpr
 import type { XsCell, XsSheetData } from './xSpreadsheetTypes';
 import { tPreview } from '../preview.i18n';
 
-const tags = (xml: string, tag: string) => [...xml.matchAll(new RegExp(`<${tag}\\b[^>]*(?:\\/>|>[\\s\\S]*?<\\/${tag}>)`, 'g'))].map(match => match[0]);
+/** One element: either self-closing, or open…close. The self-closing branch must win first, or a
+ * `<xf …/>` swallows every sibling up to the next `</xf>` (that corrupted saved cell styles). */
+const element = (tag: string) => `<${tag}\\b(?:[^>]*?\\/>|[^>]*?[^/>]>[\\s\\S]*?<\\/${tag}>|>[\\s\\S]*?<\\/${tag}>)`;
+const tags = (xml: string, tag: string) => [...xml.matchAll(new RegExp(element(tag), 'g'))].map(match => match[0]);
 const attr = (xml: string, key: string) => new RegExp(`\\b${key}="([^"]*)"`).exec(xml)?.[1] ?? '';
 const decode = (text: string) => text.replace(/&#x([\da-f]+);|&#(\d+);|&(amp|lt|gt|quot|apos);/gi, (_, hex, dec, named) => hex || dec ? String.fromCodePoint(parseInt(hex || dec, hex ? 16 : 10)) : ({ amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" }[named as string] ?? ''));
-const section = (xml: string, name: string) => new RegExp(`<${name}\\b[^>]*(?:\\/>|>[\\s\\S]*?<\\/${name}>)`).exec(xml)?.[0] ?? '';
+const section = (xml: string, name: string) => new RegExp(element(name)).exec(xml)?.[0] ?? '';
 function replaceSection(xml: string, name: string, value: string, before = '</worksheet>'): string {
   const old = section(xml, name);
   return old ? xml.replace(old, value) : xml.replace(before, `${value}${before}`);
@@ -100,13 +103,13 @@ export class LazyWorkbook {
       let original = await this.zip.file(path)!.async('string');
       // Preserve worksheet extras and relationships (drawings, validations,
       // conditional formats, print settings, VBA, external links) verbatim.
-      for (const name of ['dimension', 'cols', 'sheetData', 'mergeCells']) {
-        const before = name === 'cols' ? '<sheetData' : '</worksheet>';
+      for (const name of ['sheetViews', 'dimension', 'cols', 'sheetData', 'autoFilter', 'mergeCells']) {
+        const before = name === 'cols' ? '<sheetData' : name === 'sheetViews' ? (/<sheetFormatPr\b/.test(original) ? '<sheetFormatPr' : '<cols') : '</worksheet>';
         const value = section(xml, name);
         const old = section(original, name);
         if (old) original = original.replace(old, value);
         else if (value) {
-          const anchor = name === 'mergeCells' ? /<(?:phoneticPr|conditionalFormatting|dataValidations|hyperlinks|printOptions|pageMargins|pageSetup|headerFooter|rowBreaks|colBreaks|customProperties|cellWatches|ignoredErrors|smartTags|drawing|legacyDrawing|legacyDrawingHF|picture|oleObjects|controls|webPublishItems|tableParts|extLst)\b|<\/worksheet>/.exec(original)?.index : undefined;
+          const anchor = name === 'mergeCells' || name === 'autoFilter' ? /<(?:phoneticPr|conditionalFormatting|dataValidations|hyperlinks|printOptions|pageMargins|pageSetup|headerFooter|rowBreaks|colBreaks|customProperties|cellWatches|ignoredErrors|smartTags|drawing|legacyDrawing|legacyDrawingHF|picture|oleObjects|controls|webPublishItems|tableParts|extLst)\b|<\/worksheet>/.exec(original)?.index : undefined;
           original = anchor === undefined ? original.replace(before, `${value}${before}`) : original.slice(0, anchor) + value + original.slice(anchor);
         }
       }
@@ -138,6 +141,14 @@ function applyChanges(sheet: ExcelJS.Worksheet, before: XsSheetData, after: XsSh
   for (const column of new Set([...Object.keys(before.cols ?? {}), ...Object.keys(after.cols ?? {})])) {
     if (column === 'len') continue;
     const ci = Number(column); if (before.cols?.[ci]?.width !== after.cols?.[ci]?.width) sheet.getColumn(ci + 1).width = (after.cols?.[ci]?.width ?? 80) / 8;
+  }
+  if (freezeRef(before) !== freezeRef(after)) {
+    const ref = parseCellRef(freezeRef(after));
+    sheet.views = ref && (ref.ri > 0 || ref.ci > 0) ? [{ state: 'frozen', xSplit: ref.ci, ySplit: ref.ri }] : [{ state: 'normal' }];
+  }
+  if (filterRef(before) !== filterRef(after)) {
+    const ref = filterRef(after);
+    sheet.autoFilter = ref ?? (undefined as unknown as string);
   }
   if (JSON.stringify(before.merges) !== JSON.stringify(after.merges)) {
     for (const range of before.merges ?? []) sheet.unMergeCells(range);
@@ -183,5 +194,20 @@ async function mergeStyles(zip: JSZip, generated: string): Promise<number[]> {
 function editablePayload(data: XsSheetData): string {
   const { len: _rows, ...rows } = data.rows ?? { len: 0 };
   const { len: _cols, ...cols } = data.cols ?? { len: 0 };
-  return JSON.stringify([data.name, data.styles ?? [], data.merges ?? [], rows, cols]);
+  return JSON.stringify([data.name, data.styles ?? [], data.merges ?? [], rows, cols, freezeRef(data), filterRef(data)]);
+}
+/** Normalised freeze / filter so engine defaults ('A1', empty filter) compare equal to "none". */
+function freezeRef(data: XsSheetData): string {
+  return typeof data.freeze === 'string' && data.freeze ? data.freeze.toUpperCase() : 'A1';
+}
+function filterRef(data: XsSheetData): string | null {
+  const ref = (data.autofilter as { ref?: unknown } | undefined)?.ref;
+  return typeof ref === 'string' && ref ? ref : null;
+}
+function parseCellRef(ref: string): { ri: number; ci: number } | null {
+  const match = /^([A-Z]+)(\d+)$/.exec(ref);
+  if (!match) return null;
+  let ci = 0;
+  for (const ch of match[1]) ci = ci * 26 + ch.charCodeAt(0) - 64;
+  return { ri: Number(match[2]) - 1, ci: ci - 1 };
 }

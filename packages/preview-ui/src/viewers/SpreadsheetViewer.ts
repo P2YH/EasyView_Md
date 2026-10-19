@@ -4,6 +4,7 @@
 /// <reference path="../x-data-spreadsheet-dist.d.ts" />
 import * as React from 'react';
 import { createPortal } from 'react-dom';
+import { spreadsheetToolbarIconCss } from '../toolbarIcons';
 import type { PreviewWriteResult } from '@easyview/contracts';
 import type { XsSpreadsheetFactory, XsSpreadsheetInstance } from '../spreadsheet/xSpreadsheetTypes';
 import type { PreviewHost } from '../types';
@@ -67,6 +68,28 @@ export function exposeToolbarIconSprite(toolbar: HTMLElement): void {
   if (!sprite.startsWith('url(')) return;
   toolbar.style.setProperty('--x-spreadsheet-icon-sprite', sprite);
   toolbar.classList.add('has-icon-sprite');
+}
+
+/**
+ * x-spreadsheet fits its buttons into the toolbar's measured width and moves the rest into a
+ * "More" menu. It does not know about the EasyView chrome we append to the same strip, so at
+ * narrow widths its buttons (and the More button) overflowed onto Save/theme and swallowed their
+ * clicks. Report the toolbar width minus our chrome to the library's measurement, and re-run its
+ * layout whenever the chrome's width changes.
+ */
+export function reserveToolbarChrome(toolbar: HTMLElement, slot: HTMLElement): void {
+  if ((toolbar as HTMLElement & { __easyviewReserve?: boolean }).__easyviewReserve) return;
+  (toolbar as HTMLElement & { __easyviewReserve?: boolean }).__easyviewReserve = true;
+  const native = toolbar.getBoundingClientRect.bind(toolbar);
+  toolbar.getBoundingClientRect = () => {
+    const rect = native();
+    const reserve = slot.isConnected ? slot.getBoundingClientRect().width + 16 : 0;
+    return new DOMRect(rect.x, rect.y, Math.max(0, rect.width - reserve), rect.height);
+  };
+  const win = toolbar.ownerDocument.defaultView;
+  if (win && typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(() => win.dispatchEvent(new Event('resize'))).observe(slot);
+  }
 }
 
 /**
@@ -169,6 +192,12 @@ html, body, .preview-root, .preview-shell, .preview-content {
 }`;
           document.head.appendChild(style);
         }
+        if (!document.getElementById('easyview-xlsx-toolbar-icons')) {
+          const icons = document.createElement('style');
+          icons.id = 'easyview-xlsx-toolbar-icons';
+          icons.textContent = spreadsheetToolbarIconCss();
+          document.head.appendChild(icons);
+        }
         const createSpreadsheet = resolveXSpreadsheetFactory(SpreadsheetModule);
         mountRef.current.innerHTML = '';
         const spreadsheet = createSpreadsheet(mountRef.current, {
@@ -207,6 +236,7 @@ html, body, .preview-root, .preview-shell, .preview-content {
           if (btns?.nextSibling) toolbar.insertBefore(slot, btns.nextSibling);
           else if (btns) toolbar.appendChild(slot);
           else toolbar.appendChild(slot);
+          reserveToolbarChrome(toolbar, slot);
           if (!disposed) setChromeSlot(slot);
         }
 

@@ -22,6 +22,8 @@ export interface XsCellStyle {
   color?: string;
   strike?: boolean;
   underline?: boolean;
+  /** x-spreadsheet number format key (normal, text, number, percent, rmb, usd, eur, date, …). */
+  format?: string;
   border?: {
     top?: string[];
     right?: string[];
@@ -58,6 +60,7 @@ export interface XsColumnsData {
 export interface XsSheetData {
   name?: string;
   freeze?: string;
+  autofilter?: { ref?: string; filters?: unknown[]; sort?: unknown };
   styles?: XsCellStyle[];
   merges?: string[];
   cols?: XsColumnsData;

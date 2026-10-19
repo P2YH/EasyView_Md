@@ -1424,6 +1424,7 @@ html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-
 .preview-spreadsheet-editor .x-spreadsheet-toolbar {
   width: 100% !important;
   box-sizing: border-box;
+  overflow: visible !important;
   height: var(--preview-toolbar-strip-height) !important;
   min-height: var(--preview-toolbar-strip-height) !important;
   border-bottom: 1px solid var(--file-viewer-toolbar-border, var(--vscode-panel-border));
@@ -1432,7 +1433,6 @@ html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-
   align-items: center !important;
   justify-content: center !important;
   gap: 6px;
-  overflow: hidden;
 }
 .preview-spreadsheet-editor .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btns {
   flex-shrink: 1;
@@ -1892,10 +1892,14 @@ html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-
   line-height: 18px !important;
   zoom: 0.8889;
 }
-.preview-spreadsheet-editor .x-spreadsheet-toolbar.has-icon-sprite .x-spreadsheet-icon-img:not(.x-spreadsheet-dropdown-content .x-spreadsheet-icon-img) {
+.preview-spreadsheet-editor .x-spreadsheet-toolbar .x-spreadsheet-icon .x-spreadsheet-icon-img {
+  left: 0 !important;
+  top: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
   background: var(--preview-toolbar-icon-color) !important;
-  -webkit-mask: var(--x-spreadsheet-icon-sprite) no-repeat 0 0;
-  mask: var(--x-spreadsheet-icon-sprite) no-repeat 0 0;
+  -webkit-mask: var(--xs-icon, var(--x-spreadsheet-icon-sprite)) center / contain no-repeat;
+  mask: var(--xs-icon, var(--x-spreadsheet-icon-sprite)) center / contain no-repeat;
   opacity: 1 !important;
 }
 .preview-spreadsheet-editor .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btn.disabled {
@@ -2191,4 +2195,82 @@ body.easyview-desktop .preview-word-editor [data-testid='editor-toolbar'] {
   height: calc(var(--preview-toolbar-item-height) - 2px) !important;
   min-height: 0 !important;
   max-height: calc(var(--preview-toolbar-item-height) - 2px) !important;
+}
+
+/* Above the grid's overlayer (z-index 10) so open menus are visible and clickable. */
+.preview-spreadsheet-editor .x-spreadsheet-toolbar {
+  z-index: 20 !important;
+}
+/* Centre every glyph on the strip's midline (the library uses inline-block + line-height). */
+.preview-spreadsheet-editor .x-spreadsheet-toolbar-btns > .x-spreadsheet-toolbar-btn,
+.preview-spreadsheet-editor .x-spreadsheet-toolbar-btns > .x-spreadsheet-toolbar-btn > .x-spreadsheet-dropdown,
+.preview-spreadsheet-editor .x-spreadsheet-toolbar-btns > .x-spreadsheet-toolbar-btn > .x-spreadsheet-dropdown > .x-spreadsheet-dropdown-header {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center;
+  vertical-align: middle;
+}
+.preview-spreadsheet-editor .x-spreadsheet-toolbar-btns > .x-spreadsheet-toolbar-btn > .x-spreadsheet-dropdown {
+  height: 100%;
+}
+.preview-spreadsheet-editor .x-spreadsheet-toolbar-btns > .x-spreadsheet-toolbar-btn .x-spreadsheet-icon {
+  vertical-align: middle !important;
+  flex-shrink: 0;
+}
+.preview-spreadsheet-editor .x-spreadsheet-toolbar .x-spreadsheet-dropdown-title {
+  line-height: 1 !important;
+}
+
+/*
+ * Excel toolbar: dropdowns must escape the 30px strip (they used to be clipped by the strip's
+ * overflow:hidden, so menus/palettes opened invisibly), sit above the grid, and follow the theme.
+ */
+.preview-spreadsheet-editor .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btns {
+  overflow: visible !important;
+}
+.preview-spreadsheet-editor .x-spreadsheet-toolbar .x-spreadsheet-dropdown-content {
+  z-index: 300 !important;
+  border: 1px solid var(--file-viewer-toolbar-border, var(--vscode-panel-border, rgba(128, 128, 128, .35)));
+  border-radius: 4px;
+  background: var(--file-viewer-toolbar-bg, var(--vscode-editorWidget-background, #fff)) !important;
+  color: var(--file-viewer-button-color, inherit);
+  line-height: normal;
+  font-size: 12px;
+}
+.preview-spreadsheet-editor .x-spreadsheet-toolbar .x-spreadsheet-dropdown-content .x-spreadsheet-item:hover,
+.preview-spreadsheet-editor .x-spreadsheet-toolbar .x-spreadsheet-dropdown-content .x-spreadsheet-item.active {
+  background: var(--file-viewer-button-hover-bg, rgba(128, 128, 128, .15)) !important;
+}
+/* Colour icons carry the current colour as a 3px bottom bar on the glyph box. */
+.preview-spreadsheet-editor .x-spreadsheet-toolbar .x-spreadsheet-icon:has(> .color, > .bgcolor, > .line-color) {
+  box-sizing: border-box !important;
+}
+/* Value dropdowns (Normal / font / size) read as outlined fields, like the Word bar. */
+.preview-spreadsheet-editor.preview-spreadsheet-editor .x-spreadsheet-toolbar-btns > .x-spreadsheet-toolbar-btn:has(.x-spreadsheet-dropdown-title) {
+  border: 1px solid var(--vscode-input-border, var(--vscode-dropdown-border, var(--vscode-panel-border, rgba(128, 128, 128, .45)))) !important;
+}
+.preview-spreadsheet-editor.preview-spreadsheet-editor .x-spreadsheet-toolbar-btns > .x-spreadsheet-toolbar-btn:has(.x-spreadsheet-dropdown-title):hover {
+  border-color: var(--vscode-focusBorder, var(--vscode-input-border, rgba(128, 128, 128, .45))) !important;
+}
+
+/* Sheet tabs: one compact strip (toolbar control height, 12px UI font); tabs scroll sideways only. */
+.preview-spreadsheet-editor .preview-spreadsheet-tabs {
+  flex: 0 0 var(--preview-toolbar-item-height) !important;
+  height: var(--preview-toolbar-item-height);
+  box-sizing: border-box;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  font: 12px/1 var(--vscode-font-family, system-ui);
+}
+.preview-spreadsheet-editor .preview-spreadsheet-tabs::-webkit-scrollbar {
+  display: none;
+}
+.preview-spreadsheet-editor .preview-spreadsheet-tabs [role='tab'] {
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 10px;
+  font-size: 12px;
+  line-height: 1;
 }

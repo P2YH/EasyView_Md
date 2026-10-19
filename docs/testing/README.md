@@ -5,7 +5,7 @@
 | Kind | Location | Runner |
 |---|---|---|
 | Unit | next to the code: `apps/*/src/**/*.test.ts`, `packages/*/src/**/*.test.ts` (`src/__tests__/` only when a test has no single owner) | Vitest. The root `vitest.config.ts` finds them by glob; jsdom suites opt in with `// @vitest-environment jsdom` |
-| Desktop e2e | `apps/desktop/e2e/*.spec.ts` (helpers in `e2e/support/`) | Playwright + Electron, `apps/desktop/playwright.config.ts` |
+| Desktop e2e | `apps/desktop/e2e/*.spec.ts` (helpers in `e2e/support/`) | Playwright + Electron, `apps/desktop/playwright.config.ts ` |
 | VS Code extension e2e | `apps/vscode-extension/e2e/*.test.js` (extension host, `@vscode/test-cli`, `.vscode-test.mjs`) and `apps/vscode-extension/e2e/*.spec.ts` (Playwright drives a real VS Code window, `playwright.e2e.config.ts`) | `apps/vscode-extension/scripts/run-e2e.mjs` runs both against one VS Code build |
 | Shared fixtures | `tests/fixtures/` | — |
 

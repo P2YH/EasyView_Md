@@ -15,7 +15,7 @@
     "make:mac": "npm run make && npm run make:dmg",
     "make:appx": "node scripts/make-appx.mjs",
     "make:nsis": "node scripts/make-nsis.mjs",
-    "test:e2e": "npm run build -- --production && playwright test -c playwright.desktop.config.ts",
+    "test:e2e": "npm run build -- --production && playwright test -c playwright.config.ts",
     "prepare:runtime": "node scripts/prepare-runtime.mjs",
     "verify:package": "node scripts/verify-package.mjs",
     "verify:runtime": "node scripts/verify-packaged-runtime.mjs"

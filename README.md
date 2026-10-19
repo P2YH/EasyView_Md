@@ -50,7 +50,7 @@ packages/editor-sync    Platform-neutral canonical Markdown synchronization
 packages/preview-ui     Shared file previewers and document toolbars
 tests/fixtures          Shared test documents and samples (unit tests sit next to code; e2e in apps/*/e2e, see docs/testing)
 resources               Shared brand, demo, font and runtime-style sources
-tooling                  Architecture, maintenance and brand tooling
+tooling                  Architecture, maintenance, brand, release and manual harnesses
 ```
 
 The repository root is orchestration-only. Product manifests, versions, build outputs and packaging rules live in their own `apps/*` workspace. The extension and desktop app must reuse the packages above instead of copying editor or host logic.

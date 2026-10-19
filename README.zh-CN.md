@@ -36,7 +36,7 @@ packages/editor-sync    平台无关的 Markdown 规范化同步
 packages/preview-ui     共用文件预览与文档工具栏
 tests/fixtures          两端共用测试文档与样本（单元测试与代码同目录，e2e 在 apps/*/e2e，见 docs/testing）
 resources               公共品牌、演示、字体和运行样式源文件
-tooling                  架构、维护和品牌资源工具
+tooling                  架构、维护、品牌、发布与手工检查工具
 ```
 
 仓库根目录只负责编排。插件与桌面端的产品清单、版本、构建产物和打包规则均位于各自的 `apps/*` 工作区；两端必须复用公共包，不复制编辑器和宿主能力。

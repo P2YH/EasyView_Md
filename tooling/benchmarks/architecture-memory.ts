@@ -48,5 +48,5 @@ try {
   fingerprint = { bytes: size, beforeMs: before.ms, afterMs: after.ms, beforeWholeFileBuffers: 3, afterWholeFileBuffers: 0, streamBufferBytes: 65536, reads: 3 };
 } finally { await fs.rm(directory, { recursive: true, force: true }); }
 const result = { date: new Date().toISOString(), node: process.version, platform: process.platform, arch: process.arch, streaming, streamingTailGrowth, pmSync: { characters: current.length, edits: 40, beforeMs: baseline.ms, afterMs: optimized.ms, hash40Ms: hash.ms, metrics: serializer.metrics }, cmPatch: { edits: 100, beforeMs: cmBefore.ms, afterMs: cmAfter.ms, note: 'Patch calculation only; ChangeSet already holds offsets. Full text/hash remain in the protocol.' }, workbook: { sheets: 8, cellsPerSheet: 9000, beforeMs: fullWorkbook.ms, afterMs: lazyWorkbook.ms, beforeDecoded: 8, afterDecoded: lazyWorkbook.value.metrics.decodedSheets }, fingerprint };
-await fs.writeFile('docs/EasyView_second_round_benchmarks_2026-10-17.json', JSON.stringify(result, null, 2) + '\n');
+await fs.writeFile('docs/architecture/EasyView_second_round_benchmarks_2026-10-17.json', JSON.stringify(result, null, 2) + '\n');
 console.log(JSON.stringify(result, null, 2));

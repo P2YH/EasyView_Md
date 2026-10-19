@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto';
 import { chromium } from 'playwright';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(__dirname, '..');
+const root = path.resolve(__dirname, '../..');
 const dist = path.join(root, 'apps/vscode-extension/dist');
 const testDir = path.join(root, '测试文件夹');
 const outDir = '/tmp/easyview-preview-e2e';

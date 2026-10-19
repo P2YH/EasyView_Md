@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(__dirname, '..');
+const root = path.resolve(__dirname, '../..');
 const dist = path.join(root, 'apps/vscode-extension/dist');
 const testDir = path.join(root, '测试文件夹');
 const port = Number(process.env.PREVIEW_HARNESS_PORT || 8765);

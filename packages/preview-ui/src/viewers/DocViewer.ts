@@ -25,6 +25,10 @@ import {
 } from './DocumentRouteChrome';
 import { isEditableWordFile } from '../word/editableFormats';
 import { tPreview } from '../preview.i18n';
+import { installPreviewSidebarResize } from '../previewSidebarResize';
+import { PREVIEW_SIDEBAR_ICON, readPreviewSidebarHidden, writePreviewSidebarHidden } from '../previewSidebarToggle';
+import { installWordOutline, wordOutlineLabels } from './wordOutlinePane';
+import { createDocxEditorOutlineSource, type DocxOutlineEditor } from './wordOutlineSources';
 
 export interface DocViewerProps extends ViewerProps {
   host?: PreviewHost;
@@ -62,6 +66,19 @@ function WordEditor({ descriptor, host }: { descriptor: ViewerProps['descriptor'
   // Accept opens only from comment-related controls — not theme / save / other toolbar clicks.
   const commentsSidebarUserGestureRef = React.useRef(false);
   const colorMode = easyViewThemeToDocxColorMode(themeMode);
+  const mountRef = React.useRef<HTMLDivElement | null>(null);
+  const outlineListenersRef = React.useRef(new Set<() => void>());
+  const [sidebarHidden, setSidebarHidden] = React.useState(readPreviewSidebarHidden);
+  const toggleSidebar = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    setSidebarHidden((hidden) => {
+      writePreviewSidebarHidden(!hidden);
+      return !hidden;
+    });
+  }, []);
+  const notifyOutline = React.useCallback(() => {
+    outlineListenersRef.current.forEach(listener => listener());
+  }, []);
 
   React.useEffect(() => {
     const isCommentsControl = (target: EventTarget | null): boolean => {
@@ -148,6 +165,56 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
     return () => { disposed = true; };
   }, [descriptor.contentUrl, descriptor.sessionId]);
 
+  // EasyView outline rail (replaces DocxEditor's floating outline): headings from ProseMirror,
+  // re-collected after edits; sits below the formatting bar and shifts the page area right.
+  React.useEffect(() => {
+    const mount = mountRef.current;
+    if (loading || !buffer || !mount) return;
+    const viewerRoot = mount.closest<HTMLElement>('.preview-universal-viewer') ?? mount;
+    const listeners = outlineListenersRef.current;
+    const source = createDocxEditorOutlineSource(
+      mount,
+      () => editorRef.current as unknown as DocxOutlineEditor | null,
+      (onChange) => {
+        listeners.add(onChange);
+        return () => { listeners.delete(onChange); };
+      },
+    );
+    const controller = installWordOutline(mount, source, wordOutlineLabels());
+    const disposeResize = installPreviewSidebarResize(viewerRoot);
+    mount.dataset.wordOutline = 'on';
+    let scroller: HTMLElement | null = null;
+    const place = () => {
+      if (!scroller) return;
+      const top = scroller.getBoundingClientRect().top - mount.getBoundingClientRect().top;
+      mount.style.setProperty('--word-outline-top', `${Math.max(0, Math.round(top))}px`);
+    };
+    // The scroller's height changes whenever the formatting bar above it does.
+    const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(place) : null;
+    const watch = () => {
+      const next = mount.querySelector<HTMLElement>('.docx-editor__scroll-container');
+      if (next === scroller) return;
+      if (scroller) resize?.unobserve(scroller);
+      scroller = next;
+      if (scroller) resize?.observe(scroller);
+      place();
+      controller.refresh();
+    };
+    const observer = new MutationObserver(watch);
+    observer.observe(mount, { childList: true, subtree: true });
+    watch();
+    const late = window.setTimeout(place, 300);
+    return () => {
+      window.clearTimeout(late);
+      observer.disconnect();
+      resize?.disconnect();
+      disposeResize();
+      controller.dispose();
+      delete mount.dataset.wordOutline;
+      mount.style.removeProperty('--word-outline-top');
+    };
+  }, [buffer, loading]);
+
   // Inline-beat any remaining left gutter after mount / layout.
   React.useEffect(() => {
     if (loading || !buffer) return;
@@ -226,6 +293,15 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
     h(React.Fragment, null,
       h('button', {
         type: 'button',
+        className: 'preview-chrome-btn preview-chrome-btn--icon preview-word-outline-toggle',
+        title: tPreview('toolbar.toggleSidebar'),
+        'aria-label': tPreview('toolbar.toggleSidebar'),
+        'aria-pressed': !sidebarHidden,
+        onClick: toggleSidebar,
+        dangerouslySetInnerHTML: { __html: PREVIEW_SIDEBAR_ICON },
+      }),
+      h('button', {
+        type: 'button',
         className: 'preview-chrome-btn preview-chrome-btn--icon',
         title: tPreview('word.exportDocx'),
         'aria-label': tPreview('word.export'),
@@ -247,7 +323,7 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
         },
       }, h(DocumentPrintIcon, null)),
     )
-  ), [buffer, exportDocx, printDoc, saving]);
+  ), [buffer, exportDocx, printDoc, saving, sidebarHidden, toggleSidebar]);
 
   const toolbarExtra = React.useMemo(() => (
     pinnedOpen
@@ -280,7 +356,11 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
   },
     loading || !DocxEditor || !buffer
       ? loadingElement(tPreview('word.loadingEditor'))
-      : h('div', { className: 'preview-word-mount' },
+      : h('div', {
+          className: 'preview-word-mount',
+          ref: mountRef,
+          'data-preview-sidebar': sidebarHidden ? 'hidden' : 'visible',
+        },
           h(DocxEditor, {
             ref: editorRef,
             key: `docx-${descriptor.sessionId}`,
@@ -293,7 +373,9 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
             showFileOpen: false,
             showHelpMenu: false,
             showZoomControl: true,
-            showOutlineButton: true,
+            // EasyView renders its own outline rail (see installWordOutline above).
+            showOutline: false,
+            showOutlineButton: false,
             showRuler: false,
             // Filename + File/Format/Insert menu row are hidden via CSS; keep a single formatting bar.
             // EasyView chrome is injected into that same formatting-bar via toolbarExtra.
@@ -303,7 +385,10 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
             documentName: descriptor.fileName,
             commentsSidebarOpen,
             onCommentsSidebarOpenChange,
-            onChange: () => setDirty(true),
+            onChange: () => {
+              setDirty(true);
+              notifyOutline();
+            },
             onSave: (next: ArrayBuffer) => {
               void (async () => {
                 setSaving(true);

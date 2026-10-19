@@ -36,3 +36,11 @@ it('restores a previously saved width', () => {
   installPreviewSidebarResize(root);
   expect(root.style.getPropertyValue('--preview-sidebar-width')).toBe('240px');
 });
+
+it('adds a resize handle to the Word outline rail', () => {
+  document.body.innerHTML = '<div class="preview-universal-viewer"><nav class="preview-word-outline"></nav></div>';
+  const root = document.querySelector<HTMLElement>('.preview-universal-viewer')!;
+  const dispose = installPreviewSidebarResize(root);
+  expect(root.querySelector('.preview-word-outline > .preview-sidebar-resize-handle')).not.toBeNull();
+  dispose();
+});

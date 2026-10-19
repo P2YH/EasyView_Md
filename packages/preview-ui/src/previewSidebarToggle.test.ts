@@ -1,6 +1,6 @@
 /** @vitest-environment happy-dom */
 import { afterEach, expect, it } from 'vitest';
-import { installPreviewSidebarToggle } from './previewSidebarToggle';
+import { installPreviewSidebarToggle, readPreviewSidebarHidden, writePreviewSidebarHidden } from './previewSidebarToggle';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -49,4 +49,15 @@ it('re-inserts the toggle after the toolbar is rebuilt', async () => {
   await new Promise(resolve => setTimeout(resolve, 0));
 
   expect(toolbar.firstElementChild?.classList.contains('preview-sidebar-toggle')).toBe(true);
+});
+
+it('shows the toggle for the Word outline rail and shares the saved state', async () => {
+  const { root, toolbar } = mount('<div class="file-viewer-web-shell has-word-outline"></div>');
+  installPreviewSidebarToggle(toolbar, root, 'Toggle sidebar');
+  const toggle = toolbar.firstElementChild as HTMLButtonElement;
+  expect(toggle.hidden).toBe(false);
+  toggle.click();
+  expect(readPreviewSidebarHidden()).toBe(true);
+  writePreviewSidebarHidden(false);
+  expect(localStorage.getItem('easyview.previewSidebarHidden')).toBe('0');
 });

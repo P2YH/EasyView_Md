@@ -28,6 +28,8 @@ import { PPTX_OUTLINE_SUFFIX, readPptxSlideTitles } from './pptxOutline';
 import { installPdfOutlineFirst } from './pdfOutlineFirst';
 import { installPdfPageNavEnhance } from './pdfPageNavEnhance';
 import { installPreviewSidebarResize } from '../previewSidebarResize';
+import { installWordOutline, wordOutlineLabels, type WordOutlineController } from './wordOutlinePane';
+import { createDocxPreviewOutlineSource, createMsdocOutlineSource, readDocxPackageHeadings } from './wordOutlineSources';
 import { installPreviewSidebarToggle } from '../previewSidebarToggle';
 import { installCompactToolbarSearch } from '../toolbarSearch';
 
@@ -421,6 +423,71 @@ function usePptxThumbnails(
   }, [enabled, rootRef, contentUrl, fileName]);
 }
 
+/** OOXML Word files the read-only renderer shows with docx-preview (macro-enabled or not writable). */
+const WORD_PACKAGE_SUFFIX = /\.(docx|docm|dotx|dotm)$/i;
+const WORD_BINARY_SUFFIX = /\.doc$/i;
+
+/** Word outline rail beside the read-only .doc / .docm renderer; theme reloads replace the shell. */
+function useWordOutline(
+  rootRef: React.RefObject<HTMLDivElement | null>,
+  enabled: boolean,
+  contentUrl: string,
+  fileName: string,
+): void {
+  React.useEffect(() => {
+    const root = rootRef.current;
+    const binary = WORD_BINARY_SUFFIX.test(fileName);
+    if (!enabled || !root || (!binary && !WORD_PACKAGE_SUFFIX.test(fileName))) return;
+    const headings = binary
+      ? null
+      : fetch(contentUrl)
+          .then(response => (response.ok ? response.arrayBuffer() : Promise.reject(new Error(String(response.status)))))
+          .then(readDocxPackageHeadings);
+    headings?.catch(() => undefined);
+    let shell: HTMLElement | null = null;
+    let controller: WordOutlineController | null = null;
+    let resize: ResizeObserver | null = null;
+    const place = (): void => {
+      const content = shell?.querySelector<HTMLElement>(':scope > .file-viewer-web-content');
+      if (controller && content) controller.pane.style.top = `${content.offsetTop}px`;
+    };
+    const detach = (): void => {
+      resize?.disconnect();
+      resize = null;
+      controller?.dispose();
+      controller = null;
+      shell?.classList.remove('has-word-outline');
+    };
+    const attach = (): void => {
+      const next = root.querySelector<HTMLElement>('.file-viewer-web-shell');
+      if (next === shell && (!next || controller)) {
+        place();
+        return;
+      }
+      detach();
+      shell = next;
+      if (!next || !next.querySelector('.file-viewer-web-content')) return;
+      const source = binary
+        ? createMsdocOutlineSource(root)
+        : createDocxPreviewOutlineSource(root, headings ?? Promise.resolve([]));
+      next.classList.add('has-word-outline');
+      controller = installWordOutline(next, source, wordOutlineLabels());
+      if (typeof ResizeObserver === 'function') {
+        resize = new ResizeObserver(place);
+        resize.observe(next);
+      }
+      place();
+    };
+    attach();
+    const observer = new MutationObserver(attach);
+    observer.observe(root, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+      detach();
+    };
+  }, [enabled, rootRef, contentUrl, fileName]);
+}
+
 /** PDF navigation opens on the outline; documents without one fall back to pages. */
 function usePdfOutlineFirst(rootRef: React.RefObject<HTMLDivElement | null>, enabled: boolean): void {
   React.useEffect(() => {
@@ -469,7 +536,8 @@ export function UniversalFilePreview({ descriptor, loadingLabel = tPreview('comm
   usePptxThumbnails(rootRef, needsPptxWorker && !!Viewer && !!pptxWorkerUrl, descriptor.contentUrl, descriptor.fileName);
   usePdfOutlineFirst(rootRef, descriptor.route === 'pdf' && !!Viewer);
   usePdfPageNavEnhance(rootRef, descriptor.route === 'pdf' && !!Viewer);
-  usePreviewSidebarResize(rootRef, !!Viewer && (descriptor.route === 'pdf' || descriptor.route === 'powerpoint'));
+  useWordOutline(rootRef, descriptor.route === 'word' && !!Viewer, descriptor.contentUrl, descriptor.fileName);
+  usePreviewSidebarResize(rootRef, !!Viewer && (descriptor.route === 'pdf' || descriptor.route === 'powerpoint' || descriptor.route === 'word'));
 
   React.useEffect(() => {
     setThemeMode(resolvePreviewThemeMode(themeStorage, descriptor.relativePath));

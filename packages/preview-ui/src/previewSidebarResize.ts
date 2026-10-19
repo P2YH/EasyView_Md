@@ -95,7 +95,7 @@ function attachResizeHandle(pane: HTMLElement, root: HTMLElement, getWidth: () =
 }
 
 /**
- * Draggable edge on PDF and PPTX preview sidebars. Width is stored on the viewer root and
+ * Draggable edge on PDF, PPTX and Word preview sidebars. Width is stored on the viewer root and
  * persisted in localStorage so thumbnails and the main pane relayout together.
  */
 export function installPreviewSidebarResize(root: HTMLElement): () => void {
@@ -127,7 +127,7 @@ export function installPreviewSidebarResize(root: HTMLElement): () => void {
 
   const scan = (): void => {
     const panes = new Set<HTMLElement>();
-    Array.from(root.querySelectorAll<HTMLElement>('.pdf-nav-pane:not([hidden]), .preview-pptx-thumbs:not([hidden])')).forEach((pane) => {
+    Array.from(root.querySelectorAll<HTMLElement>('.pdf-nav-pane:not([hidden]), .preview-pptx-thumbs:not([hidden]), .preview-word-outline:not([hidden])')).forEach((pane) => {
       panes.add(pane);
     });
     for (const pane of paneCleanups.keys()) {

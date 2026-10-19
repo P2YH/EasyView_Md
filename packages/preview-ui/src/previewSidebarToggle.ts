@@ -1,9 +1,10 @@
 const STORAGE_KEY = 'easyview.previewSidebarHidden';
-/** Viewers that render a left navigation pane: PDF pages/outline and the PPTX thumbnail rail. */
-const SIDEBAR_SELECTOR = '.pdf-shell:not(.pdf-shell--nav-hidden), .file-viewer-web-shell.has-pptx-thumbs';
-const ICON = '<svg class="preview-toolbar-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M9.5 4.5v15M5.75 8.5h1.5M5.75 11.5h1.5"/></svg>';
+/** Viewers that render a left navigation pane: PDF pages/outline, the PPTX thumbnail rail and the Word outline. */
+const SIDEBAR_SELECTOR = '.pdf-shell:not(.pdf-shell--nav-hidden), .file-viewer-web-shell.has-pptx-thumbs, .file-viewer-web-shell.has-word-outline';
+export const PREVIEW_SIDEBAR_ICON = '<svg class="preview-toolbar-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M9.5 4.5v15M5.75 8.5h1.5M5.75 11.5h1.5"/></svg>';
 
-function readHidden(): boolean {
+/** Shared show/hide state of preview sidebars; viewers with their own toolbar (Word editor) reuse it. */
+export function readPreviewSidebarHidden(): boolean {
   try {
     return localStorage.getItem(STORAGE_KEY) === '1';
   } catch {
@@ -11,7 +12,7 @@ function readHidden(): boolean {
   }
 }
 
-function writeHidden(hidden: boolean): void {
+export function writePreviewSidebarHidden(hidden: boolean): void {
   try {
     localStorage.setItem(STORAGE_KEY, hidden ? '1' : '0');
   } catch {
@@ -31,9 +32,9 @@ export function installPreviewSidebarToggle(toolbar: HTMLElement, root: HTMLElem
   button.className = 'preview-toolbar-icon-button preview-sidebar-toggle';
   button.title = label;
   button.setAttribute('aria-label', label);
-  button.innerHTML = ICON;
+  button.innerHTML = PREVIEW_SIDEBAR_ICON;
 
-  let hidden = readHidden();
+  let hidden = readPreviewSidebarHidden();
   let frame = 0;
 
   const apply = (): void => {
@@ -52,7 +53,7 @@ export function installPreviewSidebarToggle(toolbar: HTMLElement, root: HTMLElem
 
   const onClick = (): void => {
     hidden = !hidden;
-    writeHidden(hidden);
+    writePreviewSidebarHidden(hidden);
     apply();
   };
 

@@ -8,7 +8,8 @@ import { tPreviewService } from './preview.i18n';
 
 const inflateRawAsync = promisify(inflateRaw);
 const gunzipAsync = promisify(gunzip);
-const MAX_ARCHIVE_ENTRIES = 10_000;
+// Listing reads metadata only; bound index bytes rather than reject ordinary archives with many small files.
+const MAX_ARCHIVE_INDEX_BYTES = 32 * 1024 * 1024;
 const MAX_EXPANDED_BYTES = 512 * 1024 * 1024;
 const MAX_ENTRY_PREVIEW_BYTES = 4 * 1024 * 1024;
 
@@ -118,14 +119,15 @@ function parseZipEntries(bytes: Buffer): InternalZipEntry[] {
   const centralDirectorySize = bytes.readUInt32LE(eocdOffset + 12);
   const centralDirectoryOffset = bytes.readUInt32LE(eocdOffset + 16);
   if (disk !== 0 || centralDirectoryDisk !== 0 || entryCount === 0xffff || centralDirectoryOffset === 0xffffffff) throw new PreviewSessionError('unsupported', tPreviewService('archive.zip64Unsupported'));
-  if (entryCount > MAX_ARCHIVE_ENTRIES) throw new PreviewSessionError('invalid', tPreviewService('archive.tooManyEntries'));
-  if (centralDirectoryOffset + centralDirectorySize > bytes.length) throw new PreviewSessionError('invalid', tPreviewService('archive.zipCentralDirectoryCorrupt'));
+  const centralDirectoryEnd = centralDirectoryOffset + centralDirectorySize;
+  if (centralDirectoryEnd > eocdOffset || entryCount * 46 > centralDirectorySize) throw new PreviewSessionError('invalid', tPreviewService('archive.zipCentralDirectoryCorrupt'));
+  if (centralDirectorySize > MAX_ARCHIVE_INDEX_BYTES) throw new PreviewSessionError('invalid', tPreviewService('archive.indexTooLarge'));
 
   const entries: InternalZipEntry[] = [];
   let offset = centralDirectoryOffset;
   let expandedBytes = 0;
   for (let index = 0; index < entryCount; index += 1) {
-    if (offset + 46 > bytes.length || bytes.readUInt32LE(offset) !== 0x02014b50) throw new PreviewSessionError('invalid', tPreviewService('archive.zipCentralDirectoryCorrupt'));
+    if (offset + 46 > centralDirectoryEnd || bytes.readUInt32LE(offset) !== 0x02014b50) throw new PreviewSessionError('invalid', tPreviewService('archive.zipCentralDirectoryCorrupt'));
     const flags = bytes.readUInt16LE(offset + 8);
     const compressionMethod = bytes.readUInt16LE(offset + 10);
     const dosTime = bytes.readUInt16LE(offset + 12);
@@ -137,7 +139,7 @@ function parseZipEntries(bytes: Buffer): InternalZipEntry[] {
     const commentLength = bytes.readUInt16LE(offset + 32);
     const localHeaderOffset = bytes.readUInt32LE(offset + 42);
     const end = offset + 46 + nameLength + extraLength + commentLength;
-    if (end > bytes.length) throw new PreviewSessionError('invalid', tPreviewService('archive.zipEntryCorrupt'));
+    if (end > centralDirectoryEnd) throw new PreviewSessionError('invalid', tPreviewService('archive.zipEntryCorrupt'));
     if ((flags & 0x1) !== 0) throw new PreviewSessionError('unsupported', tPreviewService('archive.zipEncrypted'));
     const name = decodeZipName(bytes.subarray(offset + 46, offset + 46 + nameLength), (flags & 0x800) !== 0);
     assertSafeArchivePath(name);
@@ -181,6 +183,7 @@ function parseTarEntries(bytes: Buffer): Array<{ entry: ArchiveEntry; payloadOff
   const entries: Array<{ entry: ArchiveEntry; payloadOffset: number }> = [];
   let offset = 0;
   let expandedBytes = 0;
+  let indexBytes = 0;
   while (offset + 512 <= bytes.length) {
     const header = bytes.subarray(offset, offset + 512);
     if (header.every((value) => value === 0)) break;
@@ -190,8 +193,10 @@ function parseTarEntries(bytes: Buffer): Array<{ entry: ArchiveEntry; payloadOff
     const size = parseTarOctal(header.subarray(124, 136));
     const type = header[156];
     assertSafeArchivePath(entryPath);
+    indexBytes += 512;
+    if (indexBytes > MAX_ARCHIVE_INDEX_BYTES) throw new PreviewSessionError('invalid', tPreviewService('archive.indexTooLarge'));
     expandedBytes += size;
-    if (entries.length >= MAX_ARCHIVE_ENTRIES || expandedBytes > MAX_EXPANDED_BYTES) throw new PreviewSessionError('invalid', tPreviewService('archive.contentTooLarge'));
+    if (expandedBytes > MAX_EXPANDED_BYTES) throw new PreviewSessionError('invalid', tPreviewService('archive.contentTooLarge'));
     const payloadOffset = offset + 512;
     if (payloadOffset + size > bytes.length) throw new PreviewSessionError('invalid', tPreviewService('archive.tarEntryDataCorrupt'));
     entries.push({ entry: { path: entryPath, directory: type === 53 || entryPath.endsWith('/'), compressedSize: size, uncompressedSize: size }, payloadOffset });

@@ -68,7 +68,10 @@ export async function startHtmlPreviewServer(rootUri: vscode.Uri): Promise<HtmlP
   return {
     origin,
     async contentUrlFor(fileUri: vscode.Uri): Promise<string> {
-      const relative = path.relative(root, fileUri.fsPath);
+      // The root is a realpath; resolve the file the same way so symlinked folders
+      // (e.g. macOS /var -> /private/var) stay inside it.
+      const filePath = await fsp.realpath(fileUri.fsPath).catch(() => fileUri.fsPath);
+      const relative = path.relative(root, filePath);
       if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
         throw new Error('HTML file is outside the preview root');
       }

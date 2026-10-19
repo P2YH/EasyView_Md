@@ -8,6 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./phase1": "./src/phase1.ts",
+    "./toolbar": "./src/toolbarState.ts",
+    "./toolbar-styles": "./src/documentToolbar.css",
     "./styles": "./src/preview.css"
   },
   "files": [

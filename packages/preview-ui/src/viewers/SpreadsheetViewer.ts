@@ -58,6 +58,18 @@ function spreadsheetViewHeight(mount: HTMLElement | null | undefined): number {
 }
 
 /**
+ * x-spreadsheet draws its icons from a fixed black sprite. Expose that sprite so toolbar
+ * styles can use it as a mask and paint icons with the shared toolbar foreground.
+ */
+export function exposeToolbarIconSprite(toolbar: HTMLElement): void {
+  const icon = toolbar.querySelector('.x-spreadsheet-icon-img');
+  const sprite = icon ? getComputedStyle(icon).backgroundImage : '';
+  if (!sprite.startsWith('url(')) return;
+  toolbar.style.setProperty('--x-spreadsheet-icon-sprite', sprite);
+  toolbar.classList.add('has-icon-sprite');
+}
+
+/**
  * Spreadsheet route:
  * - .xlsx/.xlsm with write host → editable x-spreadsheet (rich toolbar + save)
  * - .xls / .ods / .csv / .tsv / others → UniversalFilePreview (same chrome as PDF)
@@ -183,8 +195,9 @@ html, body, .preview-root, .preview-shell, .preview-content {
         detachWheel = attachSpreadsheetWheelNormalization(mountRef.current);
 
         // Append EasyView chrome after formatting buttons so the whole strip can center as one group.
-        const toolbar = mountRef.current.querySelector('.x-spreadsheet-toolbar');
+        const toolbar = mountRef.current.querySelector<HTMLElement>('.x-spreadsheet-toolbar');
         if (toolbar) {
+          exposeToolbarIconSprite(toolbar);
           let slot = toolbar.querySelector('[data-easyview-spreadsheet-chrome]') as HTMLElement | null;
           if (!slot) {
             slot = document.createElement('div');

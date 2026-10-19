@@ -14,26 +14,11 @@ import { appearanceFromThemeMode, h, PreviewToolbarPinIcon } from './shared';
 import { usePreviewAssets } from '../assets';
 import { tPreview } from '../preview.i18n';
 
-const TOOLBAR_PINNED_STORAGE_KEY = 'easyview.preview.toolbarPinned';
+export { readToolbarPinned, writeToolbarPinned } from '../toolbarState';
+import { useToolbarPinned } from '../useToolbarPinned';
+export { useToolbarPinned } from '../useToolbarPinned';
+
 const WORD_COMMENTS_SIDEBAR_STORAGE_KEY = 'easyview.preview.word.commentsSidebarOpen';
-
-export function readToolbarPinned(): boolean {
-  try {
-    const raw = localStorage.getItem(TOOLBAR_PINNED_STORAGE_KEY);
-    if (raw === null) return true;
-    return raw === '1' || raw === 'true';
-  } catch {
-    return true;
-  }
-}
-
-export function writeToolbarPinned(pinned: boolean): void {
-  try {
-    localStorage.setItem(TOOLBAR_PINNED_STORAGE_KEY, pinned ? '1' : '0');
-  } catch {
-    // Ignore quota / private-mode failures.
-  }
-}
 
 /** Word comments sidebar: default closed; remember last user choice. */
 export function readWordCommentsSidebarOpen(): boolean {
@@ -52,22 +37,6 @@ export function writeWordCommentsSidebarOpen(open: boolean): void {
   } catch {
     // Ignore quota / private-mode failures.
   }
-}
-
-export function useToolbarPinned(): {
-  pinnedOpen: boolean;
-  togglePinned: (event: React.MouseEvent<HTMLButtonElement>) => void;
-} {
-  const [pinnedOpen, setPinnedOpen] = React.useState(readToolbarPinned);
-  const togglePinned = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
-    event.stopPropagation();
-    setPinnedOpen((open) => {
-      const next = !open;
-      writeToolbarPinned(next);
-      return next;
-    });
-  }, []);
-  return { pinnedOpen, togglePinned };
 }
 
 function resolveThemeStorage(explicit?: PreviewThemeStorage): PreviewThemeStorage {
@@ -193,7 +162,8 @@ export function DocumentThemeButton(props: {
 
 export function DocumentCollapseButton(props: {
   onTogglePinned: (event: React.MouseEvent<HTMLButtonElement>) => void;
-}): React.ReactElement {
+}): React.ReactElement | null {
+  if (usePreviewAssets().compactToolbars) return null;
   return h('button', {
     type: 'button',
     className: 'preview-chrome-btn preview-chrome-btn--icon preview-toolbar-toggle preview-toolbar-collapse-dock',
@@ -258,7 +228,8 @@ export function DocumentChromeActions(props: DocumentChromeActionsProps): React.
 
 export function DocumentToolbarExpandButton(props: {
   onTogglePinned: (event: React.MouseEvent<HTMLButtonElement>) => void;
-}): React.ReactElement {
+}): React.ReactElement | null {
+  if (usePreviewAssets().compactToolbars) return null;
   return h('button', {
     type: 'button',
     className: 'preview-chrome-btn preview-chrome-btn--icon preview-toolbar-toggle preview-toolbar-expand-dock',

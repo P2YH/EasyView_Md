@@ -19,6 +19,17 @@ import {
 } from '../theme';
 import { revokeSameOriginWorkerUrl, toSameOriginWorkerUrl } from '../workers/sameOriginWorker';
 import { tPreview } from '../preview.i18n';
+import { useToolbarPinned } from '../useToolbarPinned';
+import { PreviewAppearanceContext } from '../appearanceContext';
+import { installCompactToolbarIcons } from '../toolbarIcons';
+import { installPptxThumbnails } from './pptxThumbnails';
+import { installPptxViewerRegistry, pptxSlideMaterializer } from './pptxSlideMaterializer';
+import { PPTX_OUTLINE_SUFFIX, readPptxSlideTitles } from './pptxOutline';
+import { installPdfOutlineFirst } from './pdfOutlineFirst';
+import { installPdfPageNavEnhance } from './pdfPageNavEnhance';
+import { installPreviewSidebarResize } from '../previewSidebarResize';
+import { installPreviewSidebarToggle } from '../previewSidebarToggle';
+import { installCompactToolbarSearch } from '../toolbarSearch';
 
 export type { PreviewDescriptor };
 
@@ -109,6 +120,8 @@ export function appearanceFromThemeMode(mode: PreviewThemeMode): PreviewAppearan
 }
 
 export function usePreviewAppearance(mode?: PreviewThemeMode): PreviewAppearance {
+  const inheritedMode = React.useContext(PreviewAppearanceContext);
+  mode ??= inheritedMode;
   const [appearance, setAppearance] = React.useState(() => (
     mode ? appearanceFromThemeMode(mode) : readPreviewAppearance()
   ));
@@ -191,29 +204,10 @@ export function themedSvgDocument(markup: string, appearance: PreviewAppearance)
 }
 
 async function loadUniversalFileViewer(assetBaseUrl: string): Promise<React.ComponentType<FileViewerProps>> {
-  const module = await import('@file-viewer/react-full');
+  // The registry must wrap PptxViewer before any deck opens so thumbnails can mount every slide.
+  const [module] = await Promise.all([import('@file-viewer/react-full'), installPptxViewerRegistry()]);
   module.setDefaultFullAssetBaseUrl(assetBaseUrl);
   return module.default;
-}
-
-const TOOLBAR_PINNED_STORAGE_KEY = 'easyview.preview.toolbarPinned';
-
-function readToolbarPinned(): boolean {
-  try {
-    const raw = window.localStorage.getItem(TOOLBAR_PINNED_STORAGE_KEY);
-    if (raw === null) return true;
-    return raw === '1' || raw === 'true';
-  } catch {
-    return true;
-  }
-}
-
-function writeToolbarPinned(pinned: boolean): void {
-  try {
-    window.localStorage.setItem(TOOLBAR_PINNED_STORAGE_KEY, pinned ? '1' : '0');
-  } catch {
-    // Ignore quota / private-mode failures; in-memory state still works.
-  }
 }
 
 const STABLE_TOOLBAR_FLAG = '__easyviewStableToolbar';
@@ -300,6 +294,7 @@ function stabilizeFileViewerToolbar(toolbar: HTMLElement): void {
 function useFileViewerToolbarChromeSlot(
   rootRef: React.RefObject<HTMLElement | null>,
   enabled: boolean,
+  compact: boolean,
 ): HTMLElement | null {
   const hostRef = React.useRef<HTMLDivElement | null>(null);
   const [host, setHost] = React.useState<HTMLElement | null>(null);
@@ -325,6 +320,7 @@ function useFileViewerToolbarChromeSlot(
 
     let observedToolbar: HTMLElement | null = null;
     let toolbarObserver: MutationObserver | null = null;
+    let disposeSearch: (() => void) | null = null;
 
     const attach = () => {
       const root = rootRef.current;
@@ -336,7 +332,18 @@ function useFileViewerToolbarChromeSlot(
 
       if (observedToolbar !== toolbar) {
         toolbarObserver?.disconnect();
+        disposeSearch?.();
         observedToolbar = toolbar;
+        if (compact) {
+          const disposers = [
+            installCompactToolbarSearch(toolbar),
+            installCompactToolbarIcons(toolbar),
+            installPreviewSidebarToggle(toolbar, root, tPreview('toolbar.toggleSidebar')),
+          ];
+          disposeSearch = () => disposers.forEach(dispose => dispose());
+        } else {
+          disposeSearch = null;
+        }
         // Sync re-append before paint — rAF left a visible gap after replaceChildren.
         toolbarObserver = new MutationObserver(() => {
           attach();
@@ -361,12 +368,82 @@ function useFileViewerToolbarChromeSlot(
 
     return () => {
       toolbarObserver?.disconnect();
+      disposeSearch?.();
       rootObserver?.disconnect();
       chrome.remove();
     };
-  }, [enabled, rootRef]);
+  }, [enabled, rootRef, compact]);
 
   return host;
+}
+
+/** Mounts the PPTX thumbnail rail on each rendered deck; theme reloads replace the deck DOM. */
+function usePptxThumbnails(
+  rootRef: React.RefObject<HTMLDivElement | null>,
+  enabled: boolean,
+  contentUrl: string,
+  fileName: string,
+): void {
+  React.useEffect(() => {
+    const root = rootRef.current;
+    if (!enabled || !root) return;
+    const titles: Promise<string[]> = PPTX_OUTLINE_SUFFIX.test(fileName)
+      ? fetch(contentUrl)
+          .then(response => (response.ok ? response.arrayBuffer() : Promise.reject(new Error(String(response.status)))))
+          .then(readPptxSlideTitles)
+          .catch(() => [])
+      : Promise.resolve([]);
+    let content: HTMLElement | null = null;
+    let dispose: (() => void) | null = null;
+    const attach = (): void => {
+      const next = root.querySelector<HTMLElement>('.flyfish-pptx-content:not(.preview-pptx-thumb-stage)');
+      if (next === content) return;
+      dispose?.();
+      dispose = null;
+      content = next;
+      if (next) {
+        dispose = installPptxThumbnails(next, {
+          list: tPreview('pptx.thumbnails'),
+          outline: tPreview('nav.outline'),
+          pages: tPreview('nav.pages'),
+          outlineEmpty: tPreview('nav.outlineEmpty'),
+          slide: index => tPreview('pptx.slide', { index }),
+        }, titles, pptxSlideMaterializer(next));
+      }
+    };
+    attach();
+    const observer = new MutationObserver(attach);
+    observer.observe(root, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+      dispose?.();
+    };
+  }, [enabled, rootRef, contentUrl, fileName]);
+}
+
+/** PDF navigation opens on the outline; documents without one fall back to pages. */
+function usePdfOutlineFirst(rootRef: React.RefObject<HTMLDivElement | null>, enabled: boolean): void {
+  React.useEffect(() => {
+    const root = rootRef.current;
+    if (!enabled || !root) return;
+    return installPdfOutlineFirst(root);
+  }, [enabled, rootRef]);
+}
+
+function usePdfPageNavEnhance(rootRef: React.RefObject<HTMLDivElement | null>, enabled: boolean): void {
+  React.useEffect(() => {
+    const root = rootRef.current;
+    if (!enabled || !root) return;
+    return installPdfPageNavEnhance(root);
+  }, [enabled, rootRef]);
+}
+
+function usePreviewSidebarResize(rootRef: React.RefObject<HTMLDivElement | null>, enabled: boolean): void {
+  React.useEffect(() => {
+    const root = rootRef.current;
+    if (!enabled || !root) return;
+    return installPreviewSidebarResize(root);
+  }, [enabled, rootRef]);
 }
 
 export function UniversalFilePreview({ descriptor, loadingLabel = tPreview('common.loadingFileViewer') }: ViewerProps & { loadingLabel?: string }): React.ReactElement {
@@ -380,15 +457,19 @@ export function UniversalFilePreview({ descriptor, loadingLabel = tPreview('comm
   const [error, setError] = React.useState<unknown>(null);
   const [pptxWorkerUrl, setPptxWorkerUrl] = React.useState<string | null>(null);
   const [archiveWorkerUrl, setArchiveWorkerUrl] = React.useState<string | null>(null);
-  const [pinnedOpen, setPinnedOpen] = React.useState(readToolbarPinned);
+  const { pinnedOpen, togglePinned } = useToolbarPinned();
   const [themeMode, setThemeMode] = React.useState<PreviewThemeMode>(() => (
     resolvePreviewThemeMode(themeStorage, descriptor.relativePath)
   ));
   const appearance = appearanceFromThemeMode(themeMode);
   const needsPptxWorker = descriptor.route === 'powerpoint';
   const needsArchiveWorker = descriptor.route === 'archive';
-  const toolbarChrome = useFileViewerToolbarChromeSlot(rootRef, pinnedOpen && !!Viewer);
+  const toolbarChrome = useFileViewerToolbarChromeSlot(rootRef, pinnedOpen && !!Viewer, !!assets.compactToolbars);
   useLiftPreviewThemeSurface(themeMode);
+  usePptxThumbnails(rootRef, needsPptxWorker && !!Viewer && !!pptxWorkerUrl, descriptor.contentUrl, descriptor.fileName);
+  usePdfOutlineFirst(rootRef, descriptor.route === 'pdf' && !!Viewer);
+  usePdfPageNavEnhance(rootRef, descriptor.route === 'pdf' && !!Viewer);
+  usePreviewSidebarResize(rootRef, !!Viewer && (descriptor.route === 'pdf' || descriptor.route === 'powerpoint'));
 
   React.useEffect(() => {
     setThemeMode(resolvePreviewThemeMode(themeStorage, descriptor.relativePath));
@@ -470,15 +551,6 @@ export function UniversalFilePreview({ descriptor, loadingLabel = tPreview('comm
     };
   }, [needsArchiveWorker, assets.fileViewerAssetBaseUrl]);
 
-  const togglePinned = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
-    event.stopPropagation();
-    setPinnedOpen((open) => {
-      const next = !open;
-      writeToolbarPinned(next);
-      return next;
-    });
-  }, []);
-
   const cycleTheme = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
     setThemeMode((current) => {
@@ -500,7 +572,7 @@ export function UniversalFilePreview({ descriptor, loadingLabel = tPreview('comm
     locale: getLocale() === 'en' ? 'en-US' : 'zh-CN',
     styleIsolation: 'none',
     toolbar: pinnedOpen ? { theme: false, position: 'top' } : false,
-    pdf: { toolbar: false },
+    pdf: { toolbar: false, thumbnails: true },
     ui: {
       density: 'compact',
       surfaceBackground: appearance.background,
@@ -546,7 +618,7 @@ export function UniversalFilePreview({ descriptor, loadingLabel = tPreview('comm
             onClick: cycleTheme,
             dangerouslySetInnerHTML: { __html: PREVIEW_THEME_ICONS[themeMode] },
           }),
-          h('button', {
+          !assets.compactToolbars && h('button', {
             type: 'button',
             className: 'preview-chrome-btn preview-chrome-btn--icon preview-toolbar-toggle preview-toolbar-collapse-dock',
             title: tPreview('toolbar.collapse'),
@@ -573,7 +645,7 @@ export function UniversalFilePreview({ descriptor, loadingLabel = tPreview('comm
       style,
     }),
     chromePortal,
-    pinnedOpen
+    pinnedOpen || assets.compactToolbars
       ? null
       : h('button', {
           type: 'button',

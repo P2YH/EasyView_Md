@@ -151,8 +151,364 @@ body:not([data-mdpre-accent='default'])[data-mdpre-accent] .preview-root {
   background-color: var(--easyview-surface-bg) !important;
 }
 .preview-universal-viewer .pdf-nav-pane {
-  background: var(--file-viewer-toolbar-bg, var(--easyview-surface-bg)) !important;
-  border-right: 1px solid var(--file-viewer-toolbar-border, #d7dee8) !important;
+  background: var(--preview-sidebar-bg) !important;
+  border-right: 1px solid var(--pdf-nav-border) !important;
+}
+
+/* @file-viewer resets its chrome variables (navy + teal in dark mode) on the shell itself;
+ * point them back at the active EasyView preview theme. */
+.preview-universal-viewer .file-viewer-web-shell {
+  --file-viewer-toolbar-bg: var(--easyview-preview-panel-bg) !important;
+  --file-viewer-toolbar-border: var(--easyview-preview-border) !important;
+  --file-viewer-border: var(--easyview-preview-border) !important;
+  --file-viewer-muted: var(--easyview-preview-muted) !important;
+  --file-viewer-button-color: var(--easyview-preview-foreground) !important;
+  --file-viewer-button-hover-bg: var(--easyview-preview-hover-bg) !important;
+  --file-viewer-button-hover-color: var(--easyview-preview-foreground) !important;
+}
+.preview-universal-viewer .pdf-shell,
+.preview-universal-viewer .pdf-wrapper {
+  background: var(--easyview-surface-bg) !important;
+}
+
+/* PDF navigation: one tab strip and plain rows; the toolbar already shows the page count. */
+.preview-universal-viewer {
+  --preview-sidebar-width: 168px;
+  --pdf-nav-fg: var(--file-viewer-button-color, var(--vscode-foreground, #1f1f1f));
+  --pdf-nav-accent: var(--mdpre-accent, var(--vscode-focusBorder, #408fff));
+  --pdf-nav-border: var(--file-viewer-toolbar-border, var(--vscode-panel-border, #d7dee8));
+  --pdf-nav-hover: var(--file-viewer-button-hover-bg, var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, .12)));
+  --preview-sidebar-bg: var(--file-viewer-toolbar-bg, var(--easyview-surface-bg));
+}
+html.preview-sidebar-resizing,
+html.preview-sidebar-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+/* Desktop: navigation panes are app chrome, so they share the document toolbar palette. */
+body.easyview-desktop .preview-universal-viewer {
+  --pdf-nav-fg: var(--document-toolbar-foreground);
+  --pdf-nav-border: var(--document-toolbar-border);
+  --pdf-nav-hover: var(--document-toolbar-hover);
+  --preview-sidebar-bg: var(--document-toolbar-background);
+}
+.preview-universal-viewer .pdf-shell:not(.pdf-shell--nav-hidden) .pdf-content {
+  grid-template-columns: var(--preview-sidebar-width, 168px) minmax(0, 1fr);
+}
+.preview-universal-viewer .pdf-nav-pane {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  /* The resize handle straddles the right edge; clipping left only a 2px grab strip. The tab
+   * strip and page list size and scroll themselves. */
+  overflow: visible;
+}
+.preview-universal-viewer[data-preview-sidebar='hidden'] .pdf-shell .pdf-content {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+.preview-universal-viewer[data-preview-sidebar='hidden'] .pdf-nav-pane,
+.preview-universal-viewer[data-preview-sidebar='hidden'] .preview-pptx-thumbs {
+  display: none !important;
+}
+.preview-universal-viewer[data-preview-sidebar='hidden'] .file-viewer-web-shell.has-pptx-thumbs > .file-viewer-web-content {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin-left: 0 !important;
+}
+.preview-universal-viewer .pdf-nav-head { display: none !important; }
+/* Outline first, then pages. */
+.preview-universal-viewer .pdf-nav-pane .pdf-nav-tabs button:nth-child(2) { order: -1; }
+.preview-universal-viewer .pdf-nav-pane .pdf-nav-tabs {
+  gap: 0;
+  padding: 0 6px;
+  border-bottom: 1px solid var(--pdf-nav-border);
+  background: transparent;
+}
+.preview-universal-viewer .pdf-nav-pane .pdf-nav-tabs button {
+  height: 28px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--pdf-nav-fg);
+  background: transparent;
+  font-weight: 500;
+  opacity: .65;
+}
+.preview-universal-viewer .pdf-nav-pane .pdf-nav-tabs button:hover {
+  border-color: transparent;
+  color: var(--pdf-nav-fg);
+  background: transparent;
+  opacity: 1;
+}
+.preview-universal-viewer .pdf-nav-pane .pdf-nav-tabs button.active {
+  border-color: var(--pdf-nav-accent);
+  color: var(--pdf-nav-fg);
+  background: transparent;
+  opacity: 1;
+}
+.preview-universal-viewer .pdf-nav-pane :is(.pdf-page-list, .pdf-outline-list) {
+  gap: 1px;
+  padding: 4px;
+}
+.preview-universal-viewer .pdf-nav-pane .pdf-page-list {
+  padding: 6px 8px 12px 4px;
+}
+.preview-universal-viewer .pdf-nav-pane .pdf-page-button {
+  gap: 8px;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--pdf-nav-fg);
+  background: transparent;
+  box-shadow: none;
+}
+.preview-universal-viewer .pdf-nav-pane .pdf-page-button:not(.pdf-page-button--with-thumbnail) { display: flex; }
+.preview-universal-viewer .pdf-nav-pane .pdf-page-button:not(.pdf-page-button--with-thumbnail) .pdf-page-thumb { display: none; }
+.preview-universal-viewer .pdf-nav-pane .pdf-page-button--with-thumbnail { min-height: 0; padding: 0; }
+/* With thumbnails the list flows like the PPTX rail. As a fixed-height grid with `min-height: 0`
+ * rows it shrank every row to share the pane height, so thumbnails overlapped as thin strips. */
+.preview-universal-viewer .pdf-nav-pane .pdf-page-list:has(> .pdf-page-button--with-thumbnail) {
+  display: block;
+}
+/* Pages without a rendered thumbnail yet borrow the last measured page ratio (A4 portrait before that). */
+.preview-universal-viewer .pdf-nav-pane {
+  --pptx-thumb-ratio: var(--preview-pdf-thumb-ratio, 210 / 297);
+}
+.preview-universal-viewer .pdf-nav-pane .pdf-page-label { font-size: 12px; }
+.preview-universal-viewer .pdf-nav-pane .preview-pptx-thumb-frame .pdf-page-thumb--thumbnail {
+  width: 100%;
+  height: 100%;
+  min-height: 48px;
+  overflow: hidden;
+  background: #fff;
+}
+.preview-universal-viewer .pdf-nav-pane .preview-pptx-thumb-frame .pdf-page-thumb--thumbnail img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.preview-universal-viewer .pdf-nav-pane .preview-pptx-thumb-frame .pdf-page-thumb--thumbnail span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 48px;
+}
+.preview-universal-viewer .pdf-nav-pane :is(.pdf-page-button--active, .preview-pptx-thumb.is-active) .preview-pptx-thumb-frame {
+  border-color: var(--pdf-nav-accent);
+  box-shadow: 0 0 0 1px var(--pdf-nav-accent);
+}
+.preview-universal-viewer .pdf-nav-pane :is(.pdf-page-button--active, .preview-pptx-thumb.is-active) .preview-pptx-thumb-index {
+  color: var(--pdf-nav-accent);
+  opacity: 1;
+}
+.preview-universal-viewer .preview-sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  z-index: 4;
+  width: 6px;
+  height: 100%;
+  touch-action: none;
+  cursor: col-resize;
+}
+.preview-universal-viewer .preview-sidebar-resize-handle::after {
+  content: '';
+  position: absolute;
+  inset: 0 2px;
+  border-radius: 3px;
+  opacity: 0;
+  background: color-mix(in srgb, var(--pdf-nav-accent) 35%, transparent);
+  transition: opacity .12s ease;
+}
+.preview-universal-viewer .preview-sidebar-resize-handle:hover::after,
+html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-handle::after {
+  opacity: 1;
+}
+.preview-universal-viewer .pdf-nav-pane :is(.pdf-page-button, .pdf-outline-button):hover {
+  border-color: transparent;
+  color: var(--pdf-nav-fg);
+  background: var(--pdf-nav-hover);
+}
+.preview-universal-viewer .pdf-nav-pane .pdf-page-button--active,
+.preview-universal-viewer .pdf-nav-pane .pdf-page-button--active:hover {
+  color: var(--pdf-nav-fg);
+  background: color-mix(in srgb, var(--pdf-nav-accent) 18%, transparent);
+  box-shadow: inset 2px 0 0 var(--pdf-nav-accent);
+}
+/* Thumbnail rows highlight only the frame, like the PPTX rail. */
+.preview-universal-viewer .pdf-nav-pane .pdf-page-button.pdf-page-button--with-thumbnail:is(:hover, .pdf-page-button--active) {
+  background: transparent;
+  box-shadow: none;
+}
+.preview-universal-viewer .pdf-nav-pane .pdf-outline-button {
+  min-height: 24px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--pdf-nav-fg);
+}
+.preview-universal-viewer .pdf-nav-pane .pdf-outline-toggle { color: var(--pdf-nav-fg); opacity: .6; }
+/* PPTX thumbnail rail (rendered by EasyView beside the windowed slide list). */
+.preview-universal-viewer .file-viewer-web-shell.has-pptx-thumbs {
+  --pptx-thumbs-width: var(--preview-sidebar-width, 168px);
+  position: relative;
+}
+.preview-universal-viewer .file-viewer-web-shell.has-pptx-thumbs > .file-viewer-web-content {
+  width: calc(100% - var(--pptx-thumbs-width)) !important;
+  max-width: calc(100% - var(--pptx-thumbs-width)) !important;
+  margin-left: var(--pptx-thumbs-width) !important;
+}
+.preview-universal-viewer .preview-pptx-thumbs {
+  --pptx-thumb-ratio: 16 / 9;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: var(--pptx-thumbs-width, 168px);
+  border-right: 1px solid var(--pdf-nav-border);
+  background: var(--preview-sidebar-bg);
+}
+.preview-universal-viewer .preview-pptx-thumbs[hidden],
+.preview-universal-viewer .preview-pptx-thumbs [hidden] { display: none; }
+.preview-universal-viewer .preview-pptx-tabs {
+  display: flex;
+  flex: none;
+  padding: 0 6px;
+  border-bottom: 1px solid var(--pdf-nav-border);
+}
+.preview-universal-viewer .preview-pptx-tabs button {
+  flex: 1;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--pdf-nav-fg);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  opacity: .65;
+  cursor: pointer;
+}
+.preview-universal-viewer .preview-pptx-tabs button:hover { opacity: 1; }
+.preview-universal-viewer .preview-pptx-tabs button.active {
+  border-bottom-color: var(--pdf-nav-accent);
+  opacity: 1;
+}
+.preview-universal-viewer :is(.preview-pptx-thumb-list, .preview-pptx-outline) {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.preview-universal-viewer .preview-pptx-thumb-list { padding: 6px 8px 12px 4px; }
+.preview-universal-viewer .preview-pptx-outline {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px;
+}
+.preview-universal-viewer .preview-pptx-outline-item {
+  display: flex;
+  flex: none;
+  gap: 6px;
+  align-items: baseline;
+  min-height: 24px;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--pdf-nav-fg);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.preview-universal-viewer .preview-pptx-outline-item:hover { background: var(--pdf-nav-hover); }
+.preview-universal-viewer .preview-pptx-outline-item.is-active {
+  background: color-mix(in srgb, var(--pdf-nav-accent) 18%, transparent);
+  box-shadow: inset 2px 0 0 var(--pdf-nav-accent);
+}
+.preview-universal-viewer .preview-pptx-outline-index { flex: none; min-width: 14px; text-align: right; opacity: .6; }
+.preview-universal-viewer .preview-pptx-outline-title {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.preview-universal-viewer .preview-pptx-outline-empty { padding: 8px; color: var(--pdf-nav-fg); font-size: 12px; opacity: .6; }
+.preview-universal-viewer .preview-pptx-outline[data-state='loading'] .preview-pptx-outline-empty,
+.preview-universal-viewer .pdf-nav-pane[data-outline-default='pending'] .pdf-outline-empty { visibility: hidden; }
+.preview-universal-viewer .preview-pptx-thumb {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 4px;
+  width: 100%;
+  margin: 0 0 8px;
+  padding: 0;
+  border: 0;
+  color: var(--pdf-nav-fg);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.preview-universal-viewer .preview-pptx-thumb-index {
+  padding-top: 2px;
+  font-size: 11px;
+  text-align: right;
+  opacity: .6;
+}
+.preview-universal-viewer .preview-pptx-thumb-frame {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  aspect-ratio: var(--pptx-thumb-ratio);
+  border: 1px solid var(--pdf-nav-border);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--pdf-nav-fg) 6%, transparent);
+}
+.preview-universal-viewer .preview-pptx-thumb:hover .preview-pptx-thumb-frame {
+  border-color: color-mix(in srgb, var(--pdf-nav-accent) 60%, transparent);
+}
+.preview-universal-viewer .preview-pptx-thumb.is-active .preview-pptx-thumb-frame {
+  border-color: var(--pdf-nav-accent);
+  box-shadow: 0 0 0 1px var(--pdf-nav-accent);
+}
+.preview-universal-viewer .preview-pptx-thumb.is-active .preview-pptx-thumb-index {
+  color: var(--pdf-nav-accent);
+  opacity: 1;
+}
+.preview-universal-viewer .preview-pptx-thumb-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+.preview-universal-viewer .preview-pptx-thumb-stage.flyfish-pptx-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: scale(var(--pptx-thumb-scale, .1));
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+.preview-universal-viewer .pdf-nav-pane .pdf-outline-empty {
+  border: 0;
+  color: var(--pdf-nav-fg);
+  background: transparent;
+  opacity: .6;
 }
 .preview-toolbar-toggle,
 .preview-toolbar-theme {

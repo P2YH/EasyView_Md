@@ -1,6 +1,7 @@
 import * as React from 'react';
 import type { PreviewDescriptor } from '@easyview/contracts';
-import { PreviewAssetsProvider } from './assets';
+import { PreviewAssetsProvider, usePreviewAssets } from './assets';
+import { BasicPreviewShell, needsBasicPreviewToolbar } from './BasicPreviewShell';
 import type { PreviewAssetConfig, PreviewExtraViewers, PreviewHost, PreviewViewerRenderer } from './types';
 import { loadingElement } from './viewers/shared';
 import { tPreview } from './preview.i18n';
@@ -52,6 +53,7 @@ function RouteViewer({
   host: PreviewHost;
   extraViewers?: PreviewExtraViewers;
 }): React.ReactElement {
+  const assets = usePreviewAssets();
   const [renderer, setRenderer] = React.useState<PreviewViewerRenderer | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const lockFile = isOfficeLockFile(descriptor);
@@ -78,7 +80,10 @@ function RouteViewer({
   if (!renderer) {
     return loadingElement(tPreview('shell.loadingViewer'));
   }
-  return renderer(descriptor, host);
+  const viewer = renderer(descriptor, host);
+  return assets.compactToolbars && needsBasicPreviewToolbar(descriptor)
+    ? React.createElement(BasicPreviewShell, { descriptor }, viewer)
+    : viewer;
 }
 
 function loadViewer(

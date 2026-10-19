@@ -33,6 +33,8 @@ export interface PreviewHost {
 }
 
 export interface PreviewAssetConfig {
+  /** Desktop's compact toolbar; its host owns the single visibility toggle outside the viewer. */
+  compactToolbars?: boolean;
   /** Base URL for @file-viewer/react-full static assets (trailing slash). */
   fileViewerAssetBaseUrl: string;
   /** Base URL for @file-viewer/ppt assets (trailing slash). */

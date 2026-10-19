@@ -1,0 +1,319 @@
+/* Desktop document chrome: a single visual contract across all viewer engines. */
+body.easyview-desktop {
+  --document-toolbar-height: 32px;
+  --document-toolbar-control: 24px;
+  --document-toolbar-icon: 16px;
+  --document-toolbar-background: var(--vscode-editorWidget-background);
+  --document-toolbar-foreground: var(--vscode-icon-foreground, var(--vscode-editor-foreground));
+  --document-toolbar-border: var(--vscode-panel-border);
+  --document-toolbar-hover: var(--vscode-toolbar-hoverBackground);
+}
+
+body.easyview-desktop :is(.preview-universal-viewer, .preview-basic-viewer) {
+  --preview-toolbar-strip-height: var(--document-toolbar-height);
+  --preview-toolbar-control-height: var(--document-toolbar-control);
+  --file-viewer-toolbar-min-height: var(--document-toolbar-height);
+}
+
+body.easyview-desktop :is(
+  .file-header-toolbar,
+  .file-viewer-web-toolbar,
+  .x-spreadsheet-toolbar,
+  [data-testid='formatting-bar'],
+  .preview-archive-toolbar,
+  .preview-basic-toolbar,
+  .preview-basic-viewer .preview-tabs,
+  .preview-basic-viewer .preview-http-request
+) {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: safe center !important;
+  flex-wrap: nowrap !important;
+  flex: 0 0 var(--document-toolbar-height) !important;
+  box-sizing: border-box !important;
+  height: var(--document-toolbar-height) !important;
+  min-height: var(--document-toolbar-height) !important;
+  max-height: var(--document-toolbar-height) !important;
+  gap: 2px !important;
+  margin: 0 !important;
+  padding: 0 40px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--document-toolbar-border) !important;
+  border-radius: 0 !important;
+  color: var(--document-toolbar-foreground) !important;
+  background: var(--document-toolbar-background) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  font: 12px/1 var(--vscode-font-family, system-ui) !important;
+}
+
+/* Overflowing strips keep scrolling with a hairline bar. Standard scrollbar-* properties
+ * (scrollbar-color is inherited from the docx editor) would disable the ::-webkit-scrollbar sizing. */
+body.easyview-desktop :is(
+  .file-header-toolbar,
+  .file-viewer-web-toolbar,
+  .x-spreadsheet-toolbar,
+  [data-testid='formatting-bar'],
+  .preview-archive-toolbar,
+  .preview-basic-toolbar
+) {
+  scrollbar-width: auto !important;
+  scrollbar-color: auto !important;
+}
+body.easyview-desktop :is(
+  .file-header-toolbar,
+  .file-viewer-web-toolbar,
+  .x-spreadsheet-toolbar,
+  [data-testid='formatting-bar'],
+  .preview-archive-toolbar,
+  .preview-basic-toolbar
+)::-webkit-scrollbar {
+  width: 2px;
+  height: 2px;
+  background: transparent;
+}
+body.easyview-desktop :is(
+  .file-header-toolbar,
+  .file-viewer-web-toolbar,
+  .x-spreadsheet-toolbar,
+  [data-testid='formatting-bar'],
+  .preview-archive-toolbar,
+  .preview-basic-toolbar
+)::-webkit-scrollbar-thumb {
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--document-toolbar-foreground) 30%, transparent);
+}
+body.easyview-desktop :is(
+  .file-header-toolbar,
+  .file-viewer-web-toolbar,
+  .x-spreadsheet-toolbar,
+  [data-testid='formatting-bar'],
+  .preview-archive-toolbar,
+  .preview-basic-toolbar
+):hover::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--document-toolbar-foreground) 55%, transparent);
+}
+
+/* Groups form one centered row; only the host's visibility toggle is right-aligned. */
+body.easyview-desktop :is(.file-viewer-web-toolbar, [data-testid='formatting-bar']) > :is([role='group'], .file-viewer-web-toolbar-group) {
+  flex: 0 0 auto !important;
+  margin-inline: 0 !important;
+}
+body.easyview-desktop [data-testid='formatting-bar'] > [role='group'] + [role='group'] {
+  margin-left: 4px !important;
+  padding-left: 6px !important;
+  border-left: 1px solid var(--document-toolbar-border) !important;
+}
+body.easyview-desktop .file-viewer-web-toolbar > .file-viewer-web-toolbar-group + button {
+  margin-left: 4px !important;
+  border-left: 1px solid var(--document-toolbar-border) !important;
+}
+body.easyview-desktop .x-spreadsheet-toolbar { width: 100% !important; }
+body.easyview-desktop .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btns { flex: 0 1 auto; flex-wrap: nowrap; }
+
+body.easyview-desktop .preview-word-editor [data-testid='editor-toolbar'] {
+  background: var(--document-toolbar-background) !important;
+  color: var(--document-toolbar-foreground) !important;
+}
+
+body.easyview-desktop :is(
+  .file-header-toolbar .file-header-btn,
+  .file-header-toolbar .file-header-zoom-label,
+  .file-header-toolbar .file-header-accent-select,
+  .file-viewer-web-toolbar button,
+  .file-viewer-web-toolbar input,
+  .file-viewer-web-toolbar select,
+  .preview-document-chrome button,
+  .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btn,
+  [data-testid='formatting-bar'] button,
+  [data-testid='formatting-bar'] [role='combobox'],
+  [data-testid='formatting-bar'] input,
+  [data-testid='font-size-display'],
+  .preview-basic-toolbar button,
+  .preview-basic-viewer .preview-tabs button,
+  .preview-basic-viewer .preview-http-request button,
+  .preview-basic-viewer .preview-http-request input,
+  .desktop-document-toolbar-toggle
+) {
+  box-sizing: border-box !important;
+  height: var(--document-toolbar-control) !important;
+  min-height: var(--document-toolbar-control) !important;
+  max-height: var(--document-toolbar-control) !important;
+  min-width: var(--document-toolbar-control) !important;
+  padding: 0 4px !important;
+  margin: 0 !important;
+  border: 1px solid transparent !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+  color: var(--document-toolbar-foreground) !important;
+  box-shadow: none !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+  flex-shrink: 0;
+}
+
+body.easyview-desktop :is(
+  .file-header-toolbar .file-header-btn,
+  .file-viewer-web-toolbar button,
+  .preview-document-chrome button,
+  .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btn,
+  [data-testid='formatting-bar'] button,
+  .preview-basic-toolbar button,
+  .preview-basic-viewer .preview-tabs button,
+  .preview-basic-viewer .preview-http-request button,
+  .desktop-document-toolbar-toggle
+):is(:hover:not(:disabled), .active, [aria-pressed='true'], [data-active='true']) {
+  background: var(--document-toolbar-hover) !important;
+  color: var(--document-toolbar-foreground) !important;
+}
+
+body.easyview-desktop :is(
+  .file-header-toolbar,
+  .file-viewer-web-toolbar,
+  .x-spreadsheet-toolbar,
+  [data-testid='formatting-bar'],
+  .preview-document-chrome,
+  .preview-basic-toolbar,
+  .preview-basic-toolbar-actions,
+  .desktop-document-toolbar-toggle
+) svg {
+  width: var(--document-toolbar-icon) !important;
+  height: var(--document-toolbar-icon) !important;
+  flex-shrink: 0;
+}
+
+body.easyview-desktop :is(.file-header-toolbar, .file-viewer-web-toolbar, .preview-document-chrome, .desktop-document-toolbar-toggle) svg [stroke-width] {
+  stroke-width: 1.5;
+}
+
+/* Action labels remain available to assistive technology and in hover hints.
+ * Value controls retain their text (page/zoom, font, size, and dropdown values). */
+body.easyview-desktop :is(.file-viewer-web-toolbar, [data-testid='formatting-bar']) button:has(svg):not([aria-haspopup], [role='combobox'], [data-testid='font-size-display']):not(:has(input)) {
+  font-size: 0 !important;
+}
+body.easyview-desktop :is(.file-viewer-web-toolbar, [data-testid='formatting-bar']) button:has(svg):not([aria-haspopup], [role='combobox'], [data-testid='font-size-display']) > span:not(:has(svg)) {
+  display: none !important;
+}
+
+body.easyview-desktop .file-header-bar.file-header-toolbar[role='toolbar'] {
+  justify-content: safe center !important;
+  width: 100%;
+  min-width: 0;
+  padding: 0 40px !important;
+}
+body.easyview-desktop .file-header-toolbar > .file-header-group {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 2px;
+}
+body.easyview-desktop .file-header-toolbar > :is(.file-header-group, .file-header-more) + :is(.file-header-group, .file-header-more) {
+  margin-left: 4px;
+  padding-left: 6px;
+  border-left: 1px solid var(--document-toolbar-border);
+}
+body.easyview-desktop .file-header-toolbar > .file-header-group > .file-header-btn,
+body.easyview-desktop .file-header-toolbar > .file-header-group > .file-header-export-wrapper:not(.file-header-accent-wrap) > .file-header-btn,
+body.easyview-desktop .file-header-toolbar > .file-header-group > div > .file-header-btn:only-child {
+  width: var(--document-toolbar-control);
+}
+body.easyview-desktop .file-header-toolbar > .file-header-more[hidden] { display: none !important; }
+body.easyview-desktop .file-header-toolbar .file-header-group > .file-header-zoom {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: 0;
+}
+body.easyview-desktop .file-header-zoom {
+  gap: 2px;
+  margin-left: 6px;
+  padding-left: 8px;
+  border-left: 1px solid var(--document-toolbar-border);
+}
+body.easyview-desktop .file-header-actions-right { gap: 2px; }
+body.easyview-desktop .file-header-toolbar .file-header-actions-left { gap: 2px; }
+body.easyview-desktop .x-spreadsheet-toolbar .x-spreadsheet-icon {
+  width: var(--document-toolbar-icon) !important;
+  height: var(--document-toolbar-icon) !important;
+  line-height: var(--document-toolbar-icon) !important;
+}
+body.easyview-desktop .x-spreadsheet-toolbar.has-icon-sprite .x-spreadsheet-icon-img:not(.x-spreadsheet-dropdown-content .x-spreadsheet-icon-img) {
+  background: var(--document-toolbar-foreground) !important;
+  -webkit-mask: var(--x-spreadsheet-icon-sprite) no-repeat 0 0;
+  mask: var(--x-spreadsheet-icon-sprite) no-repeat 0 0;
+  opacity: 1 !important;
+}
+body.easyview-desktop .preview-spreadsheet-editor .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btn:is(:hover, .active) {
+  border-color: transparent !important;
+}
+body.easyview-desktop .x-spreadsheet-toolbar-divider { border-color: var(--document-toolbar-border) !important; }
+body.easyview-desktop .file-viewer-web-toolbar input[type='number'] { min-width: 36px !important; width: 44px; }
+body.easyview-desktop .file-viewer-web-search.preview-search-compact:not(.is-search-open) > :not(.preview-search-toggle) { display: none !important; }
+body.easyview-desktop .file-viewer-web-toolbar .preview-toolbar-icon-button { display: inline-flex; align-items: center; justify-content: center; width: var(--document-toolbar-control); padding: 0 !important; }
+body.easyview-desktop .file-viewer-web-toolbar .file-viewer-web-zoom-meter {
+  min-width: 44px;
+  color: var(--document-toolbar-foreground) !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  font-variant-numeric: tabular-nums;
+}
+body.easyview-desktop .file-viewer-web-search .preview-search-toggle { display: inline-flex; align-items: center; justify-content: center; width: var(--document-toolbar-control); }
+body.easyview-desktop .file-viewer-web-search.preview-search-compact input[type='search'] { width: clamp(120px, 18vw, 240px); min-width: 0 !important; }
+
+body.easyview-desktop .preview-file-viewer-chrome-slot,
+body.easyview-desktop .x-spreadsheet-toolbar > [data-easyview-spreadsheet-chrome],
+body.easyview-desktop [data-testid='formatting-bar'] > .preview-document-chrome--embedded {
+  margin-left: 4px !important;
+  padding-left: 8px !important;
+  border-left: 1px solid var(--document-toolbar-border) !important;
+}
+
+body.easyview-desktop .preview-basic-viewer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+body.easyview-desktop .preview-basic-content { flex: 1; min-width: 0; min-height: 0; overflow: auto; }
+body.easyview-desktop .preview-basic-toolbar-actions {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: 4px;
+  padding-left: 6px;
+  border-left: 1px solid var(--document-toolbar-border);
+}
+body.easyview-desktop .preview-basic-toolbar-actions button {
+  width: var(--document-toolbar-control);
+  height: var(--document-toolbar-control);
+  color: var(--document-toolbar-foreground);
+}
+body.easyview-desktop .preview-basic-viewer.is-toolbar-collapsed :is(.preview-tabs, .preview-http-request) { display: none !important; }
+body.easyview-desktop .preview-basic-viewer .preview-http-viewer { margin: 0; padding: 0; max-width: none; width: 100%; }
+body.easyview-desktop .preview-basic-viewer .preview-http-response { padding: 8px 12px; }
+body.easyview-desktop .preview-basic-viewer .preview-http-request input { flex: 0 1 400px; width: 400px; min-width: 0; }
+body.easyview-desktop .preview-basic-viewer .preview-tabs button.active { background: var(--document-toolbar-hover); }
+
+body.easyview-desktop .desktop-document-toolbar-toggle {
+  top: 4px;
+  right: 6px;
+  width: var(--document-toolbar-control);
+  background: var(--document-toolbar-background) !important;
+}
+body.easyview-desktop .desktop-document-toolbar-toggle svg { stroke-width: 1.5; }
+body.easyview-desktop .desktop-document-toolbar-toggle[hidden],
+body.easyview-desktop.desktop-toolbar-hidden .file-header-toolbar { display: none !important; }
+
+/* Visibility wins over native engines' inline styles and the common flex strip. */
+body.easyview-desktop .is-toolbar-collapsed :is(
+  .file-viewer-web-toolbar,
+  .x-spreadsheet-toolbar,
+  [data-testid='editor-toolbar'],
+  [data-testid='formatting-bar'],
+  .preview-archive-toolbar,
+  .preview-basic-toolbar
+),
+body.easyview-desktop .file-viewer-web-toolbar[hidden] { display: none !important; }

@@ -31,7 +31,16 @@ export function HttpViewer({ descriptor, readText, send }: HttpViewerProps): Rea
     void send({ url: url.trim(), method: 'GET', headers: {} }).then(setResponse).catch(setError).finally(() => setPending(false));
   };
   return h('section', { className: 'preview-http-viewer' },
-    h('div', { className: 'preview-http-request' }, h('input', { value: url, placeholder: 'https://example.com/api', onChange: (event: React.ChangeEvent<HTMLInputElement>) => setUrl(event.currentTarget.value) }), h('button', { type: 'button', disabled: pending, onClick: submit }, pending ? tPreview('http.sending') : tPreview('http.send'))),
+    h('div', { className: 'preview-http-request', role: 'toolbar' },
+      h('input', { value: url, placeholder: 'https://example.com/api', onChange: (event: React.ChangeEvent<HTMLInputElement>) => setUrl(event.currentTarget.value) }),
+      h('button', {
+        type: 'button', disabled: pending, onClick: submit,
+        title: pending ? tPreview('http.sending') : tPreview('http.send'),
+        'aria-label': pending ? tPreview('http.sending') : tPreview('http.send'),
+      }, h('svg', { viewBox: '0 0 24 24', width: 16, height: 16, fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, 'aria-hidden': true },
+        h('path', { d: 'm3 3 18 9-18 9 4-9-4-9Zm4 9h14', strokeLinejoin: 'round' }),
+      )),
+    ),
     error ? h(ViewerError, { error }) : null,
     response ? h('article', { className: 'preview-http-response' }, h('p', null, `${response.status} ${response.statusText}`), response.truncated ? h('p', { className: 'preview-notice' }, tPreview('http.truncated')) : null, h('pre', null, response.body)) : null,
   );

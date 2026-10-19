@@ -37,9 +37,12 @@ suite('EasyView Markdown external file changes', () => {
     const document = await vscode.workspace.openTextDocument(easyViewUri);
     assert.strictEqual(document.getText(), '# Before\n');
     await vscode.commands.executeCommand('vscode.openWith', easyViewUri, 'easyviewMd.markdownEditor');
+    // The disk watcher is registered asynchronously; on Linux (inotify via the file watcher
+    // process) a write in the same tick as openWith can land before it is armed.
+    await new Promise((resolve) => setTimeout(resolve, 1500));
 
     await fs.writeFile(diskPath, '# Updated by another AI\n', 'utf8');
-    await waitFor(() => document.getText() === '# Updated by another AI\n');
+    await waitFor(() => document.getText() === '# Updated by another AI\n', 20_000);
   });
 });
 

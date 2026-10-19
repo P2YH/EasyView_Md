@@ -231,17 +231,7 @@ body.easyview-desktop .file-header-zoom {
 }
 body.easyview-desktop .file-header-actions-right { gap: 2px; }
 body.easyview-desktop .file-header-toolbar .file-header-actions-left { gap: 2px; }
-body.easyview-desktop .x-spreadsheet-toolbar .x-spreadsheet-icon {
-  width: var(--document-toolbar-icon) !important;
-  height: var(--document-toolbar-icon) !important;
-  line-height: var(--document-toolbar-icon) !important;
-}
-body.easyview-desktop .x-spreadsheet-toolbar.has-icon-sprite .x-spreadsheet-icon-img:not(.x-spreadsheet-dropdown-content .x-spreadsheet-icon-img) {
-  background: var(--document-toolbar-foreground) !important;
-  -webkit-mask: var(--x-spreadsheet-icon-sprite) no-repeat 0 0;
-  mask: var(--x-spreadsheet-icon-sprite) no-repeat 0 0;
-  opacity: 1 !important;
-}
+/* Excel sprite sizing/tint lives in preview.css so the VS Code webview shares it. */
 body.easyview-desktop .preview-spreadsheet-editor .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btn:is(:hover, .active) {
   border-color: transparent !important;
 }

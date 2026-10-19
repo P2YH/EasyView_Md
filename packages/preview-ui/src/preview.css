@@ -1869,3 +1869,221 @@ html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-
   outline: 1px solid var(--vscode-focusBorder, #3794ff);
   outline-offset: -2px;
 }
+
+/*
+ * Excel + Word toolbar icon contract, shared by the desktop app and the VS Code webview
+ * (the webview does not load documentToolbar.css, so nothing here may depend on it).
+ * - Glyph box: 16px in the shared control height.
+ * - Excel: x-spreadsheet paints a fixed black sprite of 18px cells. Shrink the whole cell
+ *   to 16px (no cropping) and tint it through the exposed sprite mask with the toolbar
+ *   foreground, so it follows light/gray/dark like the Word icons.
+ * - EasyView's own icons (save/sidebar/print/theme/collapse) come from 16px and 24px
+ *   viewBoxes; non-scaling strokes keep them at one 1.5px line weight.
+ */
+.preview-spreadsheet-editor,
+.preview-word-editor {
+  --preview-toolbar-icon-size: 16px;
+  --preview-toolbar-icon-color: var(--document-toolbar-foreground, var(--file-viewer-button-color, currentColor));
+}
+.preview-spreadsheet-editor .x-spreadsheet-toolbar .x-spreadsheet-icon {
+  width: 18px !important;
+  height: 18px !important;
+  margin: 0 !important;
+  line-height: 18px !important;
+  zoom: 0.8889;
+}
+.preview-spreadsheet-editor .x-spreadsheet-toolbar.has-icon-sprite .x-spreadsheet-icon-img:not(.x-spreadsheet-dropdown-content .x-spreadsheet-icon-img) {
+  background: var(--preview-toolbar-icon-color) !important;
+  -webkit-mask: var(--x-spreadsheet-icon-sprite) no-repeat 0 0;
+  mask: var(--x-spreadsheet-icon-sprite) no-repeat 0 0;
+  opacity: 1 !important;
+}
+.preview-spreadsheet-editor .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btn.disabled {
+  opacity: .55 !important;
+}
+/* Active = filled background only (matches Word's pressed buttons); hover keeps the outline. */
+.preview-spreadsheet-editor .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btn.active:not(:hover) {
+  border-color: transparent !important;
+}
+:is(.preview-spreadsheet-editor .x-spreadsheet-toolbar, .preview-word-editor [data-testid='editor-toolbar']) :is(.preview-document-chrome svg, .preview-toolbar-icon, .preview-toolbar-pin-icon) {
+  width: var(--preview-toolbar-icon-size) !important;
+  height: var(--preview-toolbar-icon-size) !important;
+}
+:is(.preview-spreadsheet-editor .x-spreadsheet-toolbar, .preview-word-editor [data-testid='editor-toolbar']) :is(.preview-document-chrome svg, .preview-toolbar-icon, .preview-toolbar-pin-icon) :is(path, circle, rect, line, polyline, polygon, ellipse) {
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+/*
+ * Toolbar bottom rule. DocxEditor's own utility classes zero the editor-toolbar border, and
+ * only the desktop stylesheet re-adds it on the formatting bar, so the webview showed none.
+ * Fall back through VS Code's border tokens (panel-border is unset in some themes) to a
+ * visible neutral line.
+ */
+.preview-spreadsheet-editor .x-spreadsheet-toolbar,
+.preview-word-editor [data-testid='editor-toolbar'] {
+  position: relative;
+  z-index: 1;
+  border-bottom: 1px solid var(--file-viewer-toolbar-border, var(--vscode-panel-border, var(--vscode-widget-border, rgba(128, 128, 128, .35)))) !important;
+}
+body.easyview-desktop .preview-word-editor [data-testid='editor-toolbar'] {
+  border-bottom: 0 !important;
+}
+
+/*
+ * Excel + Word toolbar metrics: one item height (icon buttons, dropdowns, split carets and
+ * separators) and compact widths. Desktop's documentToolbar.css supplies the 24px control
+ * height; the webview uses the shared 22px one.
+ */
+.preview-spreadsheet-editor,
+.preview-word-editor {
+  --preview-toolbar-item-height: var(--document-toolbar-control, var(--preview-toolbar-control-height, 22px));
+}
+.preview-spreadsheet-editor .x-spreadsheet-toolbar .x-spreadsheet-toolbar-divider,
+.preview-word-editor [data-testid='formatting-bar'] [role='separator'],
+.preview-word-editor [data-testid='formatting-bar'] > [role='group'] > div:empty {
+  align-self: center !important;
+  height: var(--preview-toolbar-item-height) !important;
+  min-height: var(--preview-toolbar-item-height) !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+.preview-spreadsheet-editor .x-spreadsheet-toolbar .x-spreadsheet-dropdown-title {
+  padding: 0 1px 0 4px !important;
+}
+.preview-spreadsheet-editor .x-spreadsheet-toolbar .x-spreadsheet-dropdown-header .x-spreadsheet-icon {
+  margin-left: 0 !important;
+}
+.preview-spreadsheet-editor.preview-spreadsheet-editor .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btn {
+  padding: 0 2px !important;
+}
+/* Word: square icon buttons (library uses 28px), compact dropdowns, narrow split carets.
+ * EasyView's own embedded chrome keeps its rules above. */
+.preview-word-editor [data-testid='formatting-bar'] svg:not(.preview-document-chrome svg) {
+  width: var(--preview-toolbar-icon-size) !important;
+  height: var(--preview-toolbar-icon-size) !important;
+}
+.preview-word-editor [data-testid='formatting-bar'] :is(button, [role='combobox']):not(.preview-document-chrome *) {
+  width: auto !important;
+  min-width: var(--preview-toolbar-item-height) !important;
+  padding: 0 !important;
+  gap: 2px !important;
+}
+.preview-word-editor [data-testid='formatting-bar'] :is(button, [role='combobox']):not(.preview-document-chrome *):has(> span) {
+  padding: 0 2px 0 5px !important;
+}
+/* Paragraph style: fixed to fit "Heading 1" / "标题 1" + chevron, so it does not jump per style. */
+.preview-word-editor.preview-word-editor [data-testid='formatting-bar'] [aria-label='Select paragraph style'] {
+  width: 84px !important;
+  min-width: 84px !important;
+  max-width: 84px !important;
+  justify-content: space-between !important;
+}
+.preview-word-editor.preview-word-editor [data-testid='formatting-bar'] [aria-label='Select font family'] {
+  max-width: 112px !important;
+}
+.preview-word-editor.preview-word-editor [data-testid='formatting-bar'] [data-testid='font-size-display'],
+.preview-word-editor.preview-word-editor [data-testid='formatting-bar'] [aria-label='Font size'] {
+  width: 32px !important;
+  min-width: 32px !important;
+}
+.preview-word-editor.preview-word-editor [data-testid='formatting-bar'] .docx-color-picker-arrow {
+  width: 14px !important;
+  min-width: 14px !important;
+}
+.preview-word-editor.preview-word-editor [data-testid='formatting-bar'] .docx-color-picker-arrow svg {
+  width: 12px !important;
+  height: 12px !important;
+}
+.preview-word-editor [data-testid='formatting-bar'] :is([role='combobox'], button) > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * Word numeric steppers (zoom "− 100% +", font size "− 26 +"): value on the left, a stacked
+ * up/down chevron pair on the right, each half the item height. Same library buttons, so
+ * click/keyboard behaviour, step values and aria labels are unchanged; only layout and
+ * glyphs (chevrons drawn with EasyView's 1.5px round-stroke icon style) differ.
+ */
+.preview-word-editor [data-testid='formatting-bar'] :is(
+  div:has(> [aria-label='Zoom out']):has(> [aria-label='Zoom in']),
+  div:has(> [aria-label='Decrease font size']):has(> [aria-label='Increase font size'])
+) {
+  --stepper-arrow-w: 14px;
+  display: grid !important;
+  grid-template-columns: auto var(--stepper-arrow-w);
+  grid-template-rows: 1fr 1fr;
+  align-items: stretch;
+  box-sizing: border-box;
+  height: var(--preview-toolbar-item-height);
+  gap: 0 !important;
+  border: 1px solid transparent;
+  border-radius: 4px;
+}
+.preview-word-editor [data-testid='formatting-bar'] :is(
+  div:has(> [aria-label='Zoom out']):has(> [aria-label='Zoom in']),
+  div:has(> [aria-label='Decrease font size']):has(> [aria-label='Increase font size'])
+):hover {
+  border-color: var(--file-viewer-toolbar-border, var(--vscode-panel-border, rgba(128, 128, 128, .35)));
+}
+.preview-word-editor.preview-word-editor [data-testid='formatting-bar'] :is([aria-label='Zoom: 100%'], [aria-label^='Zoom:']),
+.preview-word-editor.preview-word-editor [data-testid='formatting-bar'] div:has(> [aria-label='Decrease font size']) > div {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  height: calc(var(--preview-toolbar-item-height) - 2px) !important;
+  min-height: 0 !important;
+  border: 0 !important;
+}
+.preview-word-editor.preview-word-editor [data-testid='formatting-bar'] [aria-label^='Zoom:'] {
+  min-width: 40px !important;
+  padding: 0 2px 0 5px !important;
+  justify-content: flex-start !important;
+}
+/* Clicking the value opens the zoom presets, so its separate ⌄ glyph is dropped. */
+.preview-word-editor.preview-word-editor [data-testid='formatting-bar'] [aria-label^='Zoom:'] > svg {
+  display: none !important;
+}
+.preview-word-editor.preview-word-editor [data-testid='formatting-bar'] div:has(> [aria-label='Decrease font size']) > div > * {
+  height: calc(var(--preview-toolbar-item-height) - 2px) !important;
+  min-height: 0 !important;
+  border: 0 !important;
+}
+.preview-word-editor.preview-word-editor [data-testid='formatting-bar'] :is([aria-label='Zoom in'], [aria-label='Zoom out'], [aria-label='Increase font size'], [aria-label='Decrease font size']) {
+  grid-column: 2;
+  width: var(--stepper-arrow-w) !important;
+  min-width: var(--stepper-arrow-w) !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+}
+.preview-word-editor.preview-word-editor [data-testid='formatting-bar'] :is([aria-label='Zoom in'], [aria-label='Increase font size']) {
+  grid-row: 1;
+  border-top-right-radius: 3px !important;
+}
+.preview-word-editor.preview-word-editor [data-testid='formatting-bar'] :is([aria-label='Zoom out'], [aria-label='Decrease font size']) {
+  grid-row: 2;
+  border-bottom-right-radius: 3px !important;
+}
+.preview-word-editor.preview-word-editor [data-testid='formatting-bar'] :is([aria-label='Zoom in'], [aria-label='Zoom out'], [aria-label='Increase font size'], [aria-label='Decrease font size']) > svg {
+  display: none !important;
+}
+.preview-word-editor [data-testid='formatting-bar'] :is([aria-label='Zoom in'], [aria-label='Zoom out'], [aria-label='Increase font size'], [aria-label='Decrease font size'])::before {
+  content: '';
+  width: 10px;
+  height: 6px;
+  background: currentColor;
+  -webkit-mask: var(--preview-stepper-chevron) center / 10px 6px no-repeat;
+  mask: var(--preview-stepper-chevron) center / 10px 6px no-repeat;
+}
+.preview-word-editor [data-testid='formatting-bar'] :is([aria-label='Zoom in'], [aria-label='Increase font size']) {
+  --preview-stepper-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.5 4.75 5 1.25l3.5 3.5'/%3E%3C/svg%3E");
+}
+.preview-word-editor [data-testid='formatting-bar'] :is([aria-label='Zoom out'], [aria-label='Decrease font size']) {
+  --preview-stepper-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.5 1.25 5 4.75l3.5-3.5'/%3E%3C/svg%3E");
+}

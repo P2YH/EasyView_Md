@@ -28,6 +28,7 @@ const required = [
   'extension/dist/brand/logo.png',
   'extension/dist/brand/easyview-editor-light.svg',
   'extension/dist/brand/easyview-editor-dark.svg',
+  'extension/dist/icon-theme/easyview-icon-theme.json',
   'extension/dist/media/xterm.css',
   'extension/dist/media/SourceHanSansCN-Normal.otf',
   'extension/dist/media/SourceHanSansCN-Heavy.otf',

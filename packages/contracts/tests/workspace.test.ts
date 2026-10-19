@@ -10,6 +10,7 @@ import {
   parentOfWorkspaceViewRelativePath,
   resolveWorkspaceTreeDropMode,
   resolveWorkspaceTreeIcon,
+  buildWorkspaceFileIconTheme,
   workspaceEntryNameSelectionRange,
   workspaceTreeSortModeLabel,
   setLocale,
@@ -63,7 +64,32 @@ describe('workspace contracts', () => {
     expect(resolveWorkspaceTreeIcon({ kind: 'file', name: 'notes.docx' }).id).toBe('seti:word');
     expect(resolveWorkspaceTreeIcon({ kind: 'file', name: 'report.pdf' }).id).toBe('seti:pdf');
     expect(resolveWorkspaceTreeIcon({ kind: 'file', name: 'README.md' }).id).toBe('seti:info');
+    expect(resolveWorkspaceTreeIcon({ kind: 'file', name: '规划.xmind' })).toMatchObject({ id: 'seti:xmind', codicon: 'type-hierarchy' });
+    for (const name of ['demo.zip', 'demo.rar', 'demo.7z', 'backup.tar.gz']) {
+      expect(resolveWorkspaceTreeIcon({ kind: 'file', name })).toMatchObject({ id: 'seti:zip', codicon: 'file-zip' });
+    }
+    const office = ['a.docx', 'a.xlsx', 'a.pptx', 'a.pdf', 'a.png'].map((name) => resolveWorkspaceTreeIcon({ kind: 'file', name }).svg);
+    expect(new Set(office).size).toBe(5);
+    for (const svg of office) expect(svg).toContain('fill="#fff"');
+    expect(resolveWorkspaceTreeIcon({ kind: 'file', name: 'scan.heic' }).id).toBe('seti:image');
     expect(resolveWorkspaceTreeIcon({ kind: 'file', name: '.gitignore' }).id).toBe('seti:git');
+  });
+
+  it('builds a file icon theme from the workspace tree icons', () => {
+    const { theme, files } = buildWorkspaceFileIconTheme();
+    const definitions = theme.iconDefinitions as Record<string, { iconPath: string }>;
+    const extensions = theme.fileExtensions as Record<string, string>;
+    const svgFor = (id: string) => files[definitions[id].iconPath.replace(/^\.\//, '')];
+    const inline = (name: string) => resolveWorkspaceTreeIcon({ kind: 'file', name }).svg;
+
+    for (const id of Object.values(definitions)) expect(files[id.iconPath.replace(/^\.\//, '')]).toContain('xmlns=');
+    for (const [extension, name] of [['docx', 'a.docx'], ['xmind', 'a.xmind'], ['pdf', 'a.pdf'], ['rar', 'a.rar']]) {
+      expect(svgFor(extensions[extension]).replace(' xmlns="http://www.w3.org/2000/svg"', '')).toBe(inline(name));
+    }
+    expect((theme.fileNames as Record<string, string>)['readme.md']).toMatch(/^seti_info/);
+    for (const key of ['file', 'folder', 'folderExpanded', 'rootFolder', 'rootFolderExpanded']) {
+      expect(definitions[theme[key] as string]).toBeDefined();
+    }
   });
 
   it('resolves drop mode from row Y (directory top 30% = before, else into)', () => {

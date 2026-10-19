@@ -46,8 +46,18 @@ const FONT_SIZE_OFFSET_KEY = 'easyview.workspace.fontSizeOffset';
 /** Must match the base `--workspace-font-size` in desktop.css. */
 const DESKTOP_TREE_FONT_SIZE = 16;
 
+const SHOW_NAME_HOVER_KEY = 'easyview.workspace.showNameHover';
+
 function readFontSizeOffset(): number {
   try { return clampWorkspaceFontSizeOffset(Number(localStorage.getItem(FONT_SIZE_OFFSET_KEY))); } catch { return 0; }
+}
+
+function readShowNameHover(): boolean {
+  try { return localStorage.getItem(SHOW_NAME_HOVER_KEY) !== 'false'; } catch { return true; }
+}
+
+function isClipped(element: HTMLElement): boolean {
+  return element.scrollWidth > element.clientWidth + 1 || element.scrollHeight > element.clientHeight + 1;
 }
 
 interface WorkspaceExplorerOptions {
@@ -81,7 +91,9 @@ export class WorkspaceExplorer {
   private showUpdatedAt = false;
   private showDotEntries = true;
   private showTimestampHover = true;
+  private showNameHover = readShowNameHover();
   private settingsDialog: WorkspaceSettingsDialogHandle | null = null;
+  private settingsQueue: Promise<void> = Promise.resolve();
   private fontSizeOffset = readFontSizeOffset();
   private searchOpen = false;
   private searchPanel: WorkspaceSearchPanel | null = null;
@@ -520,11 +532,13 @@ export class WorkspaceExplorer {
         showCreatedAt: this.showCreatedAt,
         showUpdatedAt: this.showUpdatedAt,
         showTimestampHover: this.showTimestampHover,
+        showNameHover: this.showNameHover,
         showDotEntries: this.showDotEntries,
         fontSizeOffset: this.fontSizeOffset,
       },
       baseFontSize: DESKTOP_TREE_FONT_SIZE,
-      onSave: (values) => { void this.applySettings(values); },
+      onPreview: (values) => this.queueSettings(values),
+      onSave: (values) => this.queueSettings(values),
       onClose: () => {
         this.settingsDialog = null;
         this.render();
@@ -533,11 +547,16 @@ export class WorkspaceExplorer {
     this.render();
   }
 
+  private queueSettings(values: WorkspaceSettingsValues): void {
+    this.settingsQueue = this.settingsQueue.catch(() => undefined).then(() => this.applySettings(values));
+  }
+
   private async applySettings(values: WorkspaceSettingsValues): Promise<void> {
     if (values.fontSizeOffset !== this.fontSizeOffset) this.changeFontSizeOffset(values.fontSizeOffset);
     if (values.showCreatedAt !== this.showCreatedAt) await this.changeShowCreatedAt(values.showCreatedAt);
     if (values.showUpdatedAt !== this.showUpdatedAt) await this.changeShowUpdatedAt(values.showUpdatedAt);
     if (values.showTimestampHover !== this.showTimestampHover) await this.changeShowTimestampHover(values.showTimestampHover);
+    if (values.showNameHover !== this.showNameHover) this.changeShowNameHover(values.showNameHover);
     if (values.showDotEntries !== this.showDotEntries) await this.changeShowDotEntries(values.showDotEntries);
     if (values.sortMode !== this.sortMode) await this.changeSortMode(values.sortMode);
     if (values.displayMode !== this.displayMode) await this.changeDisplayMode(values.displayMode);
@@ -547,6 +566,12 @@ export class WorkspaceExplorer {
     this.fontSizeOffset = clampWorkspaceFontSizeOffset(offset);
     try { localStorage.setItem(FONT_SIZE_OFFSET_KEY, String(this.fontSizeOffset)); } catch { /* storage unavailable */ }
     this.render();
+  }
+
+  private changeShowNameHover(showNameHover: boolean): void {
+    this.hideTimestampTooltip();
+    this.showNameHover = showNameHover;
+    try { localStorage.setItem(SHOW_NAME_HOVER_KEY, String(showNameHover)); } catch { /* storage unavailable */ }
   }
 
   private appendResizer(container: HTMLElement): void {
@@ -736,8 +761,8 @@ export class WorkspaceExplorer {
       const label = document.createElement('span');
       label.className = 'workspace-icon-label';
       label.textContent = entry.name;
-      label.title = entry.name;
       tile.appendChild(label);
+      this.attachHoverInfo(tile, entry, label);
     }
     this.appendEntryTimestamps(tile, entry);
     tile.addEventListener('click', (event) => {
@@ -872,6 +897,7 @@ export class WorkspaceExplorer {
       });
       this.attachDragHandlers(row, entry);
       row.appendChild(name);
+      if (this.renameRelativePath !== entry.relativePath) this.attachHoverInfo(row, entry, name);
       this.appendEntryTimestamps(row, entry);
       if (entry.kind === 'directory') {
         const create = document.createElement('button');
@@ -895,14 +921,7 @@ export class WorkspaceExplorer {
       showCreatedAt: this.showCreatedAt,
       showUpdatedAt: this.showUpdatedAt,
     });
-    if (!display) return;
-    if (this.showTimestampHover) {
-      row.addEventListener('pointerenter', (event) => {
-        this.showTimestampTooltip(display.title, event.clientX, event.clientY);
-      });
-      row.addEventListener('pointerleave', () => this.hideTimestampTooltip());
-    }
-    if (display.parts.length === 0) return;
+    if (!display || display.parts.length === 0) return;
     row.classList.add('has-timestamps');
     const meta = document.createElement('span');
     meta.className = 'workspace-entry-timestamps';
@@ -919,6 +938,18 @@ export class WorkspaceExplorer {
       meta.appendChild(item);
     }
     row.appendChild(meta);
+  }
+
+  /** Shows the full name when `nameBox` clips it, plus timestamps, decided at hover time. */
+  private attachHoverInfo(target: HTMLElement, entry: WorkspaceEntry, nameBox: HTMLElement): void {
+    target.addEventListener('pointerenter', (event) => {
+      const lines: string[] = [];
+      if (this.showNameHover && isClipped(nameBox)) lines.push(entry.name);
+      const timestamps = this.showTimestampHover ? describeWorkspaceEntryTimestamps(entry)?.title : undefined;
+      if (timestamps) lines.push(timestamps);
+      if (lines.length > 0) this.showTimestampTooltip(lines.join('\n'), event.clientX, event.clientY);
+    });
+    target.addEventListener('pointerleave', () => this.hideTimestampTooltip());
   }
 
   private showTimestampTooltip(text: string, x: number, y: number): void {

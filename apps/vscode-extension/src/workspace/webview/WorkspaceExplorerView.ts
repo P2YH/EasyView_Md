@@ -53,7 +53,17 @@ interface ContextMenuItem {
 }
 
 type WorkspaceDisplayMode = 'list' | 'icons';
-interface SavedDisplayState { displayMode?: WorkspaceDisplayMode; iconDirectory?: string; rootUri?: string | null; fontSizeOffset?: number }
+interface SavedDisplayState {
+  displayMode?: WorkspaceDisplayMode;
+  iconDirectory?: string;
+  rootUri?: string | null;
+  fontSizeOffset?: number;
+  showNameHover?: boolean;
+}
+
+function isClipped(element: HTMLElement): boolean {
+  return element.scrollWidth > element.clientWidth + 1 || element.scrollHeight > element.clientHeight + 1;
+}
 
 const IS_MAC =
   /mac|iphone|ipad/i.test(navigator.platform)
@@ -86,9 +96,11 @@ export class WorkspaceExplorerView {
   private showUpdatedAt = false;
   private showDotEntries = true;
   private showTimestampHover = true;
+  private showNameHover = true;
   private pendingCreate: { parentRelativePath: string; kind: 'file' | 'directory' } | null = null;
   private renamePath: string | null = null;
   private settingsDialog: WorkspaceSettingsDialogHandle | null = null;
+  private settingsQueue: Promise<void> = Promise.resolve();
   private fontSizeOffset = 0;
   private searchOpen = false;
   private searchPanel: WorkspaceSearchPanel | null = null;
@@ -130,6 +142,7 @@ export class WorkspaceExplorerView {
     const saved = this.vscodeApi.getState() as SavedDisplayState | undefined;
     if (saved?.displayMode === 'icons') this.displayMode = 'icons';
     this.fontSizeOffset = clampWorkspaceFontSizeOffset(saved?.fontSizeOffset);
+    this.showNameHover = saved?.showNameHover !== false;
     this.applyFontSizeOffset();
     this.container.classList.add('workspace-explorer');
     this.container.tabIndex = 0;
@@ -266,6 +279,7 @@ export class WorkspaceExplorerView {
       iconDirectory: this.iconDirectory,
       rootUri: this.rootUri,
       fontSizeOffset: this.fontSizeOffset,
+      showNameHover: this.showNameHover,
     });
   }
 
@@ -706,13 +720,19 @@ export class WorkspaceExplorerView {
         showCreatedAt: this.showCreatedAt,
         showUpdatedAt: this.showUpdatedAt,
         showTimestampHover: this.showTimestampHover,
+        showNameHover: this.showNameHover,
         showDotEntries: this.showDotEntries,
         fontSizeOffset: this.fontSizeOffset,
       },
       baseFontSize: Math.round(parseFloat(getComputedStyle(document.body).fontSize) || 13),
-      onSave: (values) => { void this.applySettings(values); },
+      onPreview: (values) => this.queueSettings(values),
+      onSave: (values) => this.queueSettings(values),
       onClose: () => { this.settingsDialog = null; },
     });
+  }
+
+  private queueSettings(values: WorkspaceSettingsValues): void {
+    this.settingsQueue = this.settingsQueue.catch(() => undefined).then(() => this.applySettings(values));
   }
 
   private async applySettings(values: WorkspaceSettingsValues): Promise<void> {
@@ -720,6 +740,7 @@ export class WorkspaceExplorerView {
     if (values.showCreatedAt !== this.showCreatedAt) await this.changeShowCreatedAt(values.showCreatedAt);
     if (values.showUpdatedAt !== this.showUpdatedAt) await this.changeShowUpdatedAt(values.showUpdatedAt);
     if (values.showTimestampHover !== this.showTimestampHover) await this.changeShowTimestampHover(values.showTimestampHover);
+    if (values.showNameHover !== this.showNameHover) this.changeShowNameHover(values.showNameHover);
     if (values.showDotEntries !== this.showDotEntries) await this.changeShowDotEntries(values.showDotEntries);
     if (values.sortMode !== this.sortMode) await this.changeSortMode(values.sortMode);
     if (values.displayMode !== this.displayMode) await this.changeDisplayMode(values.displayMode);
@@ -728,6 +749,12 @@ export class WorkspaceExplorerView {
   private changeFontSizeOffset(offset: number): void {
     this.fontSizeOffset = clampWorkspaceFontSizeOffset(offset);
     this.applyFontSizeOffset();
+    this.saveDisplayState();
+  }
+
+  private changeShowNameHover(showNameHover: boolean): void {
+    this.hideTimestampTooltip();
+    this.showNameHover = showNameHover;
     this.saveDisplayState();
   }
 
@@ -801,8 +828,8 @@ export class WorkspaceExplorerView {
         const label = document.createElement('span');
         label.className = 'workspace-icon-label';
         label.textContent = entry.name;
-        label.title = entry.name;
         tile.appendChild(label);
+        this.attachHoverInfo(tile, entry, label);
       }
       this.appendEntryTimestamps(tile, entry);
       tile.addEventListener('click', (event) => {
@@ -1001,6 +1028,7 @@ export class WorkspaceExplorerView {
       });
       this.attachDragHandlers(row, entry);
       row.appendChild(name);
+      if (this.renamePath !== entry.relativePath) this.attachHoverInfo(row, entry, name);
       this.appendEntryTimestamps(row, entry);
       if (entry.kind === 'directory') {
         const create = document.createElement('button');
@@ -1035,14 +1063,7 @@ export class WorkspaceExplorerView {
       showCreatedAt: this.showCreatedAt,
       showUpdatedAt: this.showUpdatedAt,
     });
-    if (!display) return;
-    if (this.showTimestampHover) {
-      row.addEventListener('pointerenter', (event) => {
-        this.showTimestampTooltip(display.title, event.clientX, event.clientY);
-      });
-      row.addEventListener('pointerleave', () => this.hideTimestampTooltip());
-    }
-    if (display.parts.length === 0) return;
+    if (!display || display.parts.length === 0) return;
     row.classList.add('has-timestamps');
     const meta = document.createElement('span');
     meta.className = 'workspace-entry-timestamps';
@@ -1059,6 +1080,18 @@ export class WorkspaceExplorerView {
       meta.appendChild(item);
     }
     row.appendChild(meta);
+  }
+
+  /** Shows the full name when `nameBox` clips it, plus timestamps, decided at hover time. */
+  private attachHoverInfo(target: HTMLElement, entry: WorkspaceExplorerEntry, nameBox: HTMLElement): void {
+    target.addEventListener('pointerenter', (event) => {
+      const lines: string[] = [];
+      if (this.showNameHover && isClipped(nameBox)) lines.push(entry.name);
+      const timestamps = this.showTimestampHover ? describeWorkspaceEntryTimestamps(entry)?.title : undefined;
+      if (timestamps) lines.push(timestamps);
+      if (lines.length > 0) this.showTimestampTooltip(lines.join('\n'), event.clientX, event.clientY);
+    });
+    target.addEventListener('pointerleave', () => this.hideTimestampTooltip());
   }
 
   private showTimestampTooltip(text: string, x: number, y: number): void {

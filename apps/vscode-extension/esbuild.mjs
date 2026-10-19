@@ -33,6 +33,7 @@ const common = {
   sourcemap: !production,
   minify: production,
   logLevel: 'info',
+  loader: { '.png': 'dataurl' },
 };
 
 await buildBundle('history-diff-worker', { ...common, entryPoints: [path.join(workspaceDir, 'packages/editor-core/src/timeline/history-diff-worker.ts')], outfile: path.join(distDir, 'history-diff-worker.js'), platform: 'browser', format: 'iife', target: 'chrome114' });
@@ -120,6 +121,24 @@ await Promise.all([
 await cp(path.join(appDir, '../../packages/editor-core/src/webview.css'), path.join(distDir, 'webview.css'));
 await cp(path.join(workspaceDir, 'packages/preview-ui/src/preview.css'), path.join(previewDir, 'preview.css'));
 await cp(path.join(appDir, '../../resources/brand'), path.join(distDir, 'brand'), { recursive: true });
+
+// File icon theme generated from the shared workspace-tree icons, so native tabs can match the sidebar.
+{
+  const { outputFiles } = await esbuild.build({
+    entryPoints: [path.join(workspaceDir, 'packages/contracts/src/workspace/workspace-tree-icons.ts')],
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    write: false,
+    logLevel: 'silent',
+  });
+  const { buildWorkspaceFileIconTheme } = await import(`data:text/javascript;base64,${Buffer.from(outputFiles[0].text).toString('base64')}`);
+  const { theme, files } = buildWorkspaceFileIconTheme();
+  const iconThemeDir = path.join(distDir, 'icon-theme');
+  await mkdir(path.join(iconThemeDir, 'icons'), { recursive: true });
+  await Promise.all(Object.entries(files).map(([file, svg]) => writeFile(path.join(iconThemeDir, file), svg)));
+  await writeFile(path.join(iconThemeDir, 'easyview-icon-theme.json'), JSON.stringify(theme));
+}
 await mkdir(path.join(distDir, 'media'), { recursive: true });
 for (const file of [
   'xterm.css',

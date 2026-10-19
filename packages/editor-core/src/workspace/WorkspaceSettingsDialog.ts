@@ -4,7 +4,6 @@ import {
   WORKSPACE_TREE_SORT_MODE_ICONS,
   clampWorkspaceFontSizeOffset,
   workspaceTreeMenuIconSvg,
-  workspaceTreeSortModeLabel,
   type WorkspaceTreeMenuIconId,
   type WorkspaceTreeSortMode,
 } from '@easyview/contracts';
@@ -17,6 +16,7 @@ export interface WorkspaceSettingsValues {
   showCreatedAt: boolean;
   showUpdatedAt: boolean;
   showTimestampHover: boolean;
+  showNameHover: boolean;
   showDotEntries: boolean;
   fontSizeOffset: number;
 }
@@ -25,6 +25,8 @@ export interface WorkspaceSettingsDialogOptions {
   values: WorkspaceSettingsValues;
   /** File-name size at offset 0, shown next to the stepper. */
   baseFontSize: number;
+  /** Called after every edit, and with the original values when the dialog closes without Save. */
+  onPreview(values: WorkspaceSettingsValues): void;
   onSave(values: WorkspaceSettingsValues): void;
   onClose(): void;
 }
@@ -34,13 +36,20 @@ export interface WorkspaceSettingsDialogHandle {
   close(): void;
 }
 
-type ShowKey = 'showCreatedAt' | 'showUpdatedAt' | 'showTimestampHover' | 'showDotEntries';
+type ShowKey = 'showCreatedAt' | 'showUpdatedAt' | 'showTimestampHover' | 'showNameHover' | 'showDotEntries';
 
-/** Settings for the workspace file panel, shared by Desktop and the Extension sidebar; edits stay local until Save. */
+/** Settings for the workspace file panel, shared by Desktop and the Extension sidebar; edits preview live and revert unless saved. */
 export function openWorkspaceSettingsDialog(options: WorkspaceSettingsDialogOptions): WorkspaceSettingsDialogHandle {
   const draft: WorkspaceSettingsValues = { ...options.values };
+  let dirty = false;
+  let saved = false;
+  const changed = () => {
+    dirty = true;
+    options.onPreview({ ...draft });
+  };
   return openSettingsDialog({
     title: tWorkspaceSettings('title'),
+    wide: true,
     fields: [
       {
         label: tWorkspaceSettings('displayMode'),
@@ -51,26 +60,35 @@ export function openWorkspaceSettingsDialog(options: WorkspaceSettingsDialogOpti
             { value: 'icons', label: tWorkspaceSettings('displayIcons'), icon: 'viewIcons' },
           ],
           () => draft.displayMode,
-          (value) => { draft.displayMode = value; },
+          (value) => { draft.displayMode = value; changed(); },
         ),
       },
       {
         label: tWorkspaceSettings('sortMode'),
         control: segmented(
           tWorkspaceSettings('sortMode'),
-          (['created', 'name', 'custom'] as const).map((value) => ({
-            value, label: workspaceTreeSortModeLabel(value), icon: WORKSPACE_TREE_SORT_MODE_ICONS[value],
-          })),
+          [
+            { value: 'created', label: tWorkspaceSettings('sortCreated'), icon: WORKSPACE_TREE_SORT_MODE_ICONS.created },
+            { value: 'name', label: tWorkspaceSettings('sortName'), icon: WORKSPACE_TREE_SORT_MODE_ICONS.name },
+            { value: 'custom', label: tWorkspaceSettings('sortCustom'), icon: WORKSPACE_TREE_SORT_MODE_ICONS.custom },
+          ],
           () => draft.sortMode,
-          (value) => { draft.sortMode = value; },
+          (value) => { draft.sortMode = value; changed(); },
         ),
       },
-      { label: tWorkspaceSettings('fontSize'), control: fontSizeStepper(draft, options.baseFontSize) },
-      { label: tWorkspaceSettings('show'), control: checkboxes(draft, ['showCreatedAt', 'showUpdatedAt', 'showTimestampHover']) },
-      { label: tWorkspaceSettings('showTypes'), control: checkboxes(draft, ['showDotEntries']) },
+      { label: tWorkspaceSettings('fontSize'), control: fontSizeStepper(draft, options.baseFontSize, changed) },
+      { label: tWorkspaceSettings('show'), control: checkboxes(draft, ['showCreatedAt', 'showUpdatedAt'], changed) },
+      { label: tWorkspaceSettings('hoverInfo'), control: checkboxes(draft, ['showTimestampHover', 'showNameHover'], changed) },
+      { label: tWorkspaceSettings('showTypes'), control: checkboxes(draft, ['showDotEntries'], changed) },
     ],
-    onSave: () => options.onSave({ ...draft }),
-    onClose: options.onClose,
+    onSave: () => {
+      saved = true;
+      options.onSave({ ...draft });
+    },
+    onClose: () => {
+      if (!saved && dirty) options.onPreview({ ...options.values });
+      options.onClose();
+    },
   });
 }
 
@@ -96,6 +114,7 @@ function segmented<T extends string>(
     text.textContent = choice.label;
     button.append(icon, text);
     button.addEventListener('click', () => {
+      if (get() === choice.value) return;
       set(choice.value);
       sync();
     });
@@ -109,7 +128,7 @@ function segmented<T extends string>(
   return group;
 }
 
-function fontSizeStepper(draft: WorkspaceSettingsValues, baseFontSize: number): HTMLElement {
+function fontSizeStepper(draft: WorkspaceSettingsValues, baseFontSize: number, changed: () => void): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.className = 'easyview-settings-stepper';
   const button = (text: string, title: string, delta: -1 | 1) => {
@@ -121,6 +140,7 @@ function fontSizeStepper(draft: WorkspaceSettingsValues, baseFontSize: number): 
     element.addEventListener('click', () => {
       draft.fontSizeOffset = clampWorkspaceFontSizeOffset(draft.fontSizeOffset + delta);
       sync();
+      changed();
     });
     return element;
   };
@@ -135,6 +155,7 @@ function fontSizeStepper(draft: WorkspaceSettingsValues, baseFontSize: number): 
   reset.addEventListener('click', () => {
     draft.fontSizeOffset = 0;
     sync();
+    changed();
   });
   const sync = () => {
     value.textContent = `${baseFontSize + draft.fontSizeOffset}px`;
@@ -150,11 +171,11 @@ function fontSizeStepper(draft: WorkspaceSettingsValues, baseFontSize: number): 
   return wrapper;
 }
 
-function checkboxes(draft: WorkspaceSettingsValues, keys: ShowKey[]): HTMLElement {
+function checkboxes(draft: WorkspaceSettingsValues, keys: ShowKey[], changed: () => void): HTMLElement {
   const grid = document.createElement('div');
   grid.className = 'easyview-settings-checks';
   for (const key of keys) {
-    grid.appendChild(settingsCheckbox(tWorkspaceSettings(key), draft[key], (checked) => { draft[key] = checked; }));
+    grid.appendChild(settingsCheckbox(tWorkspaceSettings(key), draft[key], (checked) => { draft[key] = checked; changed(); }));
   }
   return grid;
 }

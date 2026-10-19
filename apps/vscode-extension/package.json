@@ -273,6 +273,13 @@
         "priority": "option"
       }
     ],
+    "iconThemes": [
+      {
+        "id": "easyview-icons",
+        "label": "EasyView Icons",
+        "path": "./dist/icon-theme/easyview-icon-theme.json"
+      }
+    ],
     "commands": [
       {
         "command": "easyviewMd.openEditor",

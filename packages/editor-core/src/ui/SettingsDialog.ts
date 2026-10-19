@@ -5,6 +5,7 @@ export interface SettingsDialogOptions {
   fields: Array<{ label: string; control: HTMLElement; alignTop?: boolean }>;
   /** Muted text spanning the form below the fields. */
   note?: string;
+  wide?: boolean;
   /** Return `false` to keep the dialog open; a rejected promise shows its message. */
   onSave(): boolean | void | Promise<void>;
   onClose(): void;
@@ -48,7 +49,7 @@ export function openSettingsDialog(options: SettingsDialogOptions): SettingsDial
 
   const titleId = `easyview-settings-title-${++dialogSequence}`;
   const dialog = document.createElement('div');
-  dialog.className = 'easyview-settings-dialog';
+  dialog.className = options.wide ? 'easyview-settings-dialog is-wide' : 'easyview-settings-dialog';
   dialog.tabIndex = -1;
   dialog.setAttribute('role', 'dialog');
   dialog.setAttribute('aria-modal', 'true');
@@ -159,6 +160,7 @@ export function ensureSettingsDialogStyles(): void {
   style.textContent = `
 .easyview-settings-overlay{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:16px;background:color-mix(in srgb,#000 32%,transparent)}
 .easyview-settings-dialog{--es-accent:var(--mdpre-accent,var(--vscode-button-background,#0e639c));--es-border:color-mix(in srgb,currentColor 14%,transparent);display:flex;flex-direction:column;box-sizing:border-box;width:min(520px,100%);max-height:100%;overflow:hidden;border:1px solid var(--vscode-widget-border,var(--es-border));border-radius:10px;color:var(--vscode-editorWidget-foreground,var(--vscode-foreground,#ccc));background:var(--vscode-editorWidget-background,var(--vscode-menu-background,#252526));box-shadow:0 12px 40px color-mix(in srgb,#000 38%,transparent);font-family:var(--vscode-font-family,system-ui,sans-serif);font-size:13px;line-height:1.5;user-select:none;outline:none}
+.easyview-settings-dialog.is-wide{width:min(600px,100%)}
 .easyview-settings-header{display:flex;flex:none;align-items:center;gap:8px;padding:14px 14px 10px 20px}
 .easyview-settings-title{flex:1;min-width:0;margin:0;overflow:hidden;font-size:14px;font-weight:600;text-overflow:ellipsis;white-space:nowrap}
 .easyview-settings-close{flex:none;width:26px;height:26px;padding:0;border:0;border-radius:6px;background:transparent;color:inherit;font-size:18px;line-height:1;cursor:pointer;opacity:.6}
@@ -178,11 +180,12 @@ export function ensureSettingsDialogStyles(): void {
 .easyview-settings-hint.is-ok{color:var(--vscode-testing-iconPassed,#3fa266);opacity:1}
 .easyview-settings-note{grid-column:1/-1;margin:0;padding-top:12px;border-top:1px solid var(--es-border);font-size:12px;line-height:1.6;opacity:.6;user-select:text}
 .easyview-settings-input:focus{outline:1px solid var(--vscode-focusBorder,var(--es-accent));outline-offset:-1px}
-.easyview-settings-segmented{display:inline-flex;justify-self:start;max-width:100%;padding:2px;border:1px solid var(--es-border);border-radius:7px;background:color-mix(in srgb,currentColor 4%,transparent)}
-.easyview-settings-segmented button{display:inline-flex;align-items:center;gap:6px;min-width:0;height:28px;padding:0 12px;border:0;border-radius:5px;background:transparent;color:inherit;font:inherit;white-space:nowrap;cursor:pointer;opacity:.75}
+.easyview-settings-segmented{display:inline-flex;flex-wrap:wrap;gap:2px;justify-self:start;box-sizing:border-box;max-width:100%;padding:2px;border:1px solid var(--es-border);border-radius:7px;background:color-mix(in srgb,currentColor 4%,transparent)}
+.easyview-settings-segmented button{display:inline-flex;flex:1 1 auto;align-items:center;justify-content:center;gap:6px;min-width:0;max-width:100%;height:28px;padding:0 12px;border:0;border-radius:5px;background:transparent;color:inherit;font:inherit;white-space:nowrap;cursor:pointer;opacity:.75}
 .easyview-settings-segmented button:hover{opacity:1}
 .easyview-settings-segmented button[aria-checked='true']{opacity:1;color:var(--vscode-button-foreground,#fff);background:var(--es-accent)}
-.easyview-settings-segment-icon{display:inline-flex}.easyview-settings-segment-icon svg{display:block;width:14px;height:14px}
+.easyview-settings-segmented button>span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.easyview-settings-segment-icon{display:inline-flex;flex:none}.easyview-settings-segment-icon svg{display:block;width:14px;height:14px}
 .easyview-settings-stepper{display:flex;align-items:center;gap:10px}
 .easyview-settings-stepper-box{display:inline-flex;align-items:center;border:1px solid var(--es-border);border-radius:7px;overflow:hidden}
 .easyview-settings-stepper-box button{width:30px;height:30px;padding:0;border:0;background:transparent;color:inherit;font:inherit;font-size:15px;cursor:pointer}
@@ -191,8 +194,9 @@ export function ensureSettingsDialogStyles(): void {
 .easyview-settings-stepper-value{min-width:52px;text-align:center;font-variant-numeric:tabular-nums;border-inline:1px solid var(--es-border);line-height:30px}
 .easyview-settings-link{padding:0;border:0;background:transparent;color:var(--vscode-textLink-foreground,var(--es-accent));font:inherit;cursor:pointer}
 .easyview-settings-link:disabled{color:inherit;opacity:.35;cursor:default}
-.easyview-settings-checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px}
-.easyview-settings-check{display:flex;align-items:center;gap:8px;min-width:0;cursor:pointer}
+.easyview-settings-checks{display:flex;flex-wrap:wrap;column-gap:24px;min-width:0}
+.easyview-settings-check{display:flex;align-items:center;gap:8px;min-width:0;max-width:100%;cursor:pointer}
+.easyview-settings-checks>.easyview-settings-check{min-height:30px}
 .easyview-settings-check input{flex:none;width:15px;height:15px;margin:0;accent-color:var(--es-accent);cursor:pointer}
 .easyview-settings-check span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .easyview-settings-footer{display:flex;flex:none;justify-content:center;gap:12px;padding:12px 20px;border-top:1px solid var(--es-border);background:color-mix(in srgb,currentColor 3%,transparent)}
@@ -202,7 +206,7 @@ export function ensureSettingsDialogStyles(): void {
 .easyview-settings-button.is-primary{border-color:transparent;color:var(--vscode-button-foreground,#fff);background:var(--es-accent)}
 .easyview-settings-button.is-primary:hover:not(:disabled){background:color-mix(in srgb,var(--es-accent) 85%,#fff)}
 .easyview-settings-dialog button:focus-visible,.easyview-settings-check input:focus-visible{outline:1px solid var(--vscode-focusBorder,var(--es-accent));outline-offset:1px}
-@media (max-width:420px){.easyview-settings-form{grid-template-columns:minmax(0,1fr);gap:6px}.easyview-settings-form>.easyview-settings-label:not(:first-child){margin-top:8px}.easyview-settings-checks{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:420px){.easyview-settings-form{grid-template-columns:minmax(0,1fr);gap:6px}.easyview-settings-form>.easyview-settings-label:not(:first-child){margin-top:8px}.easyview-settings-label.is-top{padding-top:0}}
 `;
   document.head.appendChild(style);
 }

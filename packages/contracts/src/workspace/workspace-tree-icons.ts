@@ -70,15 +70,95 @@ const EXTRA_EXTENSIONS: Record<string, IconDetails> = {
   '.odt': ['word', 'blue'],
   '.drawio': ['drawio', 'orange'],
   '.dio': ['drawio', 'orange'],
+  '.xmind': ['xmind', 'pink'],
+  '.zip': ['zip', 'yellow'],
+  '.rar': ['zip', 'yellow'],
+  '.7z': ['zip', 'yellow'],
+  '.tar': ['zip', 'yellow'],
+  '.gz': ['zip', 'yellow'],
+  '.tgz': ['zip', 'yellow'],
+  '.bz2': ['zip', 'yellow'],
+  '.xz': ['zip', 'yellow'],
+  '.bmp': ['image', 'purple'],
+  '.heic': ['image', 'purple'],
 };
 
-/**
- * Custom Seti-aligned glyphs for formats missing from the upstream Seti icon font.
- * PowerPoint uses a slide + play mark so it stays distinct from the PDF glyph.
- */
+/** Office-style back sheet: four horizontal bands, lightest on top. */
+function bandedSheet([top, upper, lower, bottom]: readonly [string, string, string, string]): string {
+  return `<rect x="9" y="3" width="21" height="26" rx="2" fill="${bottom}"/>`
+    + `<path fill="${top}" d="M11 3h17a2 2 0 0 1 2 2v4.5H9V5a2 2 0 0 1 2-2z"/>`
+    + `<rect x="9" y="9.5" width="21" height="6.5" fill="${upper}"/>`
+    + `<rect x="9" y="16" width="21" height="6.5" fill="${lower}"/>`;
+}
+
+/** Microsoft 365 layout: a dark tile with a white mark, overlapping a lighter back shape on its right. */
+function officeIcon(back: string, tile: string, mark: string): string {
+  return `<svg viewBox="0 0 32 32">${back}<rect x="1" y="7" width="18" height="18" rx="2" fill="${tile}"/>`
+    + `<g transform="translate(10 16) scale(1.4) translate(-9.5 -16)">${mark}</g></svg>`;
+}
+
+const whiteMark = (d: string, transform?: string) =>
+  `<path fill="#fff" fill-rule="evenodd"${transform ? ` transform="${transform}"` : ''} d="${d}"/>`;
+
+const LETTER = {
+  W: whiteMark('M4 11.5h2.3l1 5.5 1.4-5.5h1.6l1.4 5.5 1-5.5H15l-2 9h-2.1l-1.4-5.2-1.4 5.2H6z'),
+  X: whiteMark('M5 11.5h2.8l1.7 2.6 1.7-2.6H14l-3 4.5 3 4.5h-2.8l-1.7-2.6-1.7 2.6H5l3-4.5z'),
+  P: whiteMark('M6.5 11.5h4a3.2 3.2 0 0 1 0 6.4H9v2.6H6.5zM9 13.6v2.2h1.4a1.1 1.1 0 0 0 0-2.2z'),
+  M: whiteMark('M5 20.5v-9h2.4l2.1 3.5 2.1-3.5H14v9h-2.2v-5l-2.3 3.5-2.3-3.5v5z'),
+  Z: whiteMark('M5 11.5h9v2.1l-5.7 4.8H14v2.1H5v-2.1l5.7-4.8H5z'),
+};
+
+/** Seti's Acrobat swirl (32×32), scaled into the tile. */
+const PDF_MARK = whiteMark(icons.pdf?.match(/ d="([^"]+)"/)?.[1] ?? '', 'translate(.9 7.4) scale(.54)');
+const MIND_MAP_MARK = whiteMark(
+  'M5 14.5h2.6a.8.8 0 0 1 .8.8v1.4a.8.8 0 0 1-.8.8H5a.8.8 0 0 1-.8-.8v-1.4a.8.8 0 0 1 .8-.8z'
+    + 'M8.4 15.5h1.2v1H8.4zM9.6 12.4h1v7.2h-1zM10.6 12.4h.6v1h-.6zm0 3.1h.6v1h-.6zm0 3.1h.6v1h-.6z'
+    + 'M11.8 11.7h2.2a.6.6 0 0 1 .6.6v1.2a.6.6 0 0 1-.6.6h-2.2a.6.6 0 0 1-.6-.6v-1.2a.6.6 0 0 1 .6-.6z'
+    + 'M11.8 14.8h2.2a.6.6 0 0 1 .6.6v1.2a.6.6 0 0 1-.6.6h-2.2a.6.6 0 0 1-.6-.6v-1.2a.6.6 0 0 1 .6-.6z'
+    + 'M11.8 17.9h2.2a.6.6 0 0 1 .6.6v1.2a.6.6 0 0 1-.6.6h-2.2a.6.6 0 0 1-.6-.6v-1.2a.6.6 0 0 1 .6-.6z',
+);
+const IMAGE_MARK = whiteMark('M4.5 20.5 8 15.8l2.4 3 1.9-2.3 3.2 4zM12.3 11.4a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2z');
+
+/** Full-colour glyphs that are inserted as-is instead of being painted with the Seti colour. */
+const FULL_COLOR_ICONS: Record<string, string> = {
+  word: officeIcon(bandedSheet(['#41A5EE', '#2B7CD3', '#185ABD', '#103F91']), '#11479E', LETTER.W),
+  xls: officeIcon(
+    bandedSheet(['#21A366', '#107C41', '#185C37', '#185C37'])
+      + '<path fill="#33C481" d="M19.5 3H28a2 2 0 0 1 2 2v4.5H19.5z"/>'
+      + '<rect x="19.5" y="9.5" width="10.5" height="6.5" fill="#21A366"/>'
+      + '<rect x="19.5" y="16" width="10.5" height="6.5" fill="#107C41"/>',
+    '#0E6B38',
+    LETTER.X,
+  ),
+  powerpoint: officeIcon(
+    '<circle cx="19" cy="16" r="12" fill="#D35230"/>'
+      + '<path fill="#ED6C47" d="M7 16a12 12 0 0 1 24 0z"/>'
+      + '<path fill="#FF8F6B" d="M19 4a12 12 0 0 1 12 12H19z"/>',
+    '#C43E1C',
+    LETTER.P,
+  ),
+  markdown: officeIcon(
+    '<path fill="#607D8B" d="M11 3h13l6 6v18a2 2 0 0 1-2 2H11a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/>'
+      + '<path fill="#B0BEC5" d="m24 3 6 6h-4a2 2 0 0 1-2-2z"/>'
+      + '<path fill="#ECEFF1" d="M23 11.5h3v5.5h2.5L24.5 22l-4-5H23z"/>',
+    '#24496E',
+    LETTER.M,
+  ),
+  xmind: officeIcon(bandedSheet(['#F8A5C2', '#F06292', '#E04381', '#C2185B']), '#AD1457', MIND_MAP_MARK),
+  zip: officeIcon(bandedSheet(['#F7CB4D', '#F0B429', '#DE9B0F', '#C2830A']), '#9C6500', LETTER.Z),
+  pdf: officeIcon(bandedSheet(['#F47C6A', '#E2574C', '#C93B30', '#A8281F']), '#B30B00', PDF_MARK),
+  image: officeIcon(
+    '<rect x="9" y="3" width="21" height="26" rx="2" fill="#7E57C2"/>'
+      + '<path fill="#B39DDB" d="M11 3h17a2 2 0 0 1 2 2v9H9V5a2 2 0 0 1 2-2z"/>'
+      + '<path fill="#5E35B1" d="m17 29 6-9.5 7 9.5z"/>'
+      + '<circle cx="25" cy="9" r="2.4" fill="#FFD54F"/>',
+    '#5E35B1',
+    IMAGE_MARK,
+  ),
+};
+
+/** Single-colour Seti-style glyphs for formats missing from the upstream Seti icon font. */
 const CUSTOM_ICONS: Record<string, string> = {
-  powerpoint:
-    '<svg viewBox="0 0 32 32"><path d="M4.5 6.2h16.2c1.2 0 2.2 1 2.2 2.2v15.2c0 1.2-1 2.2-2.2 2.2H4.5c-1.2 0-2.2-1-2.2-2.2V8.4c0-1.2 1-2.2 2.2-2.2zm18.8 4.1 6.4 5.1c.5.4.5 1.2 0 1.6l-6.4 5.1c-.7.5-1.6 0-1.6-.8V11.1c0-.8.9-1.3 1.6-.8zM7.2 11.2h8.6v1.8H7.2v-1.8zm0 4.1h10.8v1.8H7.2v-1.8zm0 4.1h6.4v1.8H7.2v-1.8z"/></svg>',
   drawio:
     '<svg viewBox="0 0 32 32"><path d="M7.2 5.5h8.4c1 0 1.8.8 1.8 1.8v5.2c0 1-.8 1.8-1.8 1.8H7.2c-1 0-1.8-.8-1.8-1.8V7.3c0-1 .8-1.8 1.8-1.8zm9.2 9.8 5.4 3.2c.9.5.9 1.8 0 2.3l-5.4 3.2c-.9.5-2-.1-2-1.2v-6.3c0-1.1 1.1-1.7 2-1.2zM6.8 20.2h8c.9 0 1.6.7 1.6 1.6v4.1c0 .9-.7 1.6-1.6 1.6h-8c-.9 0-1.6-.7-1.6-1.6v-4.1c0-.9.7-1.6 1.6-1.6z"/></svg>',
 };
@@ -146,7 +226,7 @@ function setiFileIcon(fileName: string): WorkspaceTreeIconDescriptor {
   const [iconName, colorName] = lookupSetiDetails(fileName);
   const color = SETI_THEME[(colorName as SetiColorName)] ?? SETI_THEME.white;
   const raw = CUSTOM_ICONS[iconName] ?? icons[iconName] ?? icons[definitions.default[0]] ?? icons.default;
-  const svg = paintSvg(raw || '<svg viewBox="0 0 32 32"></svg>', color);
+  const svg = FULL_COLOR_ICONS[iconName] ?? paintSvg(raw || '<svg viewBox="0 0 32 32"></svg>', color);
   return {
     id: `seti:${iconName}`,
     codicon: codiconForSeti(iconName),
@@ -166,6 +246,7 @@ function codiconForSeti(iconName: string): string {
     case 'powerpoint':
       return 'file-media';
     case 'drawio':
+    case 'xmind':
       return 'type-hierarchy';
     case 'xls':
     case 'csv':
@@ -258,4 +339,54 @@ export function resolveWorkspaceTreeIcon(input: ResolveWorkspaceTreeIconInput): 
 
 export function workspaceTreeIconCodicon(input: ResolveWorkspaceTreeIconInput): string {
   return resolveWorkspaceTreeIcon(input).codicon;
+}
+
+export interface WorkspaceFileIconTheme {
+  /** VS Code file icon theme JSON; icon paths are relative to the theme file. */
+  theme: Record<string, unknown>;
+  /** SVG files keyed by path relative to the theme file. */
+  files: Record<string, string>;
+}
+
+/**
+ * Builds a VS Code file icon theme from the same descriptors the workspace tree paints, so the
+ * Extension's native tabs and explorer can match the sidebar. Seti "partials" are not expressible.
+ */
+export function buildWorkspaceFileIconTheme(): WorkspaceFileIconTheme {
+  const iconDefinitions: Record<string, { iconPath: string }> = {};
+  const files: Record<string, string> = {};
+  const define = (descriptor: WorkspaceTreeIconDescriptor): string => {
+    const key = `${descriptor.id}_${descriptor.color}`.replace(/[^a-z0-9_-]/gi, '_');
+    if (!iconDefinitions[key]) {
+      const svg = descriptor.svg.includes('xmlns=')
+        ? descriptor.svg
+        : descriptor.svg.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+      files[`icons/${key}.svg`] = svg;
+      iconDefinitions[key] = { iconPath: `./icons/${key}.svg` };
+    }
+    return key;
+  };
+
+  const fileExtensions: Record<string, string> = {};
+  for (const extension of new Set([...Object.keys(definitions.extensions), ...Object.keys(EXTRA_EXTENSIONS)])) {
+    fileExtensions[extension.replace(/^\./, '').toLowerCase()] = define(resolveWorkspaceTreeIcon({ kind: 'file', name: `file${extension}` }));
+  }
+  const fileNames: Record<string, string> = {};
+  for (const name of Object.keys(definitions.files)) {
+    fileNames[name.toLowerCase()] = define(resolveWorkspaceTreeIcon({ kind: 'file', name }));
+  }
+
+  return {
+    theme: {
+      iconDefinitions,
+      file: define(resolveWorkspaceTreeIcon({ kind: 'file', name: 'file' })),
+      folder: define(resolveWorkspaceTreeIcon({ kind: 'directory', name: 'folder' })),
+      folderExpanded: define(resolveWorkspaceTreeIcon({ kind: 'directory', name: 'folder', expanded: true })),
+      rootFolder: define(resolveWorkspaceTreeIcon({ kind: 'root', name: 'root' })),
+      rootFolderExpanded: define(resolveWorkspaceTreeIcon({ kind: 'root', name: 'root', expanded: true })),
+      fileExtensions,
+      fileNames,
+    },
+    files,
+  };
 }

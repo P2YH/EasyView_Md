@@ -446,6 +446,19 @@ export function createWindow(context: DesktopWindowContext = getWindowContext())
   window.on('resize', () => runInWindowContext(context, rememberWindowBounds));
   window.on('move', () => runInWindowContext(context, rememberWindowBounds));
   window.webContents.setWindowOpenHandler(({ url }) => {
+    // The preview toolbar's print button renders a printable snapshot into a blank same-origin
+    // window and prints it; allow exactly that (no URL, no node access), deny everything else.
+    if (url === 'about:blank' || url === '') {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          width: 900,
+          height: 700,
+          autoHideMenuBar: true,
+          webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
+        },
+      };
+    }
     if (isAllowedExternalUrl(url)) void shell.openExternal(url);
     return { action: 'deny' };
   });

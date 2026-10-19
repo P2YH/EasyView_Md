@@ -57,6 +57,12 @@ test('every working xlsx toolbar button changes the cell and survives save', asy
     await button(page, 'merge').click(); // B4:C4
     await select(3, 2); await button(page, 'font-bold').click(); await button(page, 'clearformat').click(); // D3 bold then cleared
 
+    const tip = (name: string) => page.locator(`.x-spreadsheet-toolbar-btns > .x-spreadsheet-toolbar-btn[data-tooltip="${name}"]`).first();
+    const pickTip = async (name: string, nth: number) => { await tip(name).click(); const menu = openMenu(page); await expect(menu).toBeVisible(); await menu.locator('.x-spreadsheet-item').nth(nth).click(); };
+    await select(0, 2); // A3
+    await pickTip('Format', 4); // percent
+    await pickTip('Font', 2);
+    await pickTip('Font size', 7);
     await select(1, 1); await button(page, 'paintformat').click(); await overlay.click({ position: cell(1, 5) }); // B2 format -> B6
     await select(2, 2); await button(page, 'freeze').click(); // freeze at C3
     await select(0, 0); await button(page, 'autofilter').click(); // filter on A1
@@ -66,6 +72,10 @@ test('every working xlsx toolbar button changes the cell and survives save', asy
     await page.getByRole('button', { name: '保存', exact: true }).click();
     await expect.poll(async () => (await readBook(xlsx)).getCell('B2').font?.bold ?? false).toBe(true);
     const extra = await readBook(xlsx);
+    const a3 = extra.getCell('A3');
+    expect(a3.numFmt).toMatch(/%/);
+    expect(a3.font?.name).toBeTruthy(); expect(a3.font?.name).not.toBe('Calibri');
+    expect(a3.font?.size).toBeTruthy(); expect(a3.font?.size).not.toBe(11);
     expect(extra.getCell('B6').font?.bold).toBe(true);
     expect(extra.views[0]).toMatchObject({ state: 'frozen', xSplit: 2, ySplit: 2 });
     expect(extra.autoFilter).toBeTruthy();
@@ -120,5 +130,37 @@ test('xlsx sheet bar matches the toolbar height and never scrolls vertically', a
     });
     expect(metrics).toMatchObject({ height: 24, overflowY: 'hidden', overflowing: 0, font: '12px', editorOverflow: 0 });
     expect(metrics.bottomGap).toBeLessThanOrEqual(1);
+  } finally { await terminateElectron(application); if (temporary) await rm(temporary, { recursive: true, force: true }); }
+});
+
+test('xlsx print preview, theme and the overflow menu work', async () => {
+  let application: ElectronApplication | undefined; let temporary = '';
+  try {
+    const opened = await launch(1400); application = opened.application; temporary = opened.temporary;
+    const { page } = opened;
+    // Print: x-spreadsheet opens its own print preview overlay; cancel closes it without printing.
+    await button(page, 'print').click();
+    const preview = page.locator('.x-spreadsheet-print');
+    await expect(preview).toBeVisible();
+    await expect(preview.locator('canvas').first()).toBeVisible();
+    await preview.locator('.x-spreadsheet-print-bar .x-spreadsheet-button').first().click();
+    await expect(preview).toBeHidden();
+    // Theme: per-file theme toggle repaints the spreadsheet surface.
+    const paint = () => page.locator('#file-preview-root').evaluate((root) => getComputedStyle(root).backgroundColor);
+    const before = await paint();
+    const theme = page.locator('[data-easyview-spreadsheet-chrome] button[title*="主题"]');
+    await theme.click(); await expect.poll(paint).not.toBe(before);
+    await theme.click(); await theme.click(); await expect.poll(paint).toBe(before);
+    // More: at a narrow width the hidden buttons move into the "more" menu and still work there.
+    await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(760, 800));
+    const more = page.locator('.x-spreadsheet-toolbar-btns > .x-spreadsheet-toolbar-btn:has(.x-spreadsheet-icon-img.ellipsis)');
+    await expect(more).toBeVisible();
+    await more.click();
+    const menu = more.locator('.x-spreadsheet-dropdown-content').first();
+    await expect(menu).toBeVisible();
+    expect(await menu.locator('.x-spreadsheet-toolbar-btn').count()).toBeGreaterThan(0);
+    await menu.locator('.x-spreadsheet-toolbar-btn').first().click();
+    const inside = await menu.evaluate((element) => { const r = element.getBoundingClientRect(); return element.contains(document.elementFromPoint(r.x + r.width / 2, r.y + 10)); });
+    expect(inside).toBe(true);
   } finally { await terminateElectron(application); if (temporary) await rm(temporary, { recursive: true, force: true }); }
 });

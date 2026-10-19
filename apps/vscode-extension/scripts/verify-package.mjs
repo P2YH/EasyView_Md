@@ -60,7 +60,14 @@ const forbidden = files.filter((file) =>
 );
 if (forbidden.length > 0) throw new Error(`Forbidden VSIX files: ${forbidden.join(', ')}`);
 
-const require = createRequire(import.meta.url);
-const nodePty = require(path.join(appDir, 'dist/runtime/node-pty/lib/index.js'));
-if (typeof nodePty.spawn !== 'function') throw new Error('Packaged node-pty runtime did not load.');
-console.log(`verified ${vsixPath}: ${files.length} files and node-pty runtime`);
+// The VSIX only ships node-pty prebuilds for macOS and Windows; on other hosts (e.g. Linux CI)
+// the file list above is still verified, but the native runtime cannot be loaded here.
+const hostPrebuild = `extension/dist/runtime/node-pty/prebuilds/${process.platform}-${process.arch}/pty.node`;
+if (files.includes(hostPrebuild)) {
+  const require = createRequire(import.meta.url);
+  const nodePty = require(path.join(appDir, 'dist/runtime/node-pty/lib/index.js'));
+  if (typeof nodePty.spawn !== 'function') throw new Error('Packaged node-pty runtime did not load.');
+  console.log(`verified ${vsixPath}: ${files.length} files and node-pty runtime`);
+} else {
+  console.log(`verified ${vsixPath}: ${files.length} files (node-pty load skipped: no ${process.platform}-${process.arch} prebuild shipped)`);
+}

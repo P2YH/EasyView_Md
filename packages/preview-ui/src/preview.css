@@ -1886,11 +1886,12 @@ html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-
   --preview-toolbar-icon-color: var(--document-toolbar-foreground, var(--file-viewer-button-color, currentColor));
 }
 .preview-spreadsheet-editor .x-spreadsheet-toolbar .x-spreadsheet-icon {
-  width: 18px !important;
-  height: 18px !important;
+  /* Plain 16px box: CSS zoom is laid out differently across Chromium versions
+     (VS Code's webview put icons 1.8px below the centre line). */
+  width: 16px !important;
+  height: 16px !important;
   margin: 0 !important;
-  line-height: 18px !important;
-  zoom: 0.8889;
+  line-height: 16px !important;
 }
 .preview-spreadsheet-editor .x-spreadsheet-toolbar .x-spreadsheet-icon .x-spreadsheet-icon-img {
   left: 0 !important;

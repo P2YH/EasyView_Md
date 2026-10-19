@@ -15,7 +15,7 @@ export interface PreviewWorkspace {
 }
 
 /** Launch the real desktop app on a temporary workspace holding the preview fixtures and extra files. */
-export async function launchPreviewWorkspace(extra: Record<string, string> = {}, width = 1600): Promise<PreviewWorkspace> {
+export async function launchPreviewWorkspace(extra: Record<string, string> = {}, width = 1600, beforeLaunch?: (workspace: string) => void): Promise<PreviewWorkspace> {
   const temporary = await mkdtemp(path.join(process.cwd(), '.toolbar-e2e-'));
   const workspace = path.join(temporary, 'workspace'), userData = path.join(temporary, 'user-data'), downloads = path.join(temporary, 'downloads');
   await mkdir(workspace); await mkdir(userData); await mkdir(downloads);
@@ -26,6 +26,7 @@ export async function launchPreviewWorkspace(extra: Record<string, string> = {},
   await writeFile(markdown, '# Notes\n\nBody text.\n\n## Second\n\nMore.\n');
   for (const [name, content] of Object.entries(extra)) await writeFile(path.join(workspace, name), content);
   await writeFile(path.join(userData, 'desktop-state.json'), JSON.stringify({ recentFiles: [markdown], workspace: { rootPath: workspace, openTabs: [{ id: 'notes', kind: 'editor', filePath: markdown }], activeTabId: 'notes', expandedRelativePaths: [], explorerVisible: true, outlineVisible: false, explorerWidth: 240, outlineWidth: 240 } }));
+  beforeLaunch?.(workspace);
   const application = await electron.launch({ args: [process.cwd(), `--user-data-dir=${userData}`], env: { ...process.env, EASYVIEW_DISABLE_UPDATE_CHECK: '1' } });
   const page = await application.firstWindow();
   await resumeRestoredSession(page);

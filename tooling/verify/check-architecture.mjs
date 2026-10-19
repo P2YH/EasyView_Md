@@ -116,7 +116,7 @@ for (const required of [
   'packages/contracts/src/messages',
   'packages/contracts/src/results',
   'packages/contracts/src/validation',
-  'packages/editor-sync',
+  'packages/editor-sync/src',
   'packages/contracts/src/preview',
   'packages/preview-ui/src',
   'packages/markdown-core/src/transforms',
@@ -150,7 +150,8 @@ for (const obsolete of ['src/host', 'e2e', 'test', 'esbuild.mjs', '.vscodeignore
     else if (error?.code !== 'ENOENT') throw error;
   }
 }
-for (const obsolete of ['packages/shared', 'packages/node-services', 'apps/vscode-extension/src/host', 'apps/vscode-extension/src/native', 'apps/vscode-extension/src/extension']) {
+// Unit tests live next to code (src/**/*.test.ts); e2e lives in apps/*/e2e.
+for (const obsolete of ['tests/e2e', 'packages/contracts/tests', 'packages/editor-sync/tests', 'packages/node-runtime/tests', 'packages/preview-ui/tests', 'packages/shared', 'packages/node-services', 'apps/vscode-extension/src/host', 'apps/vscode-extension/src/native', 'apps/vscode-extension/src/extension']) {
   try {
     await access(path.join(root, obsolete));
     violations.push(`obsolete architecture path still exists: ${obsolete}`);

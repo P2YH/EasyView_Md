@@ -22,12 +22,11 @@
   },
   "files": [
     "src",
-    "tests",
     "tsconfig.json"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run tests"
+    "test": "vitest run src"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.53",

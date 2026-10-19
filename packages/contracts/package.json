@@ -23,11 +23,10 @@
 
   "files": [
     "src",
-    "tsconfig.json",
-    "tests"
+    "tsconfig.json"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run tests"
+    "test": "vitest run src"
   }
 }

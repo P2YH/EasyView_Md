@@ -9,7 +9,7 @@ import { schema } from '../../packages/editor-core/src/editor/EditorSchema';
 import { docToMarkdown } from '../../packages/editor-core/src/editor/lib/MarkdownSerializer';
 import { IncrementalMarkdownSerializer } from '../../packages/editor-core/src/editor/lib/IncrementalMarkdownSerializer';
 import { IncrementalMarkdown } from '../../packages/editor-core/src/ui/IncrementalMarkdown';
-import { hashContent, minimalTextPatch } from '../../packages/editor-sync';
+import { hashContent, minimalTextPatch } from '../../packages/editor-sync/src';
 import { LazyWorkbook } from '../../packages/preview-ui/src/spreadsheet/lazyWorkbook';
 import { workbookBytesToXsSheets } from '../../packages/preview-ui/src/spreadsheet/xSpreadsheetBridge';
 import { fingerprintDocument } from '../../apps/desktop/src/main/application/document/documentFileSystem';

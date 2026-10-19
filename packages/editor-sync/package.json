@@ -4,17 +4,16 @@
   "private": true,
   "description": "Platform-neutral canonical Markdown synchronization primitives",
   "type": "module",
-  "types": "./index.ts",
+  "types": "./src/index.ts",
   "exports": {
-    ".": "./index.ts"
+    ".": "./src/index.ts"
   },
   "files": [
-    "*.ts",
-    "tests",
+    "src",
     "tsconfig.json"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run tests"
+    "test": "vitest run src"
   }
 }

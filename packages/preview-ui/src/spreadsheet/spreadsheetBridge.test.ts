@@ -73,4 +73,27 @@ describe('xSpreadsheetBridge', () => {
     expect(sheets[0]?.rows?.[0]?.cells?.[0]?.text).toBe('v0');
     expect(sheets[0]?.rows?.[0]?.cells?.[0]?.merge).toEqual([0, 1]);
   });
+  it('keeps x-spreadsheet default font size for bold-only header cells (header row rendered empty)', async () => {
+    const ExcelJS = (await import('exceljs')).default;
+    // @ts-expect-error x-data-spreadsheet ships no types for its internal helper module.
+    const helper = (await import('x-data-spreadsheet/src/core/helper.js')).default as { merge: (...sources: object[]) => any };
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('示例清单');
+    sheet.addRow(['编号', '名称']);
+    sheet.addRow(['A-001', '示例功能一']);
+    for (const ref of ['A1', 'B1']) {
+      sheet.getCell(ref).font = { bold: true };
+      sheet.getCell(ref).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '00DDEBF7' } };
+    }
+    const source = await workbook.xlsx.writeBuffer();
+    const [xs] = await workbookBytesToXsSheets(toArrayBuffer(source instanceof Uint8Array ? source : new Uint8Array(source)));
+    const header = xs!.rows![0]!.cells![0]!;
+    expect(header.text).toBe('编号');
+    const style = xs!.styles![header.style as number]!;
+    expect(style.font).toEqual({ bold: true, italic: false });
+    expect(Object.values(style.font!).includes(undefined)).toBe(false);
+    // Same merge x-spreadsheet applies before drawing a cell.
+    const drawn = helper.merge({ font: { name: 'Arial', size: 10, bold: false, italic: false } }, style);
+    expect(drawn.font).toEqual({ name: 'Arial', size: 10, bold: true, italic: false });
+  });
 });

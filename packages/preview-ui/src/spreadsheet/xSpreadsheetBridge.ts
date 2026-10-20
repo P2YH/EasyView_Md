@@ -239,12 +239,12 @@ function cellToXsStyle(cell: ExcelJS.Cell, workbook: ExcelJS.Workbook): XsStyle 
   const fill = cell.fill as ExcelJS.FillPattern | undefined;
   const style: XsStyle = {};
   if (font.bold || font.italic || font.size || font.name || font.color || font.strike || font.underline) {
-    style.font = {
-      bold: !!font.bold,
-      italic: !!font.italic,
-      size: typeof font.size === 'number' ? font.size : undefined,
-      name: typeof font.name === 'string' ? font.name : undefined,
-    };
+    // Omit unknown size/name instead of setting them to undefined: x-spreadsheet's style merge copies
+    // undefined over its defaultStyle font, which leaves the canvas without a font size and the text
+    // undrawn (e.g. a bold-only header row rendered empty).
+    style.font = { bold: !!font.bold, italic: !!font.italic };
+    if (typeof font.size === 'number') style.font.size = font.size;
+    if (typeof font.name === 'string') style.font.name = font.name;
     const color = colorToCss(font.color, workbook);
     // Leave near-black to x-spreadsheet defaultStyle so EasyView themes can retint body text.
     if (color && !isThemeableForeground(color)) style.color = color;

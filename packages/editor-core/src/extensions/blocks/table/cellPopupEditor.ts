@@ -23,6 +23,7 @@ import { tableEditing } from 'prosemirror-tables';
 
 import { schema } from '../../../editor/EditorSchema';
 import { handlePaste } from '../../../editor/EditorEventHandlers';
+import { imagePastePlugin } from '../../../editor/ImagePaste';
 import { createPasteParser } from '../../../editor/lib/MarkdownParser';
 
 import { KeyboardOverridesExtension } from '../../behavior/keyboard-overrides/KeyboardOverridesExtension';
@@ -76,7 +77,7 @@ const EDITING_EXTENSIONS = [
 ] as const;
 
 export function buildCellPopupPlugins(): Plugin[] {
-  const plugins: Plugin[] = [];
+  const plugins: Plugin[] = [imagePastePlugin()];
   const rules: InputRule[] = [];
 
   for (const ExtensionClass of EDITING_EXTENSIONS) {
@@ -176,8 +177,6 @@ const pasteParser = createPasteParser();
 
 let popupEditor: EditorView | null = null;
 
-/** True while an image paste was initiated from the popup editor. */
-let pendingPopupImage = false;
 
 export function createCellPopupEditor(cellNode: ProsemirrorNode, mount: HTMLElement): EditorView | null {
   if (popupEditor) disposeCellPopupEditor();
@@ -217,35 +216,10 @@ export function createCellPopupEditor(cellNode: ProsemirrorNode, mount: HTMLElem
 export function disposeCellPopupEditor(): void {
   popupEditor?.destroy();
   popupEditor = null;
-  pendingPopupImage = false;
 }
 
 export function getCellPopupEditor(): EditorView | null {
   return popupEditor;
-}
-
-// ─── Image paste routing ────────────────────────────────────────────────────
-
-// The popup editor reuses the main editor's paste handler, which broadcasts an
-// `inlinemd:pasteImage` window event with `detail.pos` = popup doc position;
-// index.ts then posts it to the host, which saves the image file and replies
-// with `imageSelected`. Mark the request so the reply is routed to the popup
-// editor instead of the main editor.
-window.addEventListener('inlinemd:pasteImage', () => {
-  if (popupEditor) pendingPopupImage = true;
-});
-
-export function handlePopupImageSelected(src: string, originalSrc: string, pos: number): boolean {
-  if (!pendingPopupImage) return false;
-  pendingPopupImage = false;
-  if (!popupEditor) return true; // Popup already closed — image file is saved; drop the insert.
-  try {
-    const image = schema.nodes.image.create({ src, originalSrc });
-    popupEditor.dispatch(popupEditor.state.tr.replaceWith(pos, pos, image));
-  } catch {
-    // Stale position (e.g. popup content was replaced); the file is persisted.
-  }
-  return true;
 }
 
 // ─── Cell locating & save-back ──────────────────────────────────────────────

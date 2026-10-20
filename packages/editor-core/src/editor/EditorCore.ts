@@ -55,6 +55,7 @@ import {
 import type { Node as ProsemirrorNode } from 'prosemirror-model';
 
 import { EditorImageManager } from './EditorImageManager';
+import { imagePastePlugin } from './ImagePaste';
 import {
   isSelectionInsideTableCell,
   preserveTableSelectionViewport,
@@ -607,6 +608,7 @@ export class EditorCore {
     };
 
     const core = [
+      imagePastePlugin(),
       history(),
       keymap({
         'Mod-z': wrappedUndo,

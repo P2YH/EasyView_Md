@@ -40,6 +40,7 @@ export interface ApplyEditsSuccess {
   revision: number;
   resultHash: string;
   dirtyChanged: boolean;
+  assetsUpdated: Promise<void>;
 }
 
 export type DocumentSaveOutcome =
@@ -251,10 +252,12 @@ export class DocumentSessionService {
     }
     this.sessions.delete(sessionId);
     this.saveQueues.delete(sessionId);
+    session.imageAssets.dispose();
     return session;
   }
 
   clear(): void {
+    for (const session of this.sessions.values()) session.imageAssets.dispose();
     this.sessions.clear();
     this.aliases.clear();
     this.saveQueues.clear();
@@ -274,6 +277,7 @@ export class DocumentSessionService {
         return operationFailure('CONFLICT', 'Edit result hash mismatch');
       }
       const previousDirty = session.dirty;
+      const previousContent = session.content;
       const result = session.documentAdapter.apply(input.edits);
       session.content = result.canonicalContent;
       session.rawContent = result.rawContent;
@@ -283,13 +287,17 @@ export class DocumentSessionService {
         revision: session.sync.snapshot.revision,
         resultHash: result.resultHash,
         dirtyChanged: previousDirty !== session.dirty,
+        assetsUpdated: session.filePath
+          ? session.imageAssets.reconcile(session.filePath, previousContent, session.content)
+          : Promise.resolve(),
       });
     } catch (error) {
       return operationFailure('INVALID_ARGUMENT', error instanceof Error ? error.message : 'Invalid document patch');
     }
   }
 
-  revertToDisk(session: DocumentSession): void {
+  async revertToDisk(session: DocumentSession): Promise<void> {
+    if (session.filePath) await session.imageAssets.reconcile(session.filePath, session.content, session.diskContent);
     const reverted = session.documentAdapter.replaceRaw(session.diskContent);
     session.rawContent = reverted.rawContent;
     session.content = reverted.canonicalContent;
@@ -488,6 +496,7 @@ export class DocumentSessionService {
     }
     const raw = session.documentAdapter.rawContentFor(content);
     try {
+      await session.imageAssets.whenIdle();
       if (session.diskContentHash && !options.skipConflictCheck) {
         const written = await this.fileSystem.compareAndWrite(filePath, session.diskContentHash, raw);
         if (written === 'conflict') {

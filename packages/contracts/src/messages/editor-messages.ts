@@ -1,4 +1,4 @@
-import type { AiChatAttachment, AiChatHistoryEntry, AiChatSettings } from '../ai/ai-chat';
+import type { AiChatAttachment, AiChatHistoryEntry, AiChatSettings, AiOfficeCellChange } from '../ai/ai-chat';
 import type { AiTextPatch } from '../ai/text-patch';
 import type { XlsxTablePayload } from '../export/xlsx-export';
 
@@ -133,7 +133,7 @@ export type EditorToHostMessage =
   | { type: 'showInfo'; text: string }
   | { type: 'pickImage'; pos?: number }
   | { type: 'dropImages'; paths: string[]; pos?: number }
-  | { type: 'pasteImage'; dataUrl: string; mimeType?: string; name?: string; pos?: number }
+  | { type: 'pasteImage'; requestId: string; documentId: string; dataUrl: string; name?: string }
   | { type: 'exportPdfBase64'; data: string }
   | { type: 'exportDocx'; title: string; markdown: string; mermaidImages: Array<{ source: string; pngBase64: string; width: number; height: number }>; asciiImages: Array<{ source: string; pngBase64: string; width: number; height: number }> }
   | { type: 'exportXlsx'; payload: XlsxTablePayload; fileName: string }
@@ -146,6 +146,10 @@ export type EditorToHostMessage =
   | { type: 'aiChat.saveWebSearchApiKey'; requestId: string; apiKey: string }
   | { type: 'aiChat.pickImage'; requestId: string }
   | { type: 'aiChat.patchesApplied'; requestId: string; operationId: string; error?: string }
+  /** User decision on a pending Office (xlsx) edit proposal. */
+  | { type: 'aiChat.officeDecision'; requestId: string; proposalId: string; accepted: boolean }
+  /** Restores the backup taken before an applied Office edit. */
+  | { type: 'aiChat.officeUndo'; requestId: string; commitId: string }
   | { type: 'productThemeChanged'; mode: 'light' | 'gray' | 'dark' };
 
 export type HostToEditorMessage =
@@ -173,6 +177,7 @@ export type HostToEditorMessage =
   | { type: 'requestExportHtml'; theme: 'light' | 'dark' }
   | { type: 'requestExportPdf'; theme: 'light' | 'dark' }
   | { type: 'requestExportDocx' }
+  | { type: 'pasteImageResult'; requestId: string; documentId: string; result: { ok: true; src: string; originalSrc: string } | { ok: false; message: string } }
   | { type: 'imageSelected'; src: string; originalSrc: string; pos?: number }
   | { type: 'imagesDropped'; images: ImagePayload[]; pos?: number }
   | { type: 'imageBase64Response'; requestId: string; base64: string | null }
@@ -185,6 +190,9 @@ export type HostToEditorMessage =
   | { type: 'aiChat.done'; requestId: string; content: string; reasoning?: string; finishReason?: string }
   | { type: 'aiChat.tool'; requestId: string; phase: 'call' | 'result'; toolName: string; input: unknown; output?: unknown }
   | { type: 'aiChat.applyPatches'; requestId: string; operationId: string; path: string; patches: AiTextPatch[] }
+  | { type: 'aiChat.officeProposal'; requestId: string; proposalId: string; fileName: string; changes: AiOfficeCellChange[]; structural: string[]; truncated: boolean }
+  | { type: 'aiChat.officeCommitted'; requestId: string; commitId: string; filePath: string; backupPath: string }
+  | { type: 'aiChat.officeUndone'; requestId: string; commitId: string; filePath?: string; error?: string }
   | { type: 'aiChat.error'; requestId: string; message: string; aborted?: boolean }
   | { type: 'aiChat.settingsResponse'; requestId: string; settings: AiChatSettings; hasApiKey: boolean; hasWebSearchApiKey: boolean }
   | { type: 'aiChat.settingsSaved'; requestId: string; ok: boolean; message?: string }
@@ -236,6 +244,8 @@ const EDITOR_MESSAGE_TYPES = new Set<EditorToHostMessage['type']>([
   'aiChat.saveWebSearchApiKey',
   'aiChat.pickImage',
   'aiChat.patchesApplied',
+  'aiChat.officeDecision',
+  'aiChat.officeUndo',
   'productThemeChanged',
 ]);
 

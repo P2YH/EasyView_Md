@@ -423,6 +423,7 @@ export interface MessageHandlerContext {
   extensionContext: vscode.ExtensionContext;
   getFilename: () => string;
   getCanonicalContent: () => string;
+  waitForImageAssets?: () => Promise<void>;
   applyCanonicalContent: (content: string, settings: EditorSettings) => Promise<void>;
   getSyncRevision: () => number;
   postSnapshot: (reason?: 'initial' | 'visible' | 'resync' | 'reload') => void;
@@ -919,6 +920,7 @@ export async function handleWebviewMessage(
     case 'getImageBase64': {
       const { requestId, originalSrc } = message;
       try {
+        await ctx.waitForImageAssets?.();
         const base64 = await readImageAsDataUrl({
           documentPath: diskFsPath(document),
           source: originalSrc,
@@ -1000,20 +1002,20 @@ export async function handleWebviewMessage(
     case 'pasteImage': {
       try {
         const saved = await savePastedImage({
-          documentPath: diskFsPath(document),
-          dataUrl: message.dataUrl,
-          preferredName: message.name,
+          documentPath: diskFsPath(document), dataUrl: message.dataUrl, preferredName: message.name,
         });
         ensureImageResourceRoot(webviewPanel.webview, saved.filePath);
         webviewPanel.webview.postMessage({
-          type: 'imageSelected',
-          src: webviewPanel.webview.asWebviewUri(vscode.Uri.file(saved.filePath)).toString(),
-          originalSrc: saved.relativePath,
-          pos: message.pos,
+          type: 'pasteImageResult', requestId: message.requestId, documentId: message.documentId,
+          result: { ok: true,
+            src: webviewPanel.webview.asWebviewUri(vscode.Uri.file(saved.filePath)).toString(),
+            originalSrc: saved.relativePath },
         });
       } catch (error) {
-        console.error('[EasyView_Md] Failed to persist pasted image:', error);
-        vscode.window.showErrorMessage(tDocument('image.pasteSaveFailed', { message: toErrorMessage(error) }));
+        webviewPanel.webview.postMessage({
+          type: 'pasteImageResult', requestId: message.requestId, documentId: message.documentId,
+          result: { ok: false, message: tDocument('image.pasteSaveFailed', { message: toErrorMessage(error) }) },
+        });
       }
       break;
     }

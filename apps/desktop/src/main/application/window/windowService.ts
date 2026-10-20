@@ -8,7 +8,9 @@ import {
 } from 'electron';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, realpath } from 'node:fs/promises';
+import { once } from 'node:events';
+import { buildRecentFolderShellItems, windowsOpenFolderArguments } from './recentFolderShell';
 import { fileURLToPath } from 'node:url';
 import { requestRestart } from '../document/appLifecycle';
 import { flushDesktopEditors } from '../document/flushDesktopEditors';
@@ -158,7 +160,10 @@ export function syncShellMenu(): void {
   const context = getWindowContext();
   if (process.platform === 'darwin' && app.dock) {
     // macOS appends the open-window list (key window checked) above these items.
+    const recents = buildRecentFolderShellItems(recentFolderStore().snapshot(), os.homedir());
     app.dock.setMenu(Menu.buildFromTemplate([
+      ...recents.map((item): Electron.MenuItemConstructorOptions => ({ label: item.label, toolTip: item.displayPath, click: () => { void openFolderFromShell(item.path); } })),
+      ...(recents.length > 0 ? [{ type: 'separator' as const }] : []),
       { label: tMenu('shell.newWindow'), click: () => { void createNewWindow(); } },
       { type: 'separator' },
       { label: tMenu('shell.restart'), click: () => runInWindowContext(context, () => { void restartApp(); }) },
@@ -167,7 +172,12 @@ export function syncShellMenu(): void {
   }
 
   if (process.platform === 'win32') {
+    const recentTasks = buildRecentFolderShellItems(recentFolderStore().snapshot(), os.homedir()).flatMap((item) => {
+      const args = windowsOpenFolderArguments(item.path);
+      return args ? [{ program: process.execPath, arguments: args, iconPath: process.execPath, iconIndex: 0, title: item.label, description: item.displayPath }] : [];
+    });
     app.setUserTasks([
+      ...recentTasks,
       {
         program: process.execPath,
         arguments: NEW_WINDOW_FLAG,
@@ -209,6 +219,34 @@ function feedbackEnvironment(): FeedbackEnvironment {
     electronVersion: process.versions.electron,
     logsDirectory: anonymizePath(getLogsDirectory(), { platform: process.platform, homeDir: os.homedir(), appData: process.env.APPDATA, userProfile: process.env.USERPROFILE }),
   };
+}
+
+/** Dock / Jump List entry: focus the window already showing this folder, otherwise open it in a new window. */
+export async function openFolderFromShell(folderPath: string): Promise<void> {
+  const target = await realpath(folderPath).catch(() => folderPath);
+  const same = (candidate: string | null) => Boolean(candidate) && (process.platform === 'darwin' || process.platform === 'win32'
+    ? path.resolve(candidate!).toLowerCase() === path.resolve(target).toLowerCase()
+    : path.resolve(candidate!) === path.resolve(target));
+  for (const session of windowSessions.values()) {
+    const window = session.context.window;
+    if (!window || window.isDestroyed()) continue;
+    if (same(runInWindowContext(session.context, () => getWorkspaceState().rootPath))) {
+      if (window.isMinimized()) window.restore();
+      window.show();
+      window.focus();
+      appLog('info', 'shell', 'focused existing window for recent folder');
+      return;
+    }
+  }
+  const window = await createNewWindow();
+  const session = windowSessions.fromWebContents(window.webContents);
+  if (!session) return;
+  if (window.webContents.isLoading()) await once(window.webContents, 'did-finish-load');
+  appLog('info', 'shell', 'opening recent folder in a new window');
+  await runInWindowContext(session.context, async () => {
+    const result = await openWorkspaceFolder(target);
+    if (!result.ok) await showOperationError(result);
+  });
 }
 
 async function openRecentFolderFromMenu(folderPath: string): Promise<void> {

@@ -17,6 +17,7 @@ import { createDesktopEditorHostTransport } from './desktopHostTransport';
 import { DesktopEditorInstanceRegistry } from './DesktopEditorInstanceRegistry';
 import { WorkspaceExplorer } from './workspace/WorkspaceExplorer';
 import { ActiveViewController } from './ActiveViewController';
+import { isAgentEditablePreview } from './officePreview';
 import { TabController } from './TabController';
 import { WelcomePage } from './WelcomePage';
 import { tDesktop } from './desktopRenderer.i18n';
@@ -165,16 +166,36 @@ function getStandaloneAiChat(): AiChatPanel {
     postMessage: (message) => sharedEditorHost.postMessage(message),
     container: panelDockElements.panels.aiChat,
     getDocumentContent: () => '',
-    getFilePath: () => '',
-    getFileName: () => '',
+    getFilePath: () => activeOfficePreview()?.relativePath ?? '',
+    getFileName: () => activeOfficePreview()?.fileName ?? '',
     applyDocumentEdit: () => {},
     copyText: (text, successMessage) => sharedEditorHost.postMessage({ type: 'copyTextToClipboard', text, successMessage }),
     onVisibilityChange: (visible) => { if (!activeEditor()) updateAiChatVisible(visible); },
   });
-  panel.setDocumentContextAvailable(false);
-  sharedEditorHost.subscribe((message) => { if (message.type.startsWith('aiChat.')) panel.handleMessage(message); });
+  panel.setDocumentContextAvailable(Boolean(activeOfficePreview()));
+  sharedEditorHost.subscribe((message) => {
+    if (!message.type.startsWith('aiChat.')) return;
+    panel.handleMessage(message);
+    if ((message.type === 'aiChat.officeCommitted' || (message.type === 'aiChat.officeUndone' && !message.error)) && message.filePath) {
+      void activeView.reloadPreviewMatching(message.filePath);
+    }
+  });
   standaloneAiChat = panel;
   return panel;
+}
+
+/** The focused preview tab when Agent mode can edit it (Phase 1: .xlsx only). */
+function activeOfficePreview(): { relativePath: string; fileName: string } | null {
+  const view = activeView.getState();
+  if (view.kind !== 'preview' || !isAgentEditablePreview(view.relativePath)) return null;
+  return { relativePath: view.relativePath, fileName: view.relativePath.split(/[\\/]/).pop() ?? view.relativePath };
+}
+
+function syncStandaloneOfficeContext(): void {
+  if (!standaloneAiChat) return;
+  const office = activeOfficePreview();
+  standaloneAiChat.setFilePath(office ? `preview:${office.relativePath}` : '');
+  standaloneAiChat.setDocumentContextAvailable(Boolean(office));
 }
 
 function syncStandaloneAiChat(): void {
@@ -377,7 +398,7 @@ guardResizer.onpointerdown = event => {
 
 const activeView = new ActiveViewController({
   api, splitRoot, editorBody: editorMount, previewBody, tabBar,
-  onViewChanged: () => publishMenuState(),
+  onViewChanged: () => { publishMenuState(); syncStandaloneOfficeContext(); },
 });
 
 function visibleEditorTabs(snapshot: { groups: Array<{ tabs: DesktopTab[]; activeTabId: string | null }> }): DesktopEditorTab[] {
@@ -459,7 +480,10 @@ const disposeTitleBarOverlaySync = document.body.classList.contains('desktop-pla
     apply: api.window.setTitleBarOverlay,
     subscribe: (listener) => {
       const subscription = productAppearance.subscribe(listener);
-      return () => subscription.unsubscribe();
+      // The title-control background switches with the welcome page; repaint the native caption buttons too.
+      const welcomeObserver = new MutationObserver(listener);
+      welcomeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+      return () => { subscription.unsubscribe(); welcomeObserver.disconnect(); };
     },
   })
   : () => undefined;

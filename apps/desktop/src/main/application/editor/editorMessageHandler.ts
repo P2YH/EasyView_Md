@@ -104,7 +104,7 @@ export function validateEditorMessage(value: EditorToHostMessage): string | null
     case 'dropImages':
       return Array.isArray(message.paths) && message.paths.every((item) => typeof item === 'string') && isOptionalPosition(message.pos) ? null : tEditor('invalid.dropImages');
     case 'pasteImage':
-      return typeof message.dataUrl === 'string' && isOptionalString(message.mimeType) && isOptionalString(message.name) && isOptionalPosition(message.pos) ? null : tEditor('invalid.pasteImage');
+      return isNonEmptyString(message.requestId) && isNonEmptyString(message.documentId) && typeof message.dataUrl === 'string' && isOptionalString(message.name) ? null : tEditor('invalid.pasteImage');
     case 'exportPdfBase64':
       return isNonEmptyString(message.data) ? null : tEditor('invalid.pdfExport');
     case 'exportHtml':
@@ -122,6 +122,12 @@ export function validateEditorMessage(value: EditorToHostMessage): string | null
       return isNonEmptyString(message.requestId) ? null : tEditor('invalid.aiRequestId');
     case 'aiChat.pickImage':
       return null;
+    case 'aiChat.patchesApplied':
+      return isNonEmptyString(message.requestId) && isNonEmptyString(message.operationId) && isOptionalString(message.error) ? null : tEditor('invalid.aiRequestId');
+    case 'aiChat.officeDecision':
+      return isNonEmptyString(message.requestId) && isNonEmptyString(message.proposalId) && typeof message.accepted === 'boolean' ? null : tEditor('invalid.aiRequestId');
+    case 'aiChat.officeUndo':
+      return isNonEmptyString(message.requestId) && isNonEmptyString(message.commitId) ? null : tEditor('invalid.aiRequestId');
     case 'aiChat.saveApiKey':
     case 'aiChat.saveWebSearchApiKey':
       return isNonEmptyString(message.requestId) && typeof message.apiKey === 'string' ? null : tEditor('invalid.aiApiKey');
@@ -154,6 +160,7 @@ export async function handleEditorMessage(message: EditorToHostMessage): Promise
     !activeSession()
     // ready / AI / debug messages may arrive before a document is focused
     && !message.type.startsWith('aiChat.')
+    && message.type !== 'pasteImage'
     && message.type !== 'ready'
     && message.type !== 'webviewRuntimeError'
     && message.type !== 'openWithDebugLog'
@@ -167,6 +174,9 @@ export async function handleEditorMessage(message: EditorToHostMessage): Promise
     case 'aiChat.saveApiKey':
     case 'aiChat.saveWebSearchApiKey':
     case 'aiChat.pickImage':
+    case 'aiChat.patchesApplied':
+    case 'aiChat.officeDecision':
+    case 'aiChat.officeUndo':
       await getAiChatHost().handle(message);
       return;
     case 'ready': {
@@ -210,6 +220,7 @@ export async function handleEditorMessage(message: EditorToHostMessage): Promise
       tabRegistry.setEditorDirty(session.tabId, session.dirty);
       if (applied.value.dirtyChanged) syncTabState();
       sendEditorMessage({ type: 'editsApplied', documentId: session.documentId, clientEditId: message.clientEditId, revision: applied.value.revision, resultHash: applied.value.resultHash });
+      await applied.value.assetsUpdated;
       void notifyActiveGitChanges(session);
       return;
     }
@@ -365,6 +376,7 @@ export async function handleEditorMessage(message: EditorToHostMessage): Promise
         return;
       }
       try {
+        await activeSession()?.imageAssets.whenIdle();
         const base64 = await readImageAsDataUrl({ documentPath, source: message.originalSrc });
         sendEditorMessage({ type: 'imageBase64Response', requestId: message.requestId, base64 });
       } catch {
@@ -410,14 +422,17 @@ export async function handleEditorMessage(message: EditorToHostMessage): Promise
       return;
     }
     case 'pasteImage': {
-      const documentPath = requireDocumentPath();
-      if (!documentPath) return;
+      const session = documentSessions.findByDocumentId(message.documentId);
       try {
+        if (!session?.filePath) throw new Error(tEditor('image.saveDocumentFirst'));
+        const documentPath = session.filePath;
         const saved = await savePastedImage({ documentPath, dataUrl: message.dataUrl, preferredName: message.name });
-        const dataUrl = await readImageAsDataUrl({ documentPath, source: saved.relativePath });
-        sendEditorMessage({ type: 'imageSelected', src: dataUrl, originalSrc: saved.relativePath, pos: message.pos });
+        const src = await readImageAsDataUrl({ documentPath, source: saved.relativePath });
+        sendEditorMessage({ type: 'pasteImageResult', requestId: message.requestId, documentId: message.documentId,
+          result: { ok: true, src, originalSrc: saved.relativePath } });
       } catch (error) {
-        await dialog.showMessageBox(getMainWindow()!, { type: 'error', message: imageErrorMessage(error) });
+        sendEditorMessage({ type: 'pasteImageResult', requestId: message.requestId, documentId: message.documentId,
+          result: { ok: false, message: imageErrorMessage(error) } });
       }
       return;
     }

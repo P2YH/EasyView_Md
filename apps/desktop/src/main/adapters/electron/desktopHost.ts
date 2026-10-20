@@ -28,11 +28,13 @@ import {
   createMenu,
   createNewWindow,
   createWindow,
+  openFolderFromShell,
   findMarkdownArgument,
   markOpenedFileAtLaunch,
   restartApp,
 } from '../../application/window/windowService';
 import { registerDesktopIpc } from './registerDesktopIpc';
+import { folderArgumentFromArgv } from '../../application/window/recentFolderShell';
 import { registerPreviewProtocol, registerPreviewScheme } from './previewProtocol';
 import { ensureOpenWithRegistration } from './fileAssociations';
 
@@ -109,6 +111,11 @@ if (!hasSingleInstanceLock) {
       void createNewWindow();
       return;
     }
+    const folderPath = folderArgumentFromArgv(argv);
+    if (folderPath && startupComplete) {
+      void openFolderFromShell(folderPath);
+      return;
+    }
     const filePath = findMarkdownArgument(argv);
     if (filePath) {
       openDocumentFromSystem(filePath);
@@ -145,6 +152,8 @@ if (!hasSingleInstanceLock) {
     setPendingOpenPath(undefined);
     await openMainWindow(startupFile);
     startupComplete = true;
+    const launchFolder = folderArgumentFromArgv(process.argv);
+    if (launchFolder) void openFolderFromShell(launchFolder);
     resolveDesktopStarted();
     const lateFile = getPendingOpenPath();
     setPendingOpenPath(undefined);

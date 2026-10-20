@@ -145,6 +145,22 @@ describe('DesktopEditorInstanceRegistry', () => {
     expect(bMessages).toHaveLength(0);
   });
 
+  it('routes delayed image paste results to the original document while another tab is active', () => {
+    const hosts: EditorHostTransport[] = [];
+    const { registry, listener } = createRegistry({ retainLimit: 5, hosts });
+    registry.activate(editorTab('a', '/tmp/a.md'));
+    registry.activate(editorTab('b', '/tmp/b.md'));
+    const aMessages: HostToEditorMessage[] = [];
+    const bMessages: HostToEditorMessage[] = [];
+    hosts[0]!.subscribe(message => aMessages.push(message));
+    hosts[1]!.subscribe(message => bMessages.push(message));
+    listener()?.({ type: 'pasteImageResult', requestId: 'paste-a', documentId: '/tmp/a.md',
+      result: { ok: true, src: 'data:image/png;base64,AA==', originalSrc: '.a.assets/image.png' } });
+    expect(aMessages).toHaveLength(1);
+    expect(bMessages).toHaveLength(0);
+    registry.dispose();
+  });
+
   it('evicts a large inactive editor by text budget while preserving the active editor', () => {
     const { registry, listener, disposed } = createRegistry({ retainLimit: 5, textBudget: 8 });
     registry.activate(editorTab('a', '/tmp/a.md'));

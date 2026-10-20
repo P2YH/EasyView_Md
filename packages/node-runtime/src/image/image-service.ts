@@ -1,3 +1,4 @@
+import { isImageAssetReserved } from './document-image-assets';
 import { mkdir, writeFile } from "node:fs/promises";
 import * as path from "node:path";
 import {
@@ -126,6 +127,10 @@ export async function savePastedImage(options: SavePastedImageOptions): Promise<
   await mkdir(targetDirectory, { recursive: true });
   for (let index = 1; ; index += 1) {
     try {
+      if (isImageAssetReserved(targetPath)) {
+        targetPath = path.join(targetDirectory, `${baseName}-${index}${extension}`);
+        continue;
+      }
       await writeFile(targetPath, parsed.bytes, { flag: "wx" });
       break;
     } catch (error) {

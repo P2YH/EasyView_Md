@@ -1,4 +1,5 @@
 import * as path from 'path';
+import { markdownImageAssets } from './markdownImageAssets';
 import * as vscode from 'vscode';
 import { isEditorToHostMessage } from '@easyview/contracts/protocol';
 import type { EditorToHostMessage, HostToEditorMessage, EditorUiStatePayload } from '@easyview/contracts/protocol';
@@ -125,6 +126,7 @@ export class MarkdownEditorSession implements vscode.Disposable {
     extensionContext: this.options.context,
     getFilename: () => path.basename(this.diskUri.fsPath).replace(/\.(md|markdown|mdx)$/i, ''),
     getCanonicalContent: () => this.adapter.content,
+    waitForImageAssets: () => markdownImageAssets.whenIdle(this.document),
     applyCanonicalContent: async (content, settings) => {
       await this.updateSettings(settings);
       await this.applyCanonicalReplacement(content, 'formatter');
@@ -230,6 +232,7 @@ export class MarkdownEditorSession implements vscode.Disposable {
     const revision = this.sync.snapshot.revision + 1;
     this.sync.applySnapshot(result.content, revision);
     this.post({ type: 'documentPatched', documentId: this.documentId, baseRevision: revision - 1, revision, edits, resultHash: hashContent(result.content), source, skipAutoScroll: true });
+    await markdownImageAssets.whenIdle(this.document);
   }
 
   private async applyEdits(message: Extract<EditorToHostMessage, { type: 'applyEdits' }>): Promise<void> {
@@ -261,6 +264,7 @@ export class MarkdownEditorSession implements vscode.Disposable {
     const revision = this.sync.snapshot.revision + 1;
     this.sync.applySnapshot(result.content, revision);
     await this.updateSettings({ fullWidth: message.fullWidth, tocVisible: message.tocVisible, tableWrap: message.tableWrap });
+    await markdownImageAssets.whenIdle(this.document);
     this.post({ type: 'editsApplied', documentId: this.documentId, clientEditId: message.clientEditId, revision, resultHash: message.resultHash });
     this.scheduleGit();
   }

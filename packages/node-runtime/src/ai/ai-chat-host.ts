@@ -12,6 +12,8 @@ import { buildAiChatMessages } from './chatPrompt';
 import { OpenAiChatError, streamOpenAiChat } from './openai-chat-client';
 import { createAiAgentTools } from './agent-tools';
 import { tAi } from './ai.i18n';
+import { createOfficeAgentTools, officeDocumentKind, type OfficeEditDecision } from './office-tools';
+import { undoXlsxCommit, type XlsxCommitRecord, type XlsxDiff } from './xlsx-edit';
 
 export interface AiChatSecretStore {
   getApiKey(): Promise<string | null>;
@@ -35,6 +37,17 @@ export interface AiChatHostOptions {
   pickImages?: AiChatImagePicker;
   getToolContext?: () => Promise<AiChatToolContext> | AiChatToolContext;
   fetchImpl?: typeof fetch;
+  /**
+   * Enables Agent mode for Office files (.xlsx). The host shows the proposal to
+   * the user; the decision comes back through `AiChatHost.resolveOfficeEdit`.
+   */
+  officeEdits?: {
+    /** Overrides how a proposal is shown; defaults to posting `aiChat.officeProposal`. */
+    showProposal?(requestId: string, proposal: { id: string; fileName: string; diff: XlsxDiff }): void;
+    /** Directory that receives `.easyview/ai-backups/`; defaults to the workspace root or the file's folder. */
+    backupRoot?(filePath: string): string | null;
+    onCommitted?(requestId: string, commit: { id: string; filePath: string; backupPath: string }): void;
+  };
 }
 
 function toErrorMessage(error: unknown): string {
@@ -47,6 +60,8 @@ export class AiChatHost {
   private settings: AiChatSettings | null = null;
   private settingsLoaded = false;
   private readonly activeRequests = new Map<string, AbortController>();
+  private readonly officeProposals = new Map<string, { requestId: string; resolve(decision: OfficeEditDecision): void }>();
+  private readonly officeCommits = new Map<string, XlsxCommitRecord>();
 
   constructor(private readonly options: AiChatHostOptions) {}
 
@@ -82,12 +97,66 @@ export class AiChatHost {
       case 'aiChat.pickImage':
         await this.pickImages(message.requestId);
         return;
+      case 'aiChat.officeDecision':
+        this.resolveOfficeEdit(message.proposalId, message.accepted);
+        return;
+      case 'aiChat.officeUndo':
+        try {
+          const filePath = this.officeCommits.get(message.commitId)?.filePath;
+          await this.undoOfficeEdit(message.commitId);
+          this.options.postMessage({ type: 'aiChat.officeUndone', requestId: message.requestId, commitId: message.commitId, filePath });
+        } catch (error) {
+          this.options.postMessage({ type: 'aiChat.officeUndone', requestId: message.requestId, commitId: message.commitId, error: toErrorMessage(error) });
+        }
+        return;
       default:
         return;
     }
   }
 
+  /** Delivers the user's Apply / Reject decision for a pending Office proposal. */
+  resolveOfficeEdit(proposalId: string, accepted: boolean, reason?: string): boolean {
+    const pending = this.officeProposals.get(proposalId);
+    if (!pending) return false;
+    pending.resolve({ accepted, reason });
+    return true;
+  }
+
+  /** Restores the backup taken before an applied Office edit. */
+  async undoOfficeEdit(commitId: string): Promise<void> {
+    const record = this.officeCommits.get(commitId);
+    if (!record) throw new Error(tAi('xlsx.undoStale'));
+    await undoXlsxCommit(record);
+    this.officeCommits.delete(commitId);
+  }
+
+  private confirmOfficeEdit(
+    requestId: string,
+    proposal: { id: string; fileName: string; diff: XlsxDiff },
+    signal: AbortSignal,
+  ): Promise<OfficeEditDecision> {
+    return new Promise((resolve) => {
+      const finish = (decision: OfficeEditDecision) => {
+        signal.removeEventListener('abort', aborted);
+        this.officeProposals.delete(proposal.id);
+        resolve(decision);
+      };
+      const aborted = () => finish({ accepted: false, reason: tAi('host.editCancelled') });
+      this.officeProposals.set(proposal.id, { requestId, resolve: finish });
+      signal.addEventListener('abort', aborted, { once: true });
+      if (signal.aborted) { aborted(); return; }
+      try {
+        const office = this.options.officeEdits!;
+        if (office.showProposal) office.showProposal(requestId, proposal);
+        else this.options.postMessage({ type: 'aiChat.officeProposal', requestId, proposalId: proposal.id, fileName: proposal.fileName, changes: proposal.diff.changes, structural: proposal.diff.structural, truncated: proposal.diff.truncated });
+      }
+      catch (error) { finish({ accepted: false, reason: toErrorMessage(error) }); }
+    });
+  }
+
   dispose(): void {
+    for (const pending of this.officeProposals.values()) pending.resolve({ accepted: false, reason: tAi('host.editCancelled') });
+    this.officeProposals.clear();
     for (const controller of this.activeRequests.values()) {
       controller.abort();
     }
@@ -229,7 +298,11 @@ export class AiChatHost {
       if (!apiKey?.trim()) {
         throw new OpenAiChatError('AUTH', tAi('host.apiKeyMissing'));
       }
+      const officeKind = message.mode === 'agent' && message.documentFilePath && this.options.officeEdits
+        ? officeDocumentKind(message.documentFilePath)
+        : null;
       const messages = buildAiChatMessages({
+        documentKind: officeKind ?? 'text',
         systemPrompt: settings.systemPrompt,
         mode: message.mode,
         history: message.history,
@@ -244,17 +317,41 @@ export class AiChatHost {
       ]);
       const tools = await createAiAgentTools({
         workspaceRootPath: toolContext.workspaceRootPath,
-        activeDocument: message.mode === 'agent' && message.documentFilePath && message.documentContent !== undefined
+        activeDocument: !officeKind && message.mode === 'agent' && message.documentFilePath && message.documentContent !== undefined
           ? {
             path: message.documentFilePath,
             content: message.documentContent,
             applyPatches: (patches) => this.applyPatches(requestId, message.documentFilePath!, patches, controller.signal),
           }
           : undefined,
-        includeWorkspaceTools: message.mode === 'agent',
+        // Office edits are bound to the open file only: no workspace read/write tools.
+        includeWorkspaceTools: message.mode === 'agent' && !officeKind,
         webSearchApiKey,
         fetchImpl: this.options.fetchImpl,
       });
+      if (officeKind && message.documentFilePath) {
+        const root = toolContext.workspaceRootPath ? path.resolve(toolContext.workspaceRootPath) : null;
+        // Preview tabs send a workspace-relative path; editors send an absolute one.
+        const filePath = path.isAbsolute(message.documentFilePath)
+          ? path.resolve(message.documentFilePath)
+          : root ? path.resolve(root, message.documentFilePath) : null;
+        const relative = filePath && root ? path.relative(root, filePath) : '';
+        if (!filePath || relative.startsWith('..') || path.isAbsolute(relative)) {
+          throw new Error(tAi('tools.pathOutsideWorkspace'));
+        }
+        const office = this.options.officeEdits!;
+        Object.assign(tools, createOfficeAgentTools({
+          kind: officeKind,
+          filePath,
+          backupRoot: office.backupRoot?.(filePath) ?? toolContext.workspaceRootPath ?? path.dirname(filePath),
+          confirmEdit: (proposal) => this.confirmOfficeEdit(requestId, proposal, controller.signal),
+          onCommitted: (record, proposal) => {
+            this.officeCommits.set(proposal.id, record);
+            this.options.postMessage({ type: 'aiChat.officeCommitted', requestId, commitId: proposal.id, filePath: record.filePath, backupPath: record.backupPath });
+            office.onCommitted?.(requestId, { id: proposal.id, filePath: record.filePath, backupPath: record.backupPath });
+          },
+        }));
+      }
       const result = await streamOpenAiChat(
         {
           baseUrl: settings.baseUrl,

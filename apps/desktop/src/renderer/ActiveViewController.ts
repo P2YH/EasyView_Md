@@ -1,4 +1,5 @@
 import { HistoryView } from '@easyview/editor-core/timeline';
+import { previewPathMatches } from './officePreview';
 import type {
   DesktopEditorGroupLayout,
   DesktopTab,
@@ -60,6 +61,16 @@ export class ActiveViewController {
   }
 
   getState(): ActiveWorkspaceView { return this.state; }
+
+  /** Re-opens every visible preview of the file at `absolutePath` (after an AI edit or undo). */
+  async reloadPreviewMatching(absolutePath: string): Promise<void> {
+    if (!this.snapshot) return;
+    for (const group of this.snapshot.groups) {
+      const tab = group.tabs.find((item) => item.id === group.activeTabId);
+      if (!tab || tab.kind === 'editor' || tab.kind === 'history' || !previewPathMatches(absolutePath, tab.relativePath)) continue;
+      await this.islands.get(group.id)?.open(tab.relativePath);
+    }
+  }
 
   editorMounts(): Map<string, HTMLElement> {
     const mounts = new Map<string, HTMLElement>();

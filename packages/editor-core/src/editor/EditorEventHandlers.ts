@@ -16,6 +16,7 @@ import type { MarkdownParser } from 'prosemirror-markdown';
 import { CellSelection } from 'prosemirror-tables';
 
 import { schema } from './EditorSchema';
+import { clipboardImage, pasteImage } from './ImagePaste';
 import {
   insertNestedTableInCell,
   isInsideTableCell,
@@ -277,53 +278,12 @@ export function handlePaste(
 
   // Skip image paste when spreadsheet table data is available.
   if (!clipboardLooksLikeSheet) {
-    const clipboardDataUrl =
-      html?.match(/src=["'](data:image\/[a-zA-Z0-9.+-]+;base64,[^"']+)["']/i)?.[1]
-      ?? text?.match(/!\[[^\]]*]\(\s*(data:image\/[a-zA-Z0-9.+-]+;base64,[^)]+)\s*\)/i)?.[1]
-      ?? text?.match(/^(data:image\/[a-zA-Z0-9.+-]+;base64,\S+)$/i)?.[1];
-
-    if (clipboardDataUrl) {
+    const image = clipboardImage(event.clipboardData);
+    if (image) {
       event.preventDefault();
       event.stopPropagation();
-      const { from } = view.state.selection;
-      const mimeType = clipboardDataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/i)?.[1] || 'image/png';
-      window.dispatchEvent(new CustomEvent('inlinemd:pasteImage', {
-        detail: {
-          dataUrl: clipboardDataUrl,
-          mimeType,
-          name: 'image',
-          pos: from,
-        },
-      }));
+      pasteImage(view, image);
       return true;
-    }
-
-    const imageItems = Array.from(event.clipboardData?.items || []).filter(
-      (item) => item.kind === 'file' && item.type.startsWith('image/'),
-    );
-    if (imageItems.length > 0) {
-      const file = imageItems[0].getAsFile();
-      if (file) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        const { from } = view.state.selection;
-        const reader = new FileReader();
-        reader.onload = () => {
-          const dataUrl = typeof reader.result === 'string' ? reader.result : '';
-          if (!dataUrl.startsWith('data:image/')) return;
-          window.dispatchEvent(new CustomEvent('inlinemd:pasteImage', {
-            detail: {
-              dataUrl,
-              mimeType: file.type || 'image/png',
-              name: file.name || 'image.png',
-              pos: from,
-            },
-          }));
-        };
-        reader.readAsDataURL(file);
-        return true;
-      }
     }
   }
 
@@ -429,64 +389,26 @@ export function handlePaste(
 
 // ── handlePastePlainText ──
 
-/**
- * Paste from clipboard with markdown parsing (for context menu Paste).
- * Replicates Ctrl+V behavior but reads from Clipboard API.
- */
-export function handlePasteFromClipboard(view: EditorView, pasteParser: MarkdownParser): void {
-  navigator.clipboard.readText().then((text) => {
-    if (!text) return;
-
-    const { $from } = view.state.selection;
-    const inCodeBlock = $from.parent.type.name === 'code_block';
-
-    if (inCodeBlock) {
-      const { from, to } = view.state.selection;
-      view.dispatch(view.state.tr.insertText(text, from, to));
-      return;
+/** Route the context menu through the same rich clipboard handler as keyboard paste. */
+export async function handlePasteFromClipboard(view: EditorView, pasteParser: MarkdownParser): Promise<void> {
+  view.focus();
+  const items = await navigator.clipboard.read();
+  if (view.isDestroyed) return;
+  const data = new DataTransfer();
+  for (const item of items) {
+    for (const type of item.types) {
+      if (type !== 'text/plain' && type !== 'text/html' && !type.startsWith('image/')) continue;
+      const blob = await item.getType(type);
+      if (type.startsWith('image/')) data.items.add(new File([blob], 'image', { type }));
+      else data.setData(type, await blob.text());
     }
-
-    // Single-line markdown link: [text](url)
-    if (!text.includes('\n')) {
-      const linkMatch = text.trim().match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-      if (linkMatch) {
-        const [, linkText, linkHref] = linkMatch;
-        const linkMark = schema.marks.link.create({ href: linkHref });
-        const linkNode = schema.text(linkText, [linkMark]);
-        view.dispatch(view.state.tr.replaceSelectionWith(linkNode, false));
-        return;
-      }
-    }
-
-    // URL paste -> wrap selected text as link or insert link
-    const isUrl = /^https?:\/\/\S+$/.test(text.trim());
-    if (isUrl) {
-      const { from, to, empty } = view.state.selection;
-      if (!empty) {
-        view.dispatch(
-          view.state.tr.addMark(from, to, schema.marks.link.create({ href: text.trim() }))
-        );
-        return;
-      }
-      const linkMark = schema.marks.link.create({ href: text.trim() });
-      const linkText = schema.text(text.trim(), [linkMark]);
-      view.dispatch(view.state.tr.replaceSelectionWith(linkText));
-      return;
-    }
-
-    // Try markdown parsing
-    const doc = pasteParser.parse(text);
-    if (doc && doc.content.size > 2) {
-      view.dispatch(
-        view.state.tr.replaceSelection(doc.slice(0, doc.content.size))
-      );
-      return;
-    }
-
-    // Fallback: plain text
-    const { from, to } = view.state.selection;
-    view.dispatch(view.state.tr.insertText(text, from, to));
-  }).catch(() => {});
+  }
+  if (view.isDestroyed) return;
+  const event = new ClipboardEvent('paste', { clipboardData: data, cancelable: true });
+  if (handlePaste(view, event, pasteParser)) return;
+  const html = data.getData('text/html');
+  if (html) view.pasteHTML(html, event);
+  else view.pasteText(data.getData('text/plain'), event);
 }
 
 /** Strip markdown syntax from text, keeping only visible content */

@@ -122,6 +122,12 @@ export function validateEditorMessage(value: EditorToHostMessage): string | null
       return isNonEmptyString(message.requestId) ? null : tEditor('invalid.aiRequestId');
     case 'aiChat.pickImage':
       return null;
+    case 'aiChat.patchesApplied':
+      return isNonEmptyString(message.requestId) && isNonEmptyString(message.operationId) && isOptionalString(message.error) ? null : tEditor('invalid.aiRequestId');
+    case 'aiChat.officeDecision':
+      return isNonEmptyString(message.requestId) && isNonEmptyString(message.proposalId) && typeof message.accepted === 'boolean' ? null : tEditor('invalid.aiRequestId');
+    case 'aiChat.officeUndo':
+      return isNonEmptyString(message.requestId) && isNonEmptyString(message.commitId) ? null : tEditor('invalid.aiRequestId');
     case 'aiChat.saveApiKey':
     case 'aiChat.saveWebSearchApiKey':
       return isNonEmptyString(message.requestId) && typeof message.apiKey === 'string' ? null : tEditor('invalid.aiApiKey');
@@ -168,6 +174,9 @@ export async function handleEditorMessage(message: EditorToHostMessage): Promise
     case 'aiChat.saveApiKey':
     case 'aiChat.saveWebSearchApiKey':
     case 'aiChat.pickImage':
+    case 'aiChat.patchesApplied':
+    case 'aiChat.officeDecision':
+    case 'aiChat.officeUndo':
       await getAiChatHost().handle(message);
       return;
     case 'ready': {

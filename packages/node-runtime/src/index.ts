@@ -2,6 +2,8 @@ export * from './ai/chatPrompt';
 export * from './ai/ai-chat-host';
 export * from './ai/agent-tools';
 export * from './ai/openai-chat-client';
+export * from './ai/office-tools';
+export * from './ai/xlsx-edit';
 export * from './conversion/document-conversion';
 export * from './export/docx-export';
 export * from './export/html-export';

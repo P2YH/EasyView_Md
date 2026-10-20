@@ -103,3 +103,11 @@ export function normalizeAiChatSettings(value: unknown): AiChatSettings {
     stream: typeof raw.stream === 'boolean' ? raw.stream : DEFAULT_AI_CHAT_SETTINGS.stream,
   };
 }
+
+/** One changed cell in an AI Office (xlsx) edit proposal. */
+export interface AiOfficeCellChange {
+  sheet: string;
+  ref: string;
+  before: string | number | boolean | null;
+  after: string | number | boolean | null;
+}

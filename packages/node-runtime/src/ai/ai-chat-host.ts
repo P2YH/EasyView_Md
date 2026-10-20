@@ -42,7 +42,8 @@ export interface AiChatHostOptions {
    * the user; the decision comes back through `AiChatHost.resolveOfficeEdit`.
    */
   officeEdits?: {
-    showProposal(requestId: string, proposal: { id: string; fileName: string; diff: XlsxDiff }): void;
+    /** Overrides how a proposal is shown; defaults to posting `aiChat.officeProposal`. */
+    showProposal?(requestId: string, proposal: { id: string; fileName: string; diff: XlsxDiff }): void;
     /** Directory that receives `.easyview/ai-backups/`; defaults to the workspace root or the file's folder. */
     backupRoot?(filePath: string): string | null;
     onCommitted?(requestId: string, commit: { id: string; filePath: string; backupPath: string }): void;
@@ -96,6 +97,18 @@ export class AiChatHost {
       case 'aiChat.pickImage':
         await this.pickImages(message.requestId);
         return;
+      case 'aiChat.officeDecision':
+        this.resolveOfficeEdit(message.proposalId, message.accepted);
+        return;
+      case 'aiChat.officeUndo':
+        try {
+          const filePath = this.officeCommits.get(message.commitId)?.filePath;
+          await this.undoOfficeEdit(message.commitId);
+          this.options.postMessage({ type: 'aiChat.officeUndone', requestId: message.requestId, commitId: message.commitId, filePath });
+        } catch (error) {
+          this.options.postMessage({ type: 'aiChat.officeUndone', requestId: message.requestId, commitId: message.commitId, error: toErrorMessage(error) });
+        }
+        return;
       default:
         return;
     }
@@ -132,7 +145,11 @@ export class AiChatHost {
       this.officeProposals.set(proposal.id, { requestId, resolve: finish });
       signal.addEventListener('abort', aborted, { once: true });
       if (signal.aborted) { aborted(); return; }
-      try { this.options.officeEdits!.showProposal(requestId, proposal); }
+      try {
+        const office = this.options.officeEdits!;
+        if (office.showProposal) office.showProposal(requestId, proposal);
+        else this.options.postMessage({ type: 'aiChat.officeProposal', requestId, proposalId: proposal.id, fileName: proposal.fileName, changes: proposal.diff.changes, structural: proposal.diff.structural, truncated: proposal.diff.truncated });
+      }
       catch (error) { finish({ accepted: false, reason: toErrorMessage(error) }); }
     });
   }
@@ -313,9 +330,13 @@ export class AiChatHost {
         fetchImpl: this.options.fetchImpl,
       });
       if (officeKind && message.documentFilePath) {
-        const filePath = path.resolve(message.documentFilePath);
         const root = toolContext.workspaceRootPath ? path.resolve(toolContext.workspaceRootPath) : null;
-        if (!path.isAbsolute(message.documentFilePath) || (root && path.relative(root, filePath).startsWith('..'))) {
+        // Preview tabs send a workspace-relative path; editors send an absolute one.
+        const filePath = path.isAbsolute(message.documentFilePath)
+          ? path.resolve(message.documentFilePath)
+          : root ? path.resolve(root, message.documentFilePath) : null;
+        const relative = filePath && root ? path.relative(root, filePath) : '';
+        if (!filePath || relative.startsWith('..') || path.isAbsolute(relative)) {
           throw new Error(tAi('tools.pathOutsideWorkspace'));
         }
         const office = this.options.officeEdits!;
@@ -326,6 +347,7 @@ export class AiChatHost {
           confirmEdit: (proposal) => this.confirmOfficeEdit(requestId, proposal, controller.signal),
           onCommitted: (record, proposal) => {
             this.officeCommits.set(proposal.id, record);
+            this.options.postMessage({ type: 'aiChat.officeCommitted', requestId, commitId: proposal.id, filePath: record.filePath, backupPath: record.backupPath });
             office.onCommitted?.(requestId, { id: proposal.id, filePath: record.filePath, backupPath: record.backupPath });
           },
         }));

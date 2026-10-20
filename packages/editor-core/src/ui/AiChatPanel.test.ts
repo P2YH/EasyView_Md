@@ -33,6 +33,7 @@ describe('AiChatPanel host and document context', () => {
     const agent = root?.querySelector<HTMLButtonElement>('[data-mode="agent"]');
     expect(agent?.disabled).toBe(true);
     expect(agent?.title).toContain('仅 Markdown');
+    expect(agent?.title).toContain('.xlsx');
     expect(root?.querySelector('[data-mode="chat"]')?.classList.contains('active')).toBe(true);
 
     panel.setDocumentContextAvailable(true);
@@ -263,6 +264,37 @@ describe('AI conversation lifetime', () => {
     await Promise.resolve(); await Promise.resolve();
     expect(applied).not.toHaveBeenCalled();
     expect(sent.find(message => message.type === 'aiChat.patchesApplied')).toMatchObject({ operationId: 'conflict', error: expect.any(String) });
+    panel.destroy();
+  });
+  it('shows an xlsx cell diff, writes only on Apply, and offers Undo', () => {
+    const { panel, sent, send } = setup();
+    const requestId = send('把 B2 改成 7');
+    panel.handleMessage({ type: 'aiChat.officeProposal', requestId, proposalId: 'p1', fileName: 'book.xlsx', changes: [{ sheet: 'Sales', ref: 'B2', before: 3, after: 7 }], structural: [], truncated: false });
+    const box = document.querySelector('.ai-chat-office-edit')!;
+    expect(box.textContent).toContain('book.xlsx');
+    expect(box.querySelector('td.before')!.textContent).toBe('3');
+    expect(box.querySelector('td.after')!.textContent).toBe('7');
+    expect(sent.some((m) => m.type === 'aiChat.officeDecision')).toBe(false);
+    document.querySelector<HTMLButtonElement>('.ai-chat-office-btn.apply')!.click();
+    expect(sent).toContainEqual({ type: 'aiChat.officeDecision', requestId, proposalId: 'p1', accepted: true });
+    panel.handleMessage({ type: 'aiChat.officeCommitted', requestId, commitId: 'p1', filePath: '/ws/book.xlsx', backupPath: '/ws/.easyview/ai-backups/x/book.xlsx' });
+    panel.handleMessage({ type: 'aiChat.done', requestId, content: 'B2 已改为 7', finishReason: 'stop' });
+    document.querySelector<HTMLButtonElement>('.ai-chat-office-btn.undo')!.click();
+    const undo = sent.find((m) => m.type === 'aiChat.officeUndo') as { requestId: string; commitId: string };
+    expect(undo.commitId).toBe('p1');
+    panel.handleMessage({ type: 'aiChat.officeUndone', requestId: undo.requestId, commitId: 'p1', filePath: '/ws/book.xlsx' });
+    expect(document.querySelector('.ai-chat-office-edit')!.classList.contains('undone')).toBe(true);
+    expect(document.querySelector('.ai-chat-office-btn')).toBeNull();
+    panel.destroy();
+  });
+  it('rejecting a proposal sends a negative decision and keeps no buttons', () => {
+    const { panel, sent, send } = setup();
+    const requestId = send('改');
+    panel.handleMessage({ type: 'aiChat.officeProposal', requestId, proposalId: 'p2', fileName: 'b.xlsx', changes: [{ sheet: 'S', ref: 'A1', before: null, after: 'x' }], structural: ['S: +1 row(s) at 2'], truncated: false });
+    document.querySelector<HTMLButtonElement>('.ai-chat-office-btn.reject')!.click();
+    expect(sent).toContainEqual({ type: 'aiChat.officeDecision', requestId, proposalId: 'p2', accepted: false });
+    expect(document.querySelector('.ai-chat-office-edit')!.classList.contains('rejected')).toBe(true);
+    expect(document.querySelector('.ai-chat-office-btn')).toBeNull();
     panel.destroy();
   });
 });

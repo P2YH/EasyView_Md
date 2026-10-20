@@ -90,4 +90,58 @@ describe('AiChatHost office (xlsx) agent', () => {
     for (let i = 0; i < 100 && !posted.some((m) => m.type === 'aiChat.error'); i += 1) await new Promise((r) => setTimeout(r, 10));
     expect(posted.find((m) => m.type === 'aiChat.error')).toBeDefined();
   });
+  it('message flow: relative path, proposal → Apply → committed → undo; external edit before Apply is refused', async () => {
+    dir = await mkdtemp(path.join(os.tmpdir(), 'easyview-host-xlsx-'));
+    const file = path.join(dir, 'data', 'book.xlsx');
+    await import('node:fs/promises').then((fs) => fs.mkdir(path.dirname(file)));
+    const write = async (qty: number) => { const book = new ExcelJS.Workbook(); book.addWorksheet('Sales').addRows([['Name', 'Qty'], ['Apple', qty]]); await book.xlsx.writeFile(file); };
+    const read = async () => { const book = new ExcelJS.Workbook(); await book.xlsx.readFile(file); return book.getWorksheet('Sales')!.getCell('B2').value; };
+    await write(3);
+    const posted: HostToEditorMessage[] = [];
+    let fingerprint = (await inspectXlsxFile(file)).fingerprint;
+    let call = 0;
+    const fetchImpl = (async () => {
+      call += 1;
+      if (call % 2 === 1) return sse([chunk({ role: 'assistant', tool_calls: [{ index: 0, id: `c${call}`, type: 'function', function: { name: 'apply_sheet_ops', arguments: JSON.stringify({ fingerprint, ops: [{ op: 'setCell', sheet: 'Sales', ref: 'B2', value: 7 }] }) } }] }), chunk({}, 'tool_calls')]);
+      return sse([chunk({ role: 'assistant', content: 'ok' }), chunk({}, 'stop')]);
+    }) as typeof fetch;
+    const host = new AiChatHost({
+      settingsFilePath: path.join(dir, 's.json'),
+      secretStore: { getApiKey: async () => 'k', setApiKey: async () => undefined, getWebSearchApiKey: async () => null, setWebSearchApiKey: async () => undefined },
+      postMessage: (m) => posted.push(m),
+      getToolContext: () => ({ workspaceRootPath: dir }),
+      fetchImpl,
+      officeEdits: {},
+    });
+    const waitFor = async (predicate: () => boolean) => { for (let i = 0; i < 300 && !predicate(); i += 1) await new Promise((r) => setTimeout(r, 10)); expect(predicate()).toBe(true); };
+    const send = (requestId: string) => host.handle({ type: 'aiChat.send', requestId, mode: 'agent', model: 'm', userMessage: 'B2=7', attachments: [], history: [], documentFilePath: 'data/book.xlsx', documentFileName: 'book.xlsx' });
+
+    // 1) Apply path
+    await send('r1');
+    await waitFor(() => posted.some((m) => m.type === 'aiChat.officeProposal'));
+    const proposal = posted.find((m) => m.type === 'aiChat.officeProposal') as Extract<HostToEditorMessage, { type: 'aiChat.officeProposal' }>;
+    expect(proposal.changes).toEqual([{ sheet: 'Sales', ref: 'B2', before: 3, after: 7 }]);
+    expect(await read()).toBe(3);
+    await host.handle({ type: 'aiChat.officeDecision', requestId: 'r1', proposalId: proposal.proposalId, accepted: true });
+    await waitFor(() => posted.some((m) => m.type === 'aiChat.done' && m.requestId === 'r1'));
+    const committed = posted.find((m) => m.type === 'aiChat.officeCommitted') as Extract<HostToEditorMessage, { type: 'aiChat.officeCommitted' }>;
+    expect(committed.filePath).toBe(file);
+    expect(await read()).toBe(7);
+    await host.handle({ type: 'aiChat.officeUndo', requestId: 'u1', commitId: committed.commitId });
+    expect(posted.find((m) => m.type === 'aiChat.officeUndone')).toMatchObject({ commitId: committed.commitId, filePath: file });
+    expect(await read()).toBe(3);
+
+    // 2) File modified externally while the proposal waits → Apply is refused, file keeps the external content
+    fingerprint = (await inspectXlsxFile(file)).fingerprint;
+    posted.length = 0;
+    await send('r2');
+    await waitFor(() => posted.some((m) => m.type === 'aiChat.officeProposal'));
+    const second = posted.find((m) => m.type === 'aiChat.officeProposal') as Extract<HostToEditorMessage, { type: 'aiChat.officeProposal' }>;
+    await write(100);
+    await host.handle({ type: 'aiChat.officeDecision', requestId: 'r2', proposalId: second.proposalId, accepted: true });
+    await waitFor(() => posted.some((m) => (m.type === 'aiChat.done' || m.type === 'aiChat.error') && m.requestId === 'r2'));
+    expect(posted.some((m) => m.type === 'aiChat.officeCommitted')).toBe(false);
+    expect(posted.some((m) => m.type === 'aiChat.tool' && m.phase === 'result')).toBe(false);
+    expect(await read()).toBe(100);
+  });
 });

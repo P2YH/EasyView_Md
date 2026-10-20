@@ -4,6 +4,7 @@
  */
 
 import type {
+  AiOfficeCellChange,
   AiChatAttachment,
   AiChatSettings,
   EditorToHostMessage,
@@ -37,12 +38,29 @@ type ChatMode = 'chat' | 'agent';
 
 type MessageBadge = 'applied' | 'no-change' | 'no-doc' | 'stopped' | 'error';
 
+/** Max diff rows rendered inline for one Office proposal. */
+export const MAX_OFFICE_DIFF_ROWS = 50;
+
+type OfficeEditStatus = 'pending' | 'applying' | 'applied' | 'rejected' | 'undoing' | 'undone' | 'error';
+
+interface OfficeEditState {
+  proposalId: string;
+  fileName: string;
+  changes: AiOfficeCellChange[];
+  structural: string[];
+  truncated: boolean;
+  status: OfficeEditStatus;
+  commitId?: string;
+  error?: string;
+}
+
 interface ChatUiMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   reasoning?: string;
   toolCalls?: Array<{ name: string; done: boolean }>;
+  officeEdits?: OfficeEditState[];
   attachments?: AiChatAttachment[];
   badge?: MessageBadge;
   error?: string;
@@ -96,6 +114,17 @@ function ensureAiChatPanelStyles(): void {
   const style = document.createElement('style');
   style.id = styleId;
   style.textContent = `
+    .ai-chat-office-edit { margin: 6px 0; padding: 8px; border: 1px solid var(--vscode-editorWidget-border, rgba(128,128,128,0.3)); border-radius: 6px; font-size: 12px; }
+    .ai-chat-office-title { font-weight: 600; margin-bottom: 4px; }
+    .ai-chat-office-notes { color: var(--vscode-descriptionForeground, #94a3b8); margin: 4px 0; }
+    .ai-chat-office-diff { width: 100%; border-collapse: collapse; margin: 4px 0; }
+    .ai-chat-office-diff th, .ai-chat-office-diff td { text-align: left; padding: 2px 6px; border-bottom: 1px solid rgba(128,128,128,0.18); word-break: break-all; }
+    .ai-chat-office-diff td.before { color: #dc2626; text-decoration: line-through; }
+    .ai-chat-office-diff td.after { color: #16a34a; }
+    .ai-chat-office-actions { display: flex; gap: 6px; align-items: center; margin-top: 6px; }
+    .ai-chat-office-btn { padding: 2px 10px; border-radius: 4px; border: 1px solid rgba(128,128,128,0.4); background: transparent; color: inherit; cursor: pointer; }
+    .ai-chat-office-btn.apply { background: #2563eb; border-color: #2563eb; color: #fff; }
+    .ai-chat-office-status { color: var(--vscode-descriptionForeground, #94a3b8); }
     .ai-chat-panel {
       display: flex;
       flex-direction: column;
@@ -773,6 +802,93 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
   };
 
   const rendered = new Map<string, { message: ChatUiMessage; element: HTMLElement }>();
+  const formatCell = (value: AiOfficeCellChange['before']): string => (value === null || value === '' ? '∅' : String(value));
+
+  const updateOfficeEdit = (messageId: string, proposalId: string, patch: Partial<OfficeEditState>): void => {
+    const target = messages.find((item) => item.id === messageId);
+    if (!target?.officeEdits) return;
+    target.officeEdits = target.officeEdits.map((edit) => (edit.proposalId === proposalId ? { ...edit, ...patch } : edit));
+    renderMessages();
+  };
+
+  const findOfficeEdit = (predicate: (edit: OfficeEditState) => boolean): { message: ChatUiMessage; edit: OfficeEditState } | null => {
+    for (const message of messages) {
+      const edit = message.officeEdits?.find(predicate);
+      if (edit) return { message, edit };
+    }
+    return null;
+  };
+
+  const renderOfficeEdit = (edit: OfficeEditState, messageId: string): HTMLElement => {
+    const box = document.createElement('div');
+    box.className = `ai-chat-office-edit ${edit.status}`;
+    box.dataset.proposalId = edit.proposalId;
+    const title = document.createElement('div');
+    title.className = 'ai-chat-office-title';
+    title.textContent = tAiChat('office.title', { name: edit.fileName, count: edit.changes.length });
+    box.appendChild(title);
+    if (edit.structural.length > 0) {
+      const notes = document.createElement('div');
+      notes.className = 'ai-chat-office-notes';
+      notes.textContent = edit.structural.join('；');
+      box.appendChild(notes);
+    }
+    if (edit.changes.length > 0) {
+      const table = document.createElement('table');
+      table.className = 'ai-chat-office-diff';
+      const head = table.createTHead().insertRow();
+      for (const label of [tAiChat('office.cell'), tAiChat('office.before'), tAiChat('office.after')]) {
+        const th = document.createElement('th'); th.textContent = label; head.appendChild(th);
+      }
+      const body = table.createTBody();
+      for (const change of edit.changes.slice(0, MAX_OFFICE_DIFF_ROWS)) {
+        const row = body.insertRow();
+        row.insertCell().textContent = `${change.sheet}!${change.ref}`;
+        const before = row.insertCell(); before.className = 'before'; before.textContent = formatCell(change.before);
+        const after = row.insertCell(); after.className = 'after'; after.textContent = formatCell(change.after);
+      }
+      box.appendChild(table);
+    }
+    const hidden = Math.max(0, edit.changes.length - MAX_OFFICE_DIFF_ROWS);
+    if (hidden > 0 || edit.truncated) {
+      const more = document.createElement('div');
+      more.className = 'ai-chat-office-notes';
+      more.textContent = tAiChat('office.more', { count: hidden });
+      box.appendChild(more);
+    }
+    const actions = document.createElement('div');
+    actions.className = 'ai-chat-office-actions';
+    const button = (label: string, className: string, onClick: () => void): void => {
+      const element = document.createElement('button');
+      element.type = 'button';
+      element.className = `ai-chat-office-btn ${className}`;
+      element.textContent = label;
+      element.onclick = onClick;
+      actions.appendChild(element);
+    };
+    const decide = (accepted: boolean) => {
+      if (!activeRequestId) return;
+      deps.postMessage({ type: 'aiChat.officeDecision', requestId: activeRequestId, proposalId: edit.proposalId, accepted });
+      updateOfficeEdit(messageId, edit.proposalId, { status: accepted ? 'applying' : 'rejected' });
+    };
+    if (edit.status === 'pending') {
+      button(tAiChat('office.apply'), 'apply', () => decide(true));
+      button(tAiChat('office.reject'), 'reject', () => decide(false));
+    } else if (edit.status === 'applied' && edit.commitId) {
+      const commitId = edit.commitId;
+      button(tAiChat('office.undo'), 'undo', () => {
+        deps.postMessage({ type: 'aiChat.officeUndo', requestId: createRequestId(), commitId });
+        updateOfficeEdit(messageId, edit.proposalId, { status: 'undoing' });
+      });
+    }
+    const status = document.createElement('span');
+    status.className = 'ai-chat-office-status';
+    status.textContent = edit.status === 'error' && edit.error ? edit.error : tAiChat(`office.status.${edit.status}`);
+    actions.appendChild(status);
+    box.appendChild(actions);
+    return box;
+  };
+
   const renderMessages = (): void => {
     if (disposed || suspendedState) return;
     trimMessages();
@@ -824,6 +940,8 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         tools.title = message.toolCalls.map((call) => call.name).join(' → ');
         item.appendChild(tools);
       }
+
+      for (const edit of message.officeEdits ?? []) item.appendChild(renderOfficeEdit(edit, message.id));
 
       if (message.reasoning) {
         const details = document.createElement('details');
@@ -1468,9 +1586,41 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         });
         return true;
       }
+      case 'aiChat.officeProposal': {
+        if (message.requestId !== activeRequestId) return true;
+        const target = messages.find((item) => item.id === streamingMessageId);
+        if (!target) {
+          deps.postMessage({ type: 'aiChat.officeDecision', requestId: message.requestId, proposalId: message.proposalId, accepted: false });
+          return true;
+        }
+        target.officeEdits = [...(target.officeEdits ?? []), {
+          proposalId: message.proposalId,
+          fileName: message.fileName,
+          changes: message.changes,
+          structural: message.structural,
+          truncated: message.truncated,
+          status: 'pending',
+        }];
+        renderMessages();
+        return true;
+      }
+      case 'aiChat.officeCommitted': {
+        const found = findOfficeEdit((edit) => edit.proposalId === message.commitId);
+        if (found) updateOfficeEdit(found.message.id, found.edit.proposalId, { status: 'applied', commitId: message.commitId });
+        return true;
+      }
+      case 'aiChat.officeUndone': {
+        const found = findOfficeEdit((edit) => edit.commitId === message.commitId);
+        if (found) updateOfficeEdit(found.message.id, found.edit.proposalId, message.error ? { status: 'error', error: message.error } : { status: 'undone' });
+        return true;
+      }
       case 'aiChat.done': {
         if (message.requestId !== activeRequestId) return true;
         const target = messages.find((item) => item.id === streamingMessageId);
+        if (target?.officeEdits?.some((edit) => edit.status === 'applying' || edit.status === 'pending')) {
+          // A decision that never produced a commit was refused by the host (e.g. the file changed on disk).
+          target.officeEdits = target.officeEdits.map((edit) => (edit.status === 'applying' ? { ...edit, status: 'error', error: tAiChat('office.notWritten') } : edit.status === 'pending' ? { ...edit, status: 'rejected' } : edit));
+        }
         if (target) {
           target.content = message.content;
           target.reasoning = message.reasoning;
@@ -1486,6 +1636,9 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
       case 'aiChat.error': {
         if (message.requestId !== activeRequestId) return true;
         const target = messages.find((item) => item.id === streamingMessageId);
+        if (target?.officeEdits?.some((edit) => edit.status === 'pending' || edit.status === 'applying')) {
+          target.officeEdits = target.officeEdits.map((edit) => (edit.status === 'pending' || edit.status === 'applying' ? { ...edit, status: 'rejected' } : edit));
+        }
         if (message.aborted) {
           if (target) {
             target.badge = 'stopped';

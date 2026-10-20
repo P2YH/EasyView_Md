@@ -133,7 +133,7 @@ export type EditorToHostMessage =
   | { type: 'showInfo'; text: string }
   | { type: 'pickImage'; pos?: number }
   | { type: 'dropImages'; paths: string[]; pos?: number }
-  | { type: 'pasteImage'; dataUrl: string; mimeType?: string; name?: string; pos?: number }
+  | { type: 'pasteImage'; requestId: string; documentId: string; dataUrl: string; name?: string }
   | { type: 'exportPdfBase64'; data: string }
   | { type: 'exportDocx'; title: string; markdown: string; mermaidImages: Array<{ source: string; pngBase64: string; width: number; height: number }>; asciiImages: Array<{ source: string; pngBase64: string; width: number; height: number }> }
   | { type: 'exportXlsx'; payload: XlsxTablePayload; fileName: string }
@@ -173,6 +173,7 @@ export type HostToEditorMessage =
   | { type: 'requestExportHtml'; theme: 'light' | 'dark' }
   | { type: 'requestExportPdf'; theme: 'light' | 'dark' }
   | { type: 'requestExportDocx' }
+  | { type: 'pasteImageResult'; requestId: string; documentId: string; result: { ok: true; src: string; originalSrc: string } | { ok: false; message: string } }
   | { type: 'imageSelected'; src: string; originalSrc: string; pos?: number }
   | { type: 'imagesDropped'; images: ImagePayload[]; pos?: number }
   | { type: 'imageBase64Response'; requestId: string; base64: string | null }

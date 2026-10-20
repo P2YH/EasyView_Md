@@ -11,6 +11,7 @@ export * from './filesystem/file-write';
 export * from './git/git-service';
 export * from './image/image-security';
 export * from './image/image-service';
+export * from './image/document-image-assets';
 export * from './image/remote-image';
 export * from './terminal/terminal-service';
 export * from './workspace';

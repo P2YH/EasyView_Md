@@ -459,7 +459,10 @@ const disposeTitleBarOverlaySync = document.body.classList.contains('desktop-pla
     apply: api.window.setTitleBarOverlay,
     subscribe: (listener) => {
       const subscription = productAppearance.subscribe(listener);
-      return () => subscription.unsubscribe();
+      // The title-control background switches with the welcome page; repaint the native caption buttons too.
+      const welcomeObserver = new MutationObserver(listener);
+      welcomeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+      return () => { subscription.unsubscribe(); welcomeObserver.disconnect(); };
     },
   })
   : () => undefined;

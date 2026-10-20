@@ -402,7 +402,7 @@ export async function confirmCloseSession(session: DocumentSession): Promise<boo
   });
   if (response.response === 2) return false;
   if (response.response === 1) {
-    documentSessions.revertToDisk(session);
+    await documentSessions.revertToDisk(session);
     tabRegistry.setEditorDirty(session.tabId, false);
     syncTabState();
     if (sessionIsActive(session)) notifyActiveDocument('initial');
@@ -430,7 +430,7 @@ export async function confirmCloseAll(): Promise<boolean> {
   if (response.response === 2) return false;
   if (response.response === 1) {
     for (const session of dirtySessions) {
-      documentSessions.revertToDisk(session);
+      await documentSessions.revertToDisk(session);
       tabRegistry.setEditorDirty(session.tabId, false);
     }
     syncTabState();

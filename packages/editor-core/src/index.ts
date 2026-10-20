@@ -25,7 +25,7 @@ import { NoticeExtension } from './extensions/blocks/notice/NoticeExtension';
 import { HorizontalRuleExtension } from './extensions/blocks/horizontal-rule/HorizontalRuleExtension';
 import { TableExtension } from './extensions/blocks/table/TableExtension';
 import { setFirstRowStickyDefault } from './extensions/blocks/table/TablePreferences';
-import { cellPopupImageSelected } from './extensions/blocks/table/TableCellContentPopup';
+import type { ImagePasteRequest, PastedImage } from './editor/ImagePaste';
 import { ImageExtension } from './extensions/inline/image/ImageExtension';
 import { MermaidExtension } from './extensions/blocks/mermaid/MermaidExtension';
 import { PlantUmlExtension } from './extensions/blocks/plantuml/PlantUmlExtension';
@@ -161,6 +161,8 @@ export function createEasyViewEditor({ host, initialMessage, hostActions = {}, u
   }
 
   let disposed = false;
+  const imagePasteTasks = new Set<Promise<void>>();
+  const imagePasteRequests = new Map<string, { resolve(image: PastedImage): void; reject(error: Error): void }>();
   let readyRetryTimer: ReturnType<typeof setInterval> | null = null;
   let readyRetryStopTimer: ReturnType<typeof setTimeout> | null = null;
   let globalEditorView: EditorView | null = null;
@@ -228,7 +230,13 @@ let canPostEditsToHost = false;
 let editorSync: EditorSyncAdapter | null = null;
 let sourceEditor: ReturnType<typeof createSourceEditor> | null = null;
 let sourceModeController: SourceModeController | null = null;
-const toggleSourceMode = (): void => { sourceModeController?.toggleSourceMode(); };
+const toggleSourceMode = (): void => {
+  if (imagePasteTasks.size) {
+    void Promise.all(imagePasteTasks).then(() => { if (!disposed) sourceModeController?.toggleSourceMode(); });
+    return;
+  }
+  sourceModeController?.toggleSourceMode();
+};
 const openSourceDocument = (): void => { sourceModeController?.openSourceDocument(); };
 const openPreferredSourceMode = (): void => {
   if (host.capabilities.sourceMode === 'embedded') toggleSourceMode();
@@ -2054,7 +2062,9 @@ function initEditor() {
   const contextMenuCleanup = initContextMenu(
     editorElement,
     () => editor.view,
-    () => contextPasteParser
+    () => contextPasteParser,
+    dom.root,
+    error => showToast(error instanceof Error ? error.message : String(error)),
   );
 
   // Create Find & Replace panel
@@ -2585,15 +2595,34 @@ function initEditor() {
     const { paths, pos } = e.detail;
     host.postMessage({ type: 'dropImages', paths, pos });
   }) as EventListener;
-  const pasteImageHandler = ((e: CustomEvent) => {
-    const { dataUrl, mimeType, name, pos } = e.detail;
-    host.postMessage({ type: 'pasteImage', dataUrl, mimeType, name, pos });
+  const pasteImageHandler = ((event: CustomEvent<ImagePasteRequest>) => {
+    event.stopPropagation();
+    const request = event.detail;
+    const documentId = editorSync?.documentId;
+    if (!documentId) { request.cancel(); return; }
+    const requestId = crypto.randomUUID();
+    const task = request.image.then(async ({ dataUrl, name }) => {
+      if (disposed) return;
+      const saved = new Promise<PastedImage>((resolve, reject) => {
+        imagePasteRequests.set(requestId, { resolve, reject });
+        Promise.resolve(host.postMessage({ type: 'pasteImage', requestId, documentId, dataUrl, name })).catch(reject);
+      });
+      const image = await saved;
+      if (!disposed) request.insert(image);
+    }).catch(error => {
+      request.cancel();
+      if (!disposed) showToast(error instanceof Error ? error.message : String(error));
+    }).finally(() => {
+      imagePasteRequests.delete(requestId);
+      imagePasteTasks.delete(task);
+    });
+    imagePasteTasks.add(task);
   }) as EventListener;
   dom.eventTarget.addEventListener('inlinemd:openLink', openLinkHandler);
   dom.eventTarget.addEventListener('inlinemd:imageSelected', imageSelectedHandler);
   dom.eventTarget.addEventListener('inlinemd:pickImage', pickImageHandler);
   dom.eventTarget.addEventListener('inlinemd:dropImages', dropImagesHandler);
-  dom.eventTarget.addEventListener('inlinemd:pasteImage', pasteImageHandler);
+  dom.eventTarget.addEventListener('inlinemd:savePastedImage', pasteImageHandler);
 
   // 8. Theme change observer
   const themeChangeHandler = ((event: CustomEvent) => {
@@ -2607,6 +2636,16 @@ function initEditor() {
   let initReceived = false;
 
   const handleHostMessage = (message: HostToEditorMessage): void => {
+    if (message.type === 'pasteImageResult') {
+      const request = imagePasteRequests.get(message.requestId);
+      if (request) {
+        if (message.result.ok) {
+          editor.addImagePath(message.result.originalSrc, message.result.src);
+          request.resolve(message.result);
+        } else request.reject(new Error(message.result.message));
+      }
+      return;
+    }
     if (terminalModal.handleMessage(message)) {
       return;
     }
@@ -2668,9 +2707,6 @@ function initEditor() {
       onRequestExportDocx: () => void exportController.exportDocx(),
       onImageSelected: ({ src, originalSrc, pos }) => {
         if (!src) return;
-        // Image paste initiated inside the cell content popup editor: route
-        // the reply to the popup editor instead of the main document.
-        if (cellPopupImageSelected(src, originalSrc, typeof pos === 'number' ? pos : -1)) return;
         editor.insertImage(src, originalSrc, pos);
         if (typeof pos === 'number' && pos >= 0) showToast(tEditorCore('image.replaced'));
       },
@@ -2828,7 +2864,9 @@ function initEditor() {
       dom.eventTarget.removeEventListener('inlinemd:imageSelected', imageSelectedHandler);
       dom.eventTarget.removeEventListener('inlinemd:pickImage', pickImageHandler);
       dom.eventTarget.removeEventListener('inlinemd:dropImages', dropImagesHandler);
-      dom.eventTarget.removeEventListener('inlinemd:pasteImage', pasteImageHandler);
+      dom.eventTarget.removeEventListener('inlinemd:savePastedImage', pasteImageHandler);
+      imagePasteRequests.forEach(request => request.reject(new Error('Editor disposed')));
+      imagePasteRequests.clear();
       dom.eventTarget.removeEventListener('inlinemd:themeChanged', themeChangeHandler);
       dom.eventTarget.removeEventListener('easyview-toc-layout-change', refreshChangeRailsAfterLayout);
       dom.eventTarget.removeEventListener('easyview-editor-layout-change', refreshChangeRailsAfterLayout);

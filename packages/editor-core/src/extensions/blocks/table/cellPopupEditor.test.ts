@@ -13,7 +13,6 @@ import {
   createCellPopupEditor,
   disposeCellPopupEditor,
   getCellPopupEditor,
-  handlePopupImageSelected,
   locateCellNode,
   saveCellPopupContent,
 } from './cellPopupEditor';
@@ -186,28 +185,5 @@ describe('locateCellNode', () => {
     const doc = parseDoc(SAMPLE_MD);
     const mainView = createView(doc);
     expect(locateCellNode(mainView, document.createElement('td'))).toBeNull();
-  });
-});
-
-describe('handlePopupImageSelected', () => {
-  it('does nothing when no popup image paste is pending', () => {
-    expect(handlePopupImageSelected('src', 'orig', 0)).toBe(false);
-  });
-
-  it('routes the image into the popup editor after a pasteImage event', () => {
-    const { node } = findCellNode(parseDoc(SAMPLE_MD))!;
-    createCellPopupEditor(node, document.createElement('div'));
-    window.dispatchEvent(new Event('inlinemd:pasteImage'));
-    const popupEditor = getCellPopupEditor()!;
-    const insertPos = popupEditor.state.doc.content.size;
-
-    expect(handlePopupImageSelected('https://example/1.png', './img/1.png', insertPos)).toBe(true);
-    let hasImage = false;
-    popupEditor.state.doc.descendants((child) => {
-      if (child.type.name === 'image' && child.attrs.src === 'https://example/1.png') hasImage = true;
-      return true;
-    });
-    expect(hasImage).toBe(true);
-    disposeCellPopupEditor();
   });
 });

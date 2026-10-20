@@ -1,5 +1,6 @@
 import type { FSWatcher } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { DocumentImageAssets } from '@easyview/node-runtime';
 import path from 'node:path';
 import type { EditorUiStatePayload } from '@easyview/contracts';
 import { DesktopDocumentAdapter } from './desktopDocumentAdapter';
@@ -28,6 +29,7 @@ export interface DocumentSession {
   externalConflict: DocumentExternalConflict | null;
   readonly documentId: string;
   readonly documentAdapter: DesktopDocumentAdapter;
+  readonly imageAssets: DocumentImageAssets;
   readonly sync: DocumentSyncSession;
   uiState?: EditorUiStatePayload;
 }
@@ -64,6 +66,7 @@ export function createDocumentSession(input: {
     externalConflict: null,
     documentId,
     documentAdapter: adapter,
+    imageAssets: new DocumentImageAssets(),
     sync: new DocumentSyncSession({ documentId, initialContent: adapter.content }),
   };
 }

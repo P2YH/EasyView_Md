@@ -22,6 +22,7 @@ export function initContextMenu(
   getView: () => EditorView | null,
   getPasteParser: () => MarkdownParser,
   root: EasyViewEditorRoot = document,
+  onPasteError: (error: unknown) => void = console.error,
 ): () => void {
   const dom = createEditorDomContext(root);
   let disposed = false;
@@ -66,7 +67,7 @@ export function initContextMenu(
         label: tContextMenu('paste'),
         shortcut: 'Ctrl+V',
         action: () => {
-          handlePasteFromClipboard(view, pasteParser);
+          void handlePasteFromClipboard(view, pasteParser).catch(onPasteError);
           hide();
         },
       },

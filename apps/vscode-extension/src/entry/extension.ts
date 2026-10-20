@@ -11,6 +11,7 @@ import { setPendingCursorForUri } from '../application/document/openCursorContex
 import { setPendingDocumentContentForUri } from '../application/document/openDocumentSnapshot';
 import { logOpenWithDebug } from '../application/document/openWithDebug';
 import { registerNativeMarkdownImagePaste } from '../native-editor/nativeImagePaste';
+import { markdownImageAssets } from '../application/document/markdownImageAssets';
 import { suppressNativeOutlineRestore } from '../native-editor/nativeOutlineNavigation';
 import { registerWordToMarkdownCommand } from '../application/document/wordToMarkdown';
 import { registerPdfToMarkdownCommand } from '../application/document/pdfToMarkdown';
@@ -100,6 +101,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Must register before markdown CustomTextEditor opens easyviewMd: URIs.
   context.subscriptions.push(registerEasyViewMarkdownFileSystem());
   context.subscriptions.push(registerMirrorSavePropagation());
+  context.subscriptions.push(markdownImageAssets.register());
 
   const mermaidRenderer = NativeMermaidRenderer.register(context);
   context.subscriptions.push(NativeMarkdownDecorator.register(context, mermaidRenderer));

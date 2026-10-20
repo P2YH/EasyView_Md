@@ -6,7 +6,6 @@ import {
   getCellPopupEditor,
   locateCellNode,
   saveCellPopupContent,
-  handlePopupImageSelected,
 } from './cellPopupEditor';
 import { tTable } from './table.i18n';
 
@@ -111,7 +110,7 @@ export function showTableCellContentPopup(cell: HTMLTableCellElement, runtime: E
   popup.setAttribute('aria-label', tTable('cellPopup.label'));
   const popupEditor = createCellPopupEditor(located.node, popup);
   if (!popupEditor) return;
-  document.body.appendChild(popup);
+  view.dom.parentElement!.appendChild(popup);
   activePopup = popup;
   activeCell = cell;
   activeRuntimeContext = runtime;
@@ -171,7 +170,3 @@ export function showTableCellContentPopup(cell: HTMLTableCellElement, runtime: E
 export function closeTableCellContentPopup(_runtime?: EditorRuntimeContext): void {
   closeActivePopup();
 }
-
-// Re-exported so index.ts can route `imageSelected` replies into the popup
-// editor without importing the editor module directly.
-export { handlePopupImageSelected as cellPopupImageSelected };

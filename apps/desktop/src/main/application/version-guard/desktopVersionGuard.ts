@@ -44,7 +44,7 @@ export async function handleVersionGuard(sender: WebContents, request: GuardRequ
             for (const entry of entries) {
               const raw = await fs.readFile(entry.session.filePath!, 'utf8').catch(error => { if (error.code === 'ENOENT') return null; throw error; });
               await runInWindowContext(entry.context, async () => {
-                if (raw === null) { entry.context.documentSessions.revertToDisk(entry.session); await closeTab(entry.session.tabId); }
+                if (raw === null) { await entry.context.documentSessions.revertToDisk(entry.session); await closeTab(entry.session.tabId); }
                 else { entry.context.documentSessions.applyDiskReload(entry.session, raw, (await fs.stat(entry.session.filePath!)).mtimeMs); sendEditorMessage(editorDocumentMessage(entry.session, 'reload')); syncTabState(); }
               });
             }

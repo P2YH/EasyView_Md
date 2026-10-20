@@ -11,6 +11,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { syntaxHighlighting, HighlightStyle, bracketMatching } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
 import { closeBrackets } from '@codemirror/autocomplete';
+import { clipboardImage, requestImagePaste } from './ImagePaste';
 import { findHorizontalRuleLines } from '@easyview/markdown-core/horizontal-rule';
 
 const vscodeTheme = EditorView.theme({
@@ -579,6 +580,7 @@ export interface SourceEditorOptions {
   onChange: (content: string, edits?: import('@easyview/editor-sync').TextOffsetPatch[]) => void;
   visualMode?: 'default' | 'stickyNoteCompactMarkdown' | 'changeViewMarkdown';
   extraExtensions?: Extension[];
+  imagePaste?: boolean;
   enableWordWrapToggle?: boolean;
   lineWrapping?: boolean;
   onSelectionOrDocChange?: () => void;
@@ -654,6 +656,23 @@ const ghostSuggestionField = StateField.define<SourceGhostSuggestion | null>({
   }),
 });
 
+const imagePasteRange = StateEffect.define<{ id: object; from?: number; to?: number }>();
+const pendingImageRanges = StateField.define<Map<object, { from: number; to: number }>>({
+  create: () => new Map(),
+  update(previous, tr) {
+    const next = new Map<object, { from: number; to: number }>();
+    previous.forEach((range, id) => next.set(id, {
+      from: tr.changes.mapPos(range.from, 1), to: tr.changes.mapPos(range.to, 1),
+    }));
+    for (const effect of tr.effects) if (effect.is(imagePasteRange)) {
+      const { id, from, to } = effect.value;
+      if (from === undefined || to === undefined) next.delete(id);
+      else next.set(id, { from, to });
+    }
+    return next;
+  },
+});
+
 export function createSourceEditor(options: SourceEditorOptions) {
   const visualMode = options.visualMode ?? 'default';
   const highlightStyle = visualMode === 'stickyNoteCompactMarkdown'
@@ -668,6 +687,7 @@ export function createSourceEditor(options: SourceEditorOptions) {
       : [];
   const markdownDecoPlugin = createMarkdownDecoPlugin(visualMode);
   let suppressChange = false;
+  let destroyed = false;
   const lineWrappingCompartment = new Compartment();
   let wrappingEnabled = options.lineWrapping !== false;
   let tabCompletionInFlight = false;
@@ -901,6 +921,36 @@ export function createSourceEditor(options: SourceEditorOptions) {
         sourceSearchDecorations,
         lineWrappingCompartment.of(options.lineWrapping === false ? [] : EditorView.lineWrapping),
         onChangeExtension,
+        ...(options.imagePaste ? [pendingImageRanges, EditorView.domEventHandlers({
+          paste(event, cmView) {
+            const image = clipboardImage(event.clipboardData);
+            if (!image) return false;
+            event.preventDefault();
+            const id = {};
+            const { from, to } = cmView.state.selection.main;
+            cmView.dispatch({ effects: imagePasteRange.of({ id, from, to }) });
+            const cancel = () => {
+              if (!destroyed) cmView.dispatch({ effects: imagePasteRange.of({ id }) });
+            };
+            requestImagePaste(cmView.dom, {
+              image, cancel,
+              insert({ originalSrc }) {
+                if (destroyed) return;
+                const range = cmView.state.field(pendingImageRanges).get(id);
+                if (!range) return;
+                const insert = `![](${/[\s()]/.test(originalSrc) ? `<${originalSrc}>` : originalSrc})`;
+                cmView.dispatch({
+                  changes: { ...range, insert },
+                  selection: { anchor: range.from + insert.length },
+                  effects: imagePasteRange.of({ id }),
+                  annotations: Transaction.userEvent.of('input.paste'),
+                  scrollIntoView: true,
+                });
+              },
+            });
+            return true;
+          },
+        })] : []),
         ...(options.extraExtensions ?? []),
       ],
     }),
@@ -966,6 +1016,7 @@ export function createSourceEditor(options: SourceEditorOptions) {
     },
     focus: () => view.focus(),
     destroy: () => {
+      destroyed = true;
       previewRequestToken++;
       if (previewTimeoutId) {
         clearTimeout(previewTimeoutId);

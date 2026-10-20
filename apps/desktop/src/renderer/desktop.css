@@ -657,3 +657,28 @@ body.dock-dragging, body.dock-dragging * { cursor: grabbing !important; user-sel
 .guard-width-resizer{position:absolute;right:-3px;top:0;bottom:0;width:6px;cursor:col-resize;z-index:5}
 #version-guard-host[data-dock-side="right"] .guard-width-resizer{right:auto;left:-3px}
 
+
+/* Welcome page (no tabs): the tab strip is hidden, so nothing at the top edge was draggable and the
+ * title-control backgrounds (editorWidget) plus the chrome border formed a mismatched bar.
+ * Provide a drag strip in the welcome colour; the title controls are appended later in document order,
+ * so they stay no-drag (see windowChrome.ts). */
+body.desktop-welcome-active #desktop-center-pane { position: relative; }
+body.desktop-welcome-active #desktop-center-pane::before { content: ''; position: absolute; inset: 0 0 auto; z-index: 1; height: var(--desktop-chrome-height); background: var(--vscode-editor-background); -webkit-app-region: drag; }
+body.desktop-welcome-full #desktop-title-left, body.desktop-welcome-full #desktop-title-actions { background: var(--vscode-editor-background); }
+body.desktop-welcome-full #desktop-root::after { border-bottom-color: transparent; }
+/* Folder open, no tabs (empty state): match the side panels' control background instead of the editor white. */
+body.desktop-welcome-active:not(.desktop-welcome-full) #desktop-welcome,
+body.desktop-welcome-active:not(.desktop-welcome-full) #desktop-center-pane::before { background: var(--vscode-editorWidget-background); }
+/* Empty state: frame the full-width top strip on all four sides (overlay is pointer-events: none, so drag/clicks pass through). */
+body.desktop-welcome-active:not(.desktop-welcome-full) #desktop-root::after { border: 1px solid var(--vscode-panel-border); }
+/* Windows: the native caption buttons (titleBarOverlay, 32px tall) paint over the top-right ~140px.
+ * Drop the frame's bottom edge 1px below the overlay so it stays continuous under the buttons;
+ * the overlay itself is repainted with #desktop-title-actions' gray via titleBarOverlaySync. */
+body.desktop-platform-other.desktop-welcome-active:not(.desktop-welcome-full) #desktop-root::after { height: 33px; }
+/* Empty state: column dividers stop at the top strip so it reads as one framed bar. border-image keeps the
+ * 1px divider below the strip without changing layout (the panels clip overflow, so it cannot be painted over). */
+body.desktop-welcome-active:not(.desktop-welcome-full) :is(#workspace-explorer, #version-guard-host, #desktop-ai-chat-host > .ai-chat-panel) {
+  border-image: linear-gradient(to bottom, var(--vscode-editorWidget-background) var(--desktop-chrome-height), var(--vscode-panel-border) var(--desktop-chrome-height)) 1;
+}
+/* Version Guard host has no own background; fill it so the transparent divider segment shows gray, not body white. */
+body.desktop-welcome-active:not(.desktop-welcome-full) #version-guard-host { background-color: var(--vscode-editorWidget-background); }

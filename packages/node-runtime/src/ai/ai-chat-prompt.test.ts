@@ -73,4 +73,12 @@ describe('buildAiChatMessages', () => {
     const parts = messages[messages.length - 1].content as Array<{ type: string }>;
     expect(parts).toEqual([{ type: 'image_url', image_url: { url: 'https://example.com/b.png' } }]);
   });
+  it('xlsx agent mode uses workbook instructions instead of text patch rules', () => {
+    const messages = buildAiChatMessages({ systemPrompt: '', mode: 'agent', history: [], userMessage: '汇总', attachments: [], documentFileName: 'sales.xlsx', documentKind: 'xlsx' });
+    const system = messages[0].content as string;
+    expect(system).toContain('inspect_workbook');
+    expect(system).toContain('apply_sheet_ops');
+    expect(system).toContain('sales.xlsx');
+    expect(system).not.toContain('apply_patch');
+  });
 });

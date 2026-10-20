@@ -269,7 +269,7 @@ describe('AI conversation lifetime', () => {
   it('shows an xlsx cell diff, writes only on Apply, and offers Undo', () => {
     const { panel, sent, send } = setup();
     const requestId = send('把 B2 改成 7');
-    panel.handleMessage({ type: 'aiChat.officeProposal', requestId, proposalId: 'p1', fileName: 'book.xlsx', changes: [{ sheet: 'Sales', ref: 'B2', before: 3, after: 7 }], structural: [], truncated: false });
+    panel.handleMessage({ type: 'aiChat.officeProposal', requestId, proposalId: 'p1', fileName: 'book.xlsx', changes: [{ sheet: 'Sales', ref: 'B2', before: 3, after: 7 }], total: 1, structural: [], truncated: false });
     const box = document.querySelector('.ai-chat-office-edit')!;
     expect(box.textContent).toContain('book.xlsx');
     expect(box.querySelector('td.before')!.textContent).toBe('3');
@@ -290,11 +290,22 @@ describe('AI conversation lifetime', () => {
   it('rejecting a proposal sends a negative decision and keeps no buttons', () => {
     const { panel, sent, send } = setup();
     const requestId = send('改');
-    panel.handleMessage({ type: 'aiChat.officeProposal', requestId, proposalId: 'p2', fileName: 'b.xlsx', changes: [{ sheet: 'S', ref: 'A1', before: null, after: 'x' }], structural: ['S: +1 row(s) at 2'], truncated: false });
+    panel.handleMessage({ type: 'aiChat.officeProposal', requestId, proposalId: 'p2', fileName: 'b.xlsx', changes: [{ sheet: 'S', ref: 'A1', before: null, after: 'x' }], total: 1, structural: ['S: +1 row(s) at 2'], truncated: false });
     document.querySelector<HTMLButtonElement>('.ai-chat-office-btn.reject')!.click();
     expect(sent).toContainEqual({ type: 'aiChat.officeDecision', requestId, proposalId: 'p2', accepted: false });
     expect(document.querySelector('.ai-chat-office-edit')!.classList.contains('rejected')).toBe(true);
     expect(document.querySelector('.ai-chat-office-btn')).toBeNull();
+    panel.destroy();
+  });
+  it('summarizes a large proposal and renders only the first 50 rows', () => {
+    const { panel, send } = setup();
+    const requestId = send('全部单价上调 10%');
+    const changes = Array.from({ length: 1000 }, (_, i) => ({ sheet: 'S', ref: `C${i + 2}`, before: i, after: i * 1.1 }));
+    panel.handleMessage({ type: 'aiChat.officeProposal', requestId, proposalId: 'big', fileName: 'big.xlsx', changes, total: 30000, structural: [], truncated: true });
+    const box = document.querySelector('.ai-chat-office-edit')!;
+    expect(box.querySelectorAll('tbody tr')).toHaveLength(50);
+    expect(box.querySelector('.ai-chat-office-title')!.textContent).toContain('共 30000 处');
+    expect(box.querySelector('.ai-chat-office-more')!.textContent).toBe('共 30000 处修改，仅显示前 50 处');
     panel.destroy();
   });
 });

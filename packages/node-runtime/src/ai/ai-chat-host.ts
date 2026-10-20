@@ -148,7 +148,7 @@ export class AiChatHost {
       try {
         const office = this.options.officeEdits!;
         if (office.showProposal) office.showProposal(requestId, proposal);
-        else this.options.postMessage({ type: 'aiChat.officeProposal', requestId, proposalId: proposal.id, fileName: proposal.fileName, changes: proposal.diff.changes, structural: proposal.diff.structural, truncated: proposal.diff.truncated });
+        else this.options.postMessage({ type: 'aiChat.officeProposal', requestId, proposalId: proposal.id, fileName: proposal.fileName, changes: proposal.diff.changes, total: proposal.diff.total, structural: proposal.diff.structural, truncated: proposal.diff.truncated });
       }
       catch (error) { finish({ accepted: false, reason: toErrorMessage(error) }); }
     });

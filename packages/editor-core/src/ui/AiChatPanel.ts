@@ -47,6 +47,7 @@ interface OfficeEditState {
   proposalId: string;
   fileName: string;
   changes: AiOfficeCellChange[];
+  total: number;
   structural: string[];
   truncated: boolean;
   status: OfficeEditStatus;
@@ -825,7 +826,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
     box.dataset.proposalId = edit.proposalId;
     const title = document.createElement('div');
     title.className = 'ai-chat-office-title';
-    title.textContent = tAiChat('office.title', { name: edit.fileName, count: edit.changes.length });
+    title.textContent = tAiChat('office.title', { name: edit.fileName, count: edit.total });
     box.appendChild(title);
     if (edit.structural.length > 0) {
       const notes = document.createElement('div');
@@ -849,11 +850,11 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
       }
       box.appendChild(table);
     }
-    const hidden = Math.max(0, edit.changes.length - MAX_OFFICE_DIFF_ROWS);
-    if (hidden > 0 || edit.truncated) {
+    const shown = Math.min(edit.changes.length, MAX_OFFICE_DIFF_ROWS);
+    if (edit.total > shown) {
       const more = document.createElement('div');
-      more.className = 'ai-chat-office-notes';
-      more.textContent = tAiChat('office.more', { count: hidden });
+      more.className = 'ai-chat-office-notes ai-chat-office-more';
+      more.textContent = tAiChat('office.more', { total: edit.total, shown });
       box.appendChild(more);
     }
     const actions = document.createElement('div');
@@ -1597,6 +1598,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
           proposalId: message.proposalId,
           fileName: message.fileName,
           changes: message.changes,
+          total: message.total,
           structural: message.structural,
           truncated: message.truncated,
           status: 'pending',

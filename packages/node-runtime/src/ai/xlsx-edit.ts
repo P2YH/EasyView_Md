@@ -16,14 +16,19 @@ import { writeFileAtomically } from '../filesystem/file-write';
 import { tAi } from './ai.i18n';
 
 export const XLSX_MAX_FILE_BYTES = 20 * 1024 * 1024;
-export const XLSX_MAX_OPS = 200;
+/** Max ops in one apply_sheet_ops call. Prefer range ops for big batches: they are far shorter for the model to emit. */
+export const XLSX_MAX_OPS = 30_000;
+/** Max cells a single call may touch through range ops (setRange / transformRange / replaceWhere). */
+export const XLSX_MAX_RANGE_CELLS = 500_000;
 export const XLSX_MAX_DIFF_ENTRIES = 1000;
 export const XLSX_DEFAULT_PREVIEW_ROWS = 20;
 export const XLSX_MAX_PREVIEW_ROWS = 200;
 export const XLSX_MAX_PREVIEW_COLUMNS = 50;
-export const XLSX_OPERATION_TIMEOUT_MS = 30_000;
+export const XLSX_OPERATION_TIMEOUT_MS = 120_000;
 
 const CELL_REF = /^[A-Z]{1,3}[1-9][0-9]{0,6}$/;
+const RANGE_REF = /^[A-Z]{1,3}[1-9][0-9]{0,6}(:[A-Z]{1,3}[1-9][0-9]{0,6})?$/;
+const COLUMN_REF = /^[A-Z]{1,3}$/;
 const cellValueSchema = z.union([z.string().max(32_767), z.number().finite(), z.boolean(), z.null()]);
 const sheetName = z.string().min(1).max(31);
 
@@ -47,6 +52,40 @@ export const xlsxSheetOpSchema = z.discriminatedUnion('op', [
     at: z.number().int().min(1).max(1_048_576),
     count: z.number().int().min(1).max(500),
   }),
+  z.object({
+    op: z.literal('setRange'),
+    sheet: sheetName,
+    range: z.string().regex(RANGE_REF),
+    value: cellValueSchema.optional(),
+    /** May use {row} / {col} placeholders, e.g. "=B{row}*C{row}". */
+    formula: z.string().min(1).max(8192).optional(),
+  }).refine((op) => (op.value === undefined) !== (op.formula === undefined), { message: 'setRange needs exactly one of value or formula' }),
+  z.object({
+    op: z.literal('transformRange'),
+    sheet: sheetName,
+    range: z.string().regex(RANGE_REF),
+    transform: z.enum(['multiply', 'add', 'round', 'replaceText', 'prefix', 'suffix', 'clear']),
+    number: z.number().finite().optional(),
+    digits: z.number().int().min(0).max(10).optional(),
+    find: z.string().min(1).max(1000).optional(),
+    text: z.string().max(1000).optional(),
+  }).refine((op) => {
+    if (op.transform === 'multiply' || op.transform === 'add') return op.number !== undefined;
+    if (op.transform === 'replaceText') return op.find !== undefined && op.text !== undefined;
+    if (op.transform === 'prefix' || op.transform === 'suffix') return op.text !== undefined;
+    return true;
+  }, { message: 'transformRange is missing the argument its transform needs' }),
+  z.object({
+    op: z.literal('replaceWhere'),
+    sheet: sheetName,
+    matchColumn: z.string().regex(COLUMN_REF),
+    equals: cellValueSchema,
+    setColumn: z.string().regex(COLUMN_REF),
+    value: cellValueSchema.optional(),
+    formula: z.string().min(1).max(8192).optional(),
+    fromRow: z.number().int().min(1).max(1_048_576).optional(),
+    toRow: z.number().int().min(1).max(1_048_576).optional(),
+  }).refine((op) => (op.value === undefined) !== (op.formula === undefined), { message: 'replaceWhere needs exactly one of value or formula' }),
   z.object({
     op: z.literal('setStyle'),
     sheet: sheetName,
@@ -86,6 +125,8 @@ export interface XlsxCellChange {
 
 export interface XlsxDiff {
   changes: XlsxCellChange[];
+  /** Number of changed cells, including those beyond the `changes` cap. */
+  total: number;
   truncated: boolean;
   /** Row-structure summary per op so the UI can explain shifted rows. */
   structural: string[];
@@ -206,9 +247,77 @@ function requireSheet(workbook: ExcelJS.Workbook, name: string): ExcelJS.Workshe
   return sheet;
 }
 
+function columnNumber(letters: string): number {
+  let n = 0;
+  for (const ch of letters) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n;
+}
+
+export function parseRange(range: string): { top: number; left: number; bottom: number; right: number; cells: number } {
+  const [start, end = start] = range.split(':');
+  const parse = (ref: string) => { const m = /^([A-Z]+)(\d+)$/.exec(ref)!; return { col: columnNumber(m[1]), row: Number(m[2]) }; };
+  const a = parse(start); const b = parse(end);
+  const top = Math.min(a.row, b.row); const bottom = Math.max(a.row, b.row);
+  const left = Math.min(a.col, b.col); const right = Math.max(a.col, b.col);
+  return { top, left, bottom, right, cells: (bottom - top + 1) * (right - left + 1) };
+}
+
+function fillFormula(formula: string, row: number, col: number): ExcelJS.CellValue {
+  return { formula: formula.replace(/^=/, '').replace(/\{row\}/g, String(row)).replace(/\{col\}/g, columnLetter(col)) };
+}
+
+function transformCell(cell: ExcelJS.Cell, op: Extract<XlsxSheetOp, { op: 'transformRange' }>): void {
+  const value = cell.value;
+  switch (op.transform) {
+    case 'clear': cell.value = null; return;
+    case 'multiply': if (typeof value === 'number') cell.value = value * op.number!; return;
+    case 'add': if (typeof value === 'number') cell.value = value + op.number!; return;
+    case 'round': if (typeof value === 'number') { const f = 10 ** (op.digits ?? 0); cell.value = Math.round(value * f) / f; } return;
+    case 'replaceText': if (typeof value === 'string') cell.value = value.split(op.find!).join(op.text!); return;
+    case 'prefix': if (typeof value === 'string' || typeof value === 'number') cell.value = `${op.text}${value}`; return;
+    case 'suffix': if (typeof value === 'string' || typeof value === 'number') cell.value = `${value}${op.text}`; return;
+  }
+}
+
+/** Cells a range op will touch; used to enforce XLSX_MAX_RANGE_CELLS before any work. */
+export function rangeOpCells(op: XlsxSheetOp): number {
+  if (op.op === 'setRange' || op.op === 'transformRange') return parseRange(op.range).cells;
+  // replaceWhere is bounded by the sheet's own row count, so it needs no up-front cap.
+  return 0;
+}
+
 function applyOp(workbook: ExcelJS.Workbook, op: XlsxSheetOp): string | null {
   const sheet = requireSheet(workbook, op.sheet);
   switch (op.op) {
+    case 'setRange': {
+      const r = parseRange(op.range);
+      for (let row = r.top; row <= r.bottom; row += 1) {
+        const line = sheet.getRow(row);
+        for (let col = r.left; col <= r.right; col += 1) {
+          line.getCell(col).value = op.formula !== undefined ? fillFormula(op.formula, row, col) : (op.value ?? null);
+        }
+      }
+      return null;
+    }
+    case 'transformRange': {
+      const r = parseRange(op.range);
+      const bottom = Math.min(r.bottom, sheet.rowCount);
+      for (let row = r.top; row <= bottom; row += 1) {
+        const line = sheet.getRow(row);
+        for (let col = r.left; col <= r.right; col += 1) transformCell(line.getCell(col), op);
+      }
+      return null;
+    }
+    case 'replaceWhere': {
+      const match = columnNumber(op.matchColumn); const target = columnNumber(op.setColumn);
+      const bottom = Math.min(op.toRow ?? sheet.rowCount, sheet.rowCount);
+      for (let row = op.fromRow ?? 2; row <= bottom; row += 1) {
+        const line = sheet.getRow(row);
+        if (normalizeCellValue(line.getCell(match).value) !== op.equals) continue;
+        line.getCell(target).value = op.formula !== undefined ? fillFormula(op.formula, row, target) : (op.value ?? null);
+      }
+      return null;
+    }
     case 'setCell': {
       const cell = sheet.getCell(op.ref);
       cell.value = op.formula !== undefined ? { formula: op.formula.replace(/^=/, '') } : (op.value ?? null);
@@ -237,33 +346,37 @@ function applyOp(workbook: ExcelJS.Workbook, op: XlsxSheetOp): string | null {
 export function diffWorkbookGrids(
   before: Map<string, Map<string, XlsxCellValue>>,
   after: Map<string, Map<string, XlsxCellValue>>,
-): { changes: XlsxCellChange[]; truncated: boolean } {
+): { changes: XlsxCellChange[]; total: number; truncated: boolean } {
   const changes: XlsxCellChange[] = [];
-  let truncated = false;
+  let total = 0;
   const sheets = new Set([...before.keys(), ...after.keys()]);
   for (const sheet of sheets) {
-    const a = before.get(sheet) ?? new Map();
-    const b = after.get(sheet) ?? new Map();
-    const refs = [...new Set([...a.keys(), ...b.keys()])].sort(compareRefs);
-    for (const ref of refs) {
+    const a = before.get(sheet) ?? new Map<string, XlsxCellValue>();
+    const b = after.get(sheet) ?? new Map<string, XlsxCellValue>();
+    // Collect changed refs first (linear), then sort only those by a precomputed numeric key.
+    const changed: Array<{ key: number; ref: string; before: XlsxCellValue; after: XlsxCellValue }> = [];
+    const visit = (ref: string) => {
       const prev = a.get(ref) ?? null;
       const next = b.get(ref) ?? null;
-      if (prev === next) continue;
-      if (changes.length >= XLSX_MAX_DIFF_ENTRIES) { truncated = true; break; }
-      changes.push({ sheet, ref, before: prev, after: next });
+      if (prev !== next) changed.push({ key: refSortKey(ref), ref, before: prev, after: next });
+    };
+    for (const ref of a.keys()) visit(ref);
+    for (const ref of b.keys()) if (!a.has(ref)) visit(ref);
+    total += changed.length;
+    if (changes.length >= XLSX_MAX_DIFF_ENTRIES) continue;
+    changed.sort((left, right) => left.key - right.key);
+    for (const item of changed) {
+      if (changes.length >= XLSX_MAX_DIFF_ENTRIES) break;
+      changes.push({ sheet, ref: item.ref, before: item.before, after: item.after });
     }
   }
-  return { changes, truncated };
+  return { changes, total, truncated: total > changes.length };
 }
 
-function compareRefs(left: string, right: string): number {
-  const parse = (ref: string) => {
-    const match = /^([A-Z]+)(\d+)$/.exec(ref)!;
-    return { col: match[1], row: Number(match[2]) };
-  };
-  const a = parse(left);
-  const b = parse(right);
-  return a.row - b.row || a.col.length - b.col.length || a.col.localeCompare(b.col);
+/** Row-major sort key for an A1 reference (rows up to 2^20, columns up to 16384). */
+function refSortKey(ref: string): number {
+  const match = /^([A-Z]+)(\d+)$/.exec(ref)!;
+  return Number(match[2]) * 20_000 + columnNumber(match[1]);
 }
 
 function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
@@ -282,6 +395,8 @@ export async function planXlsxEdit(
   timeoutMs = XLSX_OPERATION_TIMEOUT_MS,
 ): Promise<XlsxProposal> {
   const ops = xlsxSheetOpsSchema.parse(rawOps);
+  const rangeCells = ops.reduce((sum, op) => sum + rangeOpCells(op), 0);
+  if (rangeCells > XLSX_MAX_RANGE_CELLS) throw new Error(tAi('xlsx.rangeTooLarge', { cells: rangeCells, max: XLSX_MAX_RANGE_CELLS }));
   return withTimeout((async () => {
     const bytes = await readXlsxBytes(filePath);
     const baseFingerprint = fingerprintBytes(bytes);
@@ -294,7 +409,7 @@ export async function planXlsxEdit(
       if (note) structural.push(note);
     }
     const gridOf = (book: ExcelJS.Workbook) => new Map(book.worksheets.map((sheet) => [sheet.name, sheetGrid(sheet)]));
-    const { changes, truncated } = diffWorkbookGrids(gridOf(original), gridOf(workbook));
+    const { changes, total, truncated } = diffWorkbookGrids(gridOf(original), gridOf(workbook));
     const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
     return {
       id: randomUUID(),
@@ -302,7 +417,7 @@ export async function planXlsxEdit(
       baseFingerprint,
       nextFingerprint: fingerprintBytes(buffer),
       buffer,
-      diff: { changes, truncated, structural },
+      diff: { changes, total, truncated, structural },
       ops,
     };
   })(), timeoutMs);

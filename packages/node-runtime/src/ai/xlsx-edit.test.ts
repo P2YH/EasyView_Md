@@ -5,6 +5,8 @@ import ExcelJS from 'exceljs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   XLSX_MAX_OPS,
+  XLSX_MAX_RANGE_CELLS,
+  parseRange,
   commitXlsxProposal,
   diffWorkbookGrids,
   fingerprintBytes,
@@ -60,6 +62,8 @@ describe('xlsx edit core', () => {
   it('validates ops: limit, address format, value xor formula', () => {
     const op = { op: 'setCell', sheet: 'Sales', ref: 'B2', value: 1 };
     expect(xlsxSheetOpsSchema.safeParse([op]).success).toBe(true);
+    expect(XLSX_MAX_OPS).toBe(30_000);
+    expect(xlsxSheetOpsSchema.safeParse(Array(XLSX_MAX_OPS).fill(op)).success).toBe(true);
     expect(xlsxSheetOpsSchema.safeParse(Array(XLSX_MAX_OPS + 1).fill(op)).success).toBe(false);
     expect(xlsxSheetOpsSchema.safeParse([{ ...op, ref: 'b2' }]).success).toBe(false);
     expect(xlsxSheetOpsSchema.safeParse([{ ...op, formula: 'A1' }]).success).toBe(false);
@@ -124,6 +128,83 @@ describe('xlsx edit core', () => {
     const result = diffWorkbookGrids(new Map([['S', new Map<string, XlsxCellValue>([['A1', 1], ['B10', 'x']])]]), new Map([['S', new Map<string, XlsxCellValue>([['A1', 2]])]]));
     expect(result.changes).toEqual([{ sheet: 'S', ref: 'A1', before: 1, after: 2 }, { sheet: 'S', ref: 'B10', before: 'x', after: null }]);
   });
+});
+
+describe('xlsx range ops and scale', () => {
+  let root = '';
+  let file = '';
+  beforeEach(async () => {
+    root = await mkdtemp(path.join(os.tmpdir(), 'easyview-xlsx-range-'));
+    file = path.join(root, 'book.xlsx');
+    await makeWorkbook(file);
+  });
+  afterEach(async () => { await rm(root, { recursive: true, force: true }); });
+
+  it('parses ranges in any corner order', () => {
+    expect(parseRange('C5:A2')).toEqual({ top: 2, left: 1, bottom: 5, right: 3, cells: 12 });
+    expect(parseRange('B7').cells).toBe(1);
+  });
+
+  it('setRange fills values and {row} formulas', async () => {
+    const { fingerprint } = await inspectXlsxFile(file);
+    const proposal = await planXlsxEdit(file, fingerprint, [
+      { op: 'setCell', sheet: 'Sales', ref: 'D1', value: 'Total' },
+      { op: 'setRange', sheet: 'Sales', range: 'D2:D3', formula: '=B{row}*C{row}' },
+      { op: 'setRange', sheet: 'Notes', range: 'B1:C2', value: 'x' },
+    ]);
+    expect(proposal.diff.changes).toContainEqual({ sheet: 'Sales', ref: 'D2', before: null, after: '=B2*C2' });
+    expect(proposal.diff.changes).toContainEqual({ sheet: 'Sales', ref: 'D3', before: null, after: '=B3*C3' });
+    expect(proposal.diff.total).toBe(7);
+  });
+
+  it('transformRange multiplies numbers, replaces text and skips other types', async () => {
+    const { fingerprint } = await inspectXlsxFile(file);
+    const proposal = await planXlsxEdit(file, fingerprint, [
+      { op: 'transformRange', sheet: 'Sales', range: 'A1:C3', transform: 'multiply', number: 10 },
+      { op: 'transformRange', sheet: 'Sales', range: 'A2:A3', transform: 'replaceText', find: 'P', text: 'B' },
+    ]);
+    expect(proposal.diff.changes).toEqual([
+      { sheet: 'Sales', ref: 'B2', before: 3, after: 30 },
+      { sheet: 'Sales', ref: 'C2', before: 2, after: 20 },
+      { sheet: 'Sales', ref: 'A3', before: 'Pear', after: 'Bear' },
+      { sheet: 'Sales', ref: 'B3', before: 5, after: 50 },
+      { sheet: 'Sales', ref: 'C3', before: 4, after: 40 },
+    ]);
+  });
+
+  it('replaceWhere sets a column where another column matches', async () => {
+    const { fingerprint } = await inspectXlsxFile(file);
+    const proposal = await planXlsxEdit(file, fingerprint, [{ op: 'replaceWhere', sheet: 'Sales', matchColumn: 'A', equals: 'Pear', setColumn: 'C', value: 9 }]);
+    expect(proposal.diff.changes).toEqual([{ sheet: 'Sales', ref: 'C3', before: 4, after: 9 }]);
+  });
+
+  it('rejects range ops above the cell cap and bad arguments', async () => {
+    const { fingerprint } = await inspectXlsxFile(file);
+    await expect(planXlsxEdit(file, fingerprint, [{ op: 'setRange', sheet: 'Sales', range: 'A1:Z100000', value: 1 }])).rejects.toThrow(String(XLSX_MAX_RANGE_CELLS));
+    expect(xlsxSheetOpsSchema.safeParse([{ op: 'transformRange', sheet: 'Sales', range: 'A1:B2', transform: 'multiply' }]).success).toBe(false);
+    expect(xlsxSheetOpsSchema.safeParse([{ op: 'setRange', sheet: 'Sales', range: 'A1:B', value: 1 }]).success).toBe(false);
+  });
+
+  it('handles 30000 ops on a 20000-row sheet with a counted, capped diff', async () => {
+    const big = path.join(root, 'big.xlsx');
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Data');
+    sheet.addRow(['id', 'qty', 'price']);
+    for (let i = 1; i <= 20_000; i += 1) sheet.addRow([`R${i}`, i, i * 2]);
+    await workbook.xlsx.writeFile(big);
+    const { fingerprint } = await inspectXlsxFile(big, 5);
+    const ops = Array.from({ length: XLSX_MAX_OPS }, (_, i) => ({ op: 'setCell' as const, sheet: 'Data', ref: `D${i + 2}`, value: i }));
+    const started = Date.now();
+    const proposal = await planXlsxEdit(big, fingerprint, ops);
+    const elapsed = Date.now() - started;
+    expect(proposal.diff.total).toBe(XLSX_MAX_OPS);
+    expect(proposal.diff.changes).toHaveLength(1000);
+    expect(proposal.diff.truncated).toBe(true);
+    expect(proposal.diff.changes[0]).toEqual({ sheet: 'Data', ref: 'D2', before: null, after: 0 });
+    expect(elapsed).toBeLessThan(30_000);
+    const ranged = await planXlsxEdit(big, fingerprint, [{ op: 'transformRange', sheet: 'Data', range: 'C2:C20001', transform: 'multiply', number: 1.1 }]);
+    expect(ranged.diff.total).toBe(20_000);
+  }, 120_000);
 });
 
 describe('office agent tools', () => {

@@ -2,11 +2,11 @@ import { defineMessages } from '@easyview/contracts/i18n';
 
 export const tAiChat = defineMessages({
   'zh-CN': {
-    'office.title': 'AI 拟修改「{name}」：{count} 个单元格',
+    'office.title': 'AI 拟修改「{name}」：共 {count} 处',
     'office.cell': '单元格',
     'office.before': '原值',
     'office.after': '新值',
-    'office.more': '还有 {count} 处修改未显示',
+    'office.more': '共 {total} 处修改，仅显示前 {shown} 处',
     'office.apply': '应用',
     'office.reject': '拒绝',
     'office.undo': '撤销',
@@ -77,11 +77,11 @@ export const tAiChat = defineMessages({
     'truncated': '注意：回复因长度限制被截断。',
   },
   en: {
-    'office.title': 'AI proposes changes to "{name}": {count} cell(s)',
+    'office.title': 'AI proposes changes to "{name}": {count} in total',
     'office.cell': 'Cell',
     'office.before': 'Before',
     'office.after': 'After',
-    'office.more': '{count} more change(s) not shown',
+    'office.more': '{total} changes in total; showing the first {shown}',
     'office.apply': 'Apply',
     'office.reject': 'Reject',
     'office.undo': 'Undo',

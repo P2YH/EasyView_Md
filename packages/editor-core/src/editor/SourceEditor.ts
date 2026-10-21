@@ -7,7 +7,7 @@ import { EditorView, ViewPlugin, ViewUpdate, Decoration, DecorationSet, WidgetTy
 import { EditorState, StateField, StateEffect, Transaction, RangeSetBuilder, Compartment, type Extension } from '@codemirror/state';
 import { markdown } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap, indentWithTab, redo } from '@codemirror/commands';
 import { syntaxHighlighting, HighlightStyle, bracketMatching } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
 import { closeBrackets } from '@codemirror/autocomplete';
@@ -896,6 +896,8 @@ export function createSourceEditor(options: SourceEditorOptions) {
           indentWithTab,
           ...defaultKeymap,
           ...historyKeymap,
+          // historyKeymap binds Mod-Shift-z only on macOS/Linux; WYSIWYG mode accepts it everywhere.
+          { key: 'Mod-Shift-z', run: redo },
         ]),
         // Cross-mode undo/redo fallback — runs when native history stack is exhausted
         keymap.of([

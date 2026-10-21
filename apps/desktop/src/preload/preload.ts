@@ -318,6 +318,11 @@ const api: EasyViewDesktopApi = {
       assertString(sessionId, 'sessionId');
       return ipcRenderer.invoke('preview.java.decompile', sessionId);
     },
+    onFileChanged: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, relativePaths: string[]) => listener(relativePaths);
+      ipcRenderer.on('preview.fileChanged', handler);
+      return subscription(() => ipcRenderer.removeListener('preview.fileChanged', handler));
+    },
   },
   system: {
     openWithDefaultApp: (relativePath: string) => {

@@ -108,4 +108,22 @@ describe('PreviewSessionStore', () => {
     expect(written.size).toBe(next.length);
     expect(Buffer.compare(await fs.readFile(path.join(root, 'note.docx')), next)).toBe(0);
   });
+
+  it('reports open previews changed outside the session but not its own writes', async () => {
+    const root = await workspace();
+    await fs.mkdir(path.join(root, 'café'));
+    const file = path.join(root, 'café', 'note.docx');
+    await fs.writeFile(file, Buffer.from('PK\u0003\u0004before'));
+    const sessions = new PreviewSessionStore();
+    const descriptor = await sessions.open(root, 'café/note.docx');
+
+    await sessions.writeBytes(descriptor.sessionId, Buffer.from('PK\u0003\u0004saved-in-app'));
+    await expect(sessions.staleRelativePaths(['café/note.docx'])).resolves.toEqual([]);
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await fs.writeFile(file, Buffer.from('PK\u0003\u0004changed-by-excel'));
+    await expect(sessions.staleRelativePaths(['other.txt'])).resolves.toEqual([]);
+    await expect(sessions.staleRelativePaths(['café/note.docx'.normalize('NFD')])).resolves.toEqual(['café/note.docx']);
+    await expect(sessions.staleRelativePaths(null)).resolves.toEqual(['café/note.docx']);
+  });
 });

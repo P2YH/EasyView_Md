@@ -22,6 +22,10 @@ import { tPreview } from './preview.i18n';
 
 const TEXT_READ_LIMIT = 4 * 1024 * 1024;
 const VIEW_TYPE = 'easyviewMd.filePreview';
+/** Routes whose parse cost justifies keeping the webview alive while its tab is hidden; others are released. */
+const KEEP_ALIVE_ROUTES: ReadonlySet<string> = new Set(['word', 'spreadsheet', 'powerpoint']);
+const EXTERNAL_CHANGE_DEBOUNCE_MS = 150;
+const RELEASED_HTML = '<!DOCTYPE html><html><body></body></html>';
 
 class FilePreviewDocument implements vscode.CustomDocument {
   constructor(readonly uri: vscode.Uri) {}
@@ -71,7 +75,7 @@ export class FilePreviewProvider implements vscode.CustomReadonlyEditorProvider<
       VIEW_TYPE,
       new FilePreviewProvider(context),
       {
-        webviewOptions: { retainContextWhenHidden: false },
+        webviewOptions: { retainContextWhenHidden: true },
         supportsMultipleEditorsPerDocument: false,
       },
     );
@@ -161,7 +165,7 @@ export class FilePreviewProvider implements vscode.CustomReadonlyEditorProvider<
       }
     }
     const relativePath = vscode.workspace.asRelativePath(document.uri, false);
-    const descriptor: PreviewDescriptor = {
+    let descriptor: PreviewDescriptor = {
       sessionId,
       relativePath: relativePath === document.uri.fsPath ? fileName : relativePath,
       fileName,
@@ -172,8 +176,6 @@ export class FilePreviewProvider implements vscode.CustomReadonlyEditorProvider<
       contentUrl,
     };
 
-    const productTheme = readProductTheme(this.context);
-    const fileTheme = readPreviewFileTheme(this.context, descriptor.relativePath);
     const assets = {
       fileViewerAssetBaseUrl: webviewPanel.webview.asWebviewUri(
         vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'preview', 'vendor', 'file-viewer'),
@@ -187,14 +189,62 @@ export class FilePreviewProvider implements vscode.CustomReadonlyEditorProvider<
       ).toString(),
     };
 
-    webviewPanel.webview.html = this.getHtml(
-      webviewPanel.webview,
-      descriptor,
-      assets,
-      productTheme,
-      fileTheme,
-      previewFrameOrigins(contentUrl, htmlServer?.origin),
+    let released = false;
+    const render = () => {
+      webviewPanel.webview.html = this.getHtml(
+        webviewPanel.webview,
+        descriptor,
+        assets,
+        readProductTheme(this.context),
+        readPreviewFileTheme(this.context, descriptor.relativePath),
+        previewFrameOrigins(descriptor.contentUrl, htmlServer?.origin),
+      );
+    };
+    render();
+
+    const viewStateSub = webviewPanel.onDidChangeViewState(() => {
+      if (KEEP_ALIVE_ROUTES.has(route.route)) return;
+      if (!webviewPanel.visible && !released) {
+        released = true;
+        webviewPanel.webview.html = RELEASED_HTML;
+      } else if (webviewPanel.visible && released) {
+        released = false;
+        render();
+      }
+    });
+
+    let pendingWrites = 0;
+    let externalChangeTimer: NodeJS.Timeout | undefined;
+    const reloadIfChangedExternally = async () => {
+      if (pendingWrites > 0) { scheduleExternalChangeCheck(); return; }
+      let stat: vscode.FileStat;
+      try {
+        stat = await vscode.workspace.fs.stat(document.uri);
+      } catch {
+        return;
+      }
+      if (stat.size === descriptor.size && stat.mtime === descriptor.mtimeMs) return;
+      const nextContentUrl = htmlServer
+        ? await htmlServer.contentUrlFor(document.uri)
+        : webviewPanel.webview.asWebviewUri(document.uri).with({ query: `v=${stat.mtime}` }).toString();
+      descriptor = { ...descriptor, sessionId: randomUUID(), size: stat.size, mtimeMs: stat.mtime, contentUrl: nextContentUrl };
+      if (!released) render();
+    };
+    const scheduleExternalChangeCheck = () => {
+      if (externalChangeTimer) clearTimeout(externalChangeTimer);
+      externalChangeTimer = setTimeout(() => { void reloadIfChangedExternally(); }, EXTERNAL_CHANGE_DEBOUNCE_MS);
+    };
+    const fileWatcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(vscode.Uri.joinPath(document.uri, '..'), '*'),
+      false,
+      false,
+      true,
     );
+    const onWatchedFile = (uri: vscode.Uri) => {
+      if (uri.toString() === document.uri.toString()) scheduleExternalChangeCheck();
+    };
+    const fileChangeSub = fileWatcher.onDidChange(onWatchedFile);
+    const fileCreateSub = fileWatcher.onDidCreate(onWatchedFile);
 
     const themePanelSub = registerPreviewThemePanel(webviewPanel);
     const messageSub = webviewPanel.webview.onDidReceiveMessage(async (message) => {
@@ -223,8 +273,15 @@ export class FilePreviewProvider implements vscode.CustomReadonlyEditorProvider<
           if (bytes.byteLength > route.maxSourceBytes) {
             throw new Error(tPreview('writeTooLarge', { size: (route.maxSourceBytes / (1024 * 1024)).toFixed(0) }));
           }
-          await vscode.workspace.fs.writeFile(document.uri, bytes);
-          const stat = await vscode.workspace.fs.stat(document.uri);
+          pendingWrites += 1;
+          let stat: vscode.FileStat;
+          try {
+            await vscode.workspace.fs.writeFile(document.uri, bytes);
+            stat = await vscode.workspace.fs.stat(document.uri);
+            descriptor = { ...descriptor, size: stat.size, mtimeMs: stat.mtime };
+          } finally {
+            pendingWrites -= 1;
+          }
           await webviewPanel.webview.postMessage({
             type: 'writeBytesResult',
             id: message.id,
@@ -258,9 +315,14 @@ export class FilePreviewProvider implements vscode.CustomReadonlyEditorProvider<
     });
 
     webviewPanel.onDidDispose(() => {
+      if (externalChangeTimer) clearTimeout(externalChangeTimer);
       htmlServer?.dispose();
       themePanelSub.dispose();
       messageSub.dispose();
+      viewStateSub.dispose();
+      fileChangeSub.dispose();
+      fileCreateSub.dispose();
+      fileWatcher.dispose();
     });
   }
 

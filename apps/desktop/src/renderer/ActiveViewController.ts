@@ -47,6 +47,8 @@ export class ActiveViewController {
   private readonly panes = new Map<string, GroupPane>();
   private readonly islands = new Map<string, PreviewIsland>();
   private readonly creatingIslands = new Map<string, Promise<PreviewIsland>>();
+  /** Preview tab currently rendered in each group, so unrelated snapshots don't re-render it. */
+  private readonly shownPreviews = new Map<string, string>();
   private previewRequest = 0;
   private snapshot: DesktopTabSnapshot | null = null;
   private renderedLayoutKey: string | null = null;
@@ -68,7 +70,11 @@ export class ActiveViewController {
     for (const group of this.snapshot.groups) {
       const tab = group.tabs.find((item) => item.id === group.activeTabId);
       if (!tab || tab.kind === 'editor' || tab.kind === 'history' || !previewPathMatches(absolutePath, tab.relativePath)) continue;
-      await this.islands.get(group.id)?.open(tab.relativePath);
+      const island = this.islands.get(group.id);
+      if (!island) continue;
+      const key = previewKey(tab.id, tab.relativePath);
+      this.shownPreviews.set(group.id, key);
+      if (!(await island.open(tab.relativePath)) && this.shownPreviews.get(group.id) === key) this.shownPreviews.delete(group.id);
     }
   }
 
@@ -116,6 +122,7 @@ export class ActiveViewController {
     for (const island of this.islands.values()) island.dispose();
     this.islands.clear();
     this.creatingIslands.clear();
+    this.shownPreviews.clear();
   }
 
   private adoptPrimaryPane(): void {
@@ -271,6 +278,7 @@ export class ActiveViewController {
     pane.toolbarToggle.hidden = !tab || tab.kind === 'history';
     const history = this.historyViews.get(pane.groupId);
     if (history && history.tabId !== tab?.id) { history.view.dispose(); this.historyViews.delete(pane.groupId); }
+    if (tab?.kind !== 'preview') this.shownPreviews.delete(pane.groupId);
     if (tab?.kind === 'history') {
       pane.editorMount.hidden = true; pane.previewRoot.hidden = false;
       if (history?.tabId === tab.id) return;
@@ -297,9 +305,14 @@ export class ActiveViewController {
     }
     pane.editorMount.hidden = true;
     pane.previewRoot.hidden = false;
+    const key = previewKey(tab.id, tab.relativePath);
+    if (this.shownPreviews.get(pane.groupId) === key) return;
     const island = await this.getIsland(pane);
     if (request !== this.previewRequest) return;
-    await island.open(tab.relativePath);
+    this.shownPreviews.set(pane.groupId, key);
+    if (!(await island.open(tab.relativePath)) && this.shownPreviews.get(pane.groupId) === key) {
+      this.shownPreviews.delete(pane.groupId);
+    }
   }
 
   private hidePane(pane: GroupPane, notify: boolean): void {
@@ -343,6 +356,9 @@ export class ActiveViewController {
       this.islands.delete(fromGroupId);
       this.islands.set(toGroupId, island);
     }
+    const shown = this.shownPreviews.get(fromGroupId);
+    this.shownPreviews.delete(fromGroupId);
+    if (shown) this.shownPreviews.set(toGroupId, shown);
   }
 
   private disposePane(groupId: string): void {
@@ -350,8 +366,13 @@ export class ActiveViewController {
     this.islands.get(groupId)?.dispose();
     this.islands.delete(groupId);
     this.creatingIslands.delete(groupId);
+    this.shownPreviews.delete(groupId);
     const pane = this.panes.get(groupId);
     if (pane && !this.isAdopted(pane)) pane.root.remove();
     this.panes.delete(groupId);
   }
+}
+
+function previewKey(tabId: string, relativePath: string): string {
+  return `${tabId}\0${relativePath}`;
 }

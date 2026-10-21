@@ -400,6 +400,9 @@ const activeView = new ActiveViewController({
   api, splitRoot, editorBody: editorMount, previewBody, tabBar,
   onViewChanged: () => { publishMenuState(); syncStandaloneOfficeContext(); },
 });
+api.preview.onFileChanged((relativePaths) => {
+  for (const relativePath of relativePaths) void activeView.reloadPreviewMatching(relativePath);
+});
 
 function visibleEditorTabs(snapshot: { groups: Array<{ tabs: DesktopTab[]; activeTabId: string | null }> }): DesktopEditorTab[] {
   const visible: DesktopEditorTab[] = [];

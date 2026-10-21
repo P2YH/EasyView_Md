@@ -38,6 +38,7 @@ import {
   getWindowContext,
   notifyActiveDocument,
   previewFailure,
+  previewSessions,
   rendererWindow,
   sendToWindow,
   setWorkspaceFileClipboard,
@@ -79,6 +80,9 @@ export function startWorkspaceWatcher(rootPath: string): void {
       runInWindowContext(context, () => {
         const affected = workspaceCore.invalidateFromWatcher(relativePaths);
         sendToWindow('workspace.changed', affected);
+        void previewSessions.staleRelativePaths(relativePaths).then((stale) => {
+          if (stale.length) runInWindowContext(context, () => sendToWindow('preview.fileChanged', stale));
+        }).catch((error) => console.warn('[Preview]', error));
         for (const relativePath of relativePaths ?? []) if (isTimelineMarkdown(relativePath)) void captureDesktopHistoryPath(path.join(rootPath, relativePath)).catch((error) => { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') console.warn('[Timeline]', error); });
       });
     },

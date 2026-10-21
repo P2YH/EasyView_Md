@@ -16,9 +16,17 @@ const esbuildSource = fs.readFileSync(
 );
 
 describe('VS Code preview lifecycle and build boundaries', () => {
-  it('releases hidden preview context and allows one editor per resource', () => {
-    expect(previewProviderSource).toContain('retainContextWhenHidden: false');
+  it('keeps only Office previews alive while hidden and allows one editor per resource', () => {
+    expect(previewProviderSource).toContain('retainContextWhenHidden: true');
+    expect(previewProviderSource).toContain("new Set(['word', 'spreadsheet', 'powerpoint'])");
+    expect(previewProviderSource).toMatch(/if \(!webviewPanel\.visible && !released\) \{\s+released = true;\s+webviewPanel\.webview\.html = RELEASED_HTML;/);
     expect(previewProviderSource).toContain('supportsMultipleEditorsPerDocument: false');
+  });
+
+  it('reloads previews changed outside the editor but not after its own writes', () => {
+    expect(previewProviderSource).toContain('createFileSystemWatcher');
+    expect(previewProviderSource).toContain('if (pendingWrites > 0)');
+    expect(previewProviderSource).toContain('descriptor = { ...descriptor, size: stat.size, mtimeMs: stat.mtime };');
   });
 
   it('persists only viewport state through the VS Code webview state API', () => {

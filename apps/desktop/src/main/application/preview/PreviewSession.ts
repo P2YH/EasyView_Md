@@ -63,6 +63,24 @@ export class PreviewSessionStore {
     this.virtualContents.clear();
   }
 
+  /** Relative paths of open sessions whose file no longer matches the size/mtime they were opened (or last saved) with. */
+  async staleRelativePaths(changedRelativePaths: readonly string[] | null): Promise<string[]> {
+    // macOS watchers may report NFD file names while sessions hold the NFC form.
+    const key = (value: string) => value.replace(/\\/g, '/').normalize('NFC');
+    const changed = changedRelativePaths ? new Set(changedRelativePaths.map(key)) : null;
+    const stale = new Set<string>();
+    for (const session of this.sessions.values()) {
+      if (stale.has(session.relativePath) || (changed && !changed.has(key(session.relativePath)))) continue;
+      try {
+        const stat = await fs.stat(session.realPath);
+        if (stat.size !== session.size || stat.mtimeMs !== session.mtimeMs) stale.add(session.relativePath);
+      } catch {
+        stale.add(session.relativePath);
+      }
+    }
+    return [...stale];
+  }
+
   async registerVirtualContent(sessionId: string, bytes: Buffer, mimeType: string): Promise<string> {
     await this.requireFresh(sessionId);
     if (!Buffer.isBuffer(bytes) || bytes.length > TEXT_READ_LIMIT) {

@@ -81,6 +81,8 @@ export interface EasyViewDesktopApi {
     writeBytes(sessionId: string, bytesBase64: string): Promise<OperationResult<PreviewWriteResult>>;
     sendHttp(request: HttpPreviewRequest): Promise<OperationResult<HttpPreviewResponse>>;
     decompileJava(sessionId: string): Promise<OperationResult<JavaDecompileResult>>;
+    /** Workspace-relative paths of open previews whose file was changed outside the preview. */
+    onFileChanged(listener: (relativePaths: string[]) => void): { unsubscribe(): void };
   };
   system: {
     openWithDefaultApp(relativePath: string): Promise<OperationResult<boolean>>;

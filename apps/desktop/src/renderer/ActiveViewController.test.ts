@@ -121,4 +121,62 @@ describe('ActiveViewController split panes', () => {
     expect(dispose).toHaveBeenCalledOnce();
     expect(views.size).toBe(0);
   });
+
+  describe('preview tabs', () => {
+    const previewTab = { id: 'p', kind: 'preview', relativePath: 'docs/report.xlsx', fileName: 'report.xlsx' };
+    const editorTab = snapshot().groups[0].tabs[0];
+    function previewSnapshot(activeTabId = 'p', extra: Record<string, unknown> = {}): DesktopTabSnapshot {
+      const tabs = [{ ...previewTab, ...extra }, editorTab] as DesktopTabSnapshot['tabs'];
+      return snapshot({
+        groups: [{ id: 'group-1', activeTabId, tabs }],
+        activeGroupId: 'group-1',
+        layout: { kind: 'group', groupId: 'group-1' },
+        tabs,
+        activeTabId,
+      });
+    }
+    function withIsland(controller: ActiveViewController) {
+      const island = { open: vi.fn(async () => true), close: vi.fn(async () => {}), dispose: vi.fn() };
+      (controller as unknown as { islands: Map<string, unknown> }).islands.set('group-1', island);
+      return island;
+    }
+
+    it('does not re-open a preview that is already shown', async () => {
+      const { controller } = createController();
+      const island = withIsland(controller);
+      await controller.showSnapshot(previewSnapshot());
+      await controller.showSnapshot(previewSnapshot());
+      await controller.showSnapshot(previewSnapshot('p', { pinned: true }));
+      expect(island.open).toHaveBeenCalledOnce();
+    });
+
+    it('re-opens the preview after switching away and back', async () => {
+      const { controller } = createController();
+      const island = withIsland(controller);
+      await controller.showSnapshot(previewSnapshot());
+      await controller.showSnapshot(previewSnapshot('a'));
+      await controller.showSnapshot(previewSnapshot());
+      expect(island.close).toHaveBeenCalledOnce();
+      expect(island.open).toHaveBeenCalledTimes(2);
+    });
+
+    it('retries a preview that failed to open', async () => {
+      const { controller } = createController();
+      const island = withIsland(controller);
+      island.open.mockResolvedValueOnce(false);
+      await controller.showSnapshot(previewSnapshot());
+      await controller.showSnapshot(previewSnapshot());
+      expect(island.open).toHaveBeenCalledTimes(2);
+    });
+
+    it('forces a reload of matching visible previews', async () => {
+      const { controller } = createController();
+      const island = withIsland(controller);
+      await controller.showSnapshot(previewSnapshot());
+      await controller.reloadPreviewMatching('docs/other.xlsx');
+      await controller.reloadPreviewMatching('docs/report.xlsx');
+      await controller.showSnapshot(previewSnapshot());
+      expect(island.open).toHaveBeenCalledTimes(2);
+    });
+  });
 });

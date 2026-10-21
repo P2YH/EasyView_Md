@@ -28,6 +28,8 @@ suite('EasyView image asset lifecycle', () => {
   setup(async () => {
     root = await fs.mkdtemp(path.join(os.tmpdir(), 'easyview-ext-image-assets-'));
     await vscode.extensions.getExtension('zhangxy.easyview-md').activate();
+    // Earlier suites in the same VS Code instance may leave EasyView editor tabs open.
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
   });
   teardown(async () => {
     for (const document of documents.splice(0)) {

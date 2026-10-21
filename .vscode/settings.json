@@ -1,4 +1,0 @@
-{
-  "npm.autoDetect": "off",
-  "npm.exclude": "**/.vscode-test/**"
-}

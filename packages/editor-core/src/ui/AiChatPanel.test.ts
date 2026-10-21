@@ -277,7 +277,7 @@ describe('AI conversation lifetime', () => {
     expect(sent.some((m) => m.type === 'aiChat.officeDecision')).toBe(false);
     document.querySelector<HTMLButtonElement>('.ai-chat-office-btn.apply')!.click();
     expect(sent).toContainEqual({ type: 'aiChat.officeDecision', requestId, proposalId: 'p1', accepted: true });
-    panel.handleMessage({ type: 'aiChat.officeCommitted', requestId, commitId: 'p1', filePath: '/ws/book.xlsx', backupPath: '/ws/.easyview/ai-backups/x/book.xlsx' });
+    panel.handleMessage({ type: 'aiChat.officeCommitted', requestId, commitId: 'p1', filePath: '/ws/book.xlsx', backup: 'git show refs/easyview/ai-backups/x' });
     panel.handleMessage({ type: 'aiChat.done', requestId, content: 'B2 已改为 7', finishReason: 'stop' });
     document.querySelector<HTMLButtonElement>('.ai-chat-office-btn.undo')!.click();
     const undo = sent.find((m) => m.type === 'aiChat.officeUndo') as { requestId: string; commitId: string };

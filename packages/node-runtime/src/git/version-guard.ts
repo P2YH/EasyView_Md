@@ -4,7 +4,8 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fingerprintFiles } from '../filesystem/file-fingerprint';
 import { retryIndexLock, serialRepo } from './repo-lock';
-import type { GuardRepository, GuardFile, GuardStatus, GuardHistory, GuardComparison, GuardRequest, GuardBranch } from '@easyview/contracts';
+import { isSpreadsheetSnapshotPath, readSpreadsheetSnapshot, SPREADSHEET_SNAPSHOT_MAX_BYTES } from './spreadsheet-snapshot';
+import type { GuardRepository, GuardFile, GuardStatus, GuardHistory, GuardComparison, GuardRequest, GuardBranch, SpreadsheetComparison } from '@easyview/contracts';
 
 // One limiter per host process, shared across windows and repositories.
 const waiting: Array<() => void> = [];
@@ -29,6 +30,15 @@ function guardGitOnce(root: string, args: string[], signal?: AbortSignal): Promi
       encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, signal,
       env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_LITERAL_PATHSPECS: '1' },
     }, (error, stdout, stderr) => error ? reject(new Error(stderr.trim() || error.message)) : resolve(stdout));
+  }));
+}
+export function guardGitBytes(root: string, args: string[]): Promise<Buffer> {
+  return slot(() => new Promise((resolve, reject) => {
+    guardDiagnostics.commands++;
+    execFile('git', ['--no-optional-locks', '-C', root, ...args], {
+      encoding: 'buffer', maxBuffer: SPREADSHEET_SNAPSHOT_MAX_BYTES + 1024 * 1024,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_LITERAL_PATHSPECS: '1' },
+    }, (error, stdout, stderr) => error ? reject(new Error(stderr.toString('utf8').trim() || error.message)) : resolve(stdout));
   }));
 }
 const inside = (root: string, file: string): boolean => { const relative = path.relative(root, file); return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)); };
@@ -104,6 +114,13 @@ export class VersionGuardService {
     if (this.active) await this.watchMetadata();
     return [...found.values()].sort((a, b) => a.rootPath.localeCompare(b.rootPath));
   }
+  async init(): Promise<string[]> {
+    const roots = await Promise.all(this.host.roots().map(root => fs.realpath(root)));
+    if (!roots.length) throw new Error('Open a folder before creating a Git repository.');
+    for (const root of roots) if (await fs.lstat(path.join(root, '.git')).then(() => true, () => false)) throw new Error(`A Git repository already exists: ${root}`);
+    for (const root of roots) await serial(root, () => guardGit(root, ['init']));
+    return roots;
+  }
   async repository(id: unknown): Promise<GuardRepository> {
     if (typeof id !== 'string' || !this.repositories.has(id)) throw new Error('Unknown repository. Refresh Version Guard.');
     const repository = this.repositories.get(id)!;
@@ -153,6 +170,7 @@ export class VersionGuardService {
     if (request.method === 'cancel') { this.controller.abort(); this.controller = new AbortController(); return true; }
     if (request.method === 'diagnostics') return { ...guardDiagnostics, watchers: this.watchers.length };
     if (request.method === 'discover') return this.discover();
+    if (request.method === 'init') return this.init();
     const repository = await this.repository(request.repository);
     const root = repository.rootPath;
     const read = async (): Promise<unknown> => {
@@ -280,26 +298,52 @@ export class VersionGuardService {
   }
   private async comparison(repository: GuardRepository, request: GuardRequest): Promise<GuardComparison> {
     const [file] = await this.files(repository, request.paths); const root = repository.rootPath;
-    let base = '', content = '', baseLabel = '', contentLabel = '';
+    let baseSpec: string | undefined, contentSpec: string | undefined, contentFile: string | undefined, baseLabel = '', contentLabel = '';
     if (request.source === 'commit') {
       const revision = this.revision(request.revision); const parent = await this.parent(root, revision);
       const files = await this.handle({ method: 'commitFiles', repository: root, revision }) as GuardFile[];
       const entry = files.find(entry => entry.path === file); if (!entry) throw new Error('File is not part of this commit.');
       baseLabel = parent ? `${parent.slice(0, 8)} (first parent)` : 'Empty'; contentLabel = revision.slice(0, 8);
-      if (parent && entry.index !== 'A') base = await this.blob(root, `${parent}:${entry.oldPath ?? file}`);
-      if (entry.index !== 'D') content = await this.blob(root, `${revision}:${file}`);
+      if (parent && entry.index !== 'A') baseSpec = `${parent}:${entry.oldPath ?? file}`;
+      if (entry.index !== 'D') contentSpec = `${revision}:${file}`;
     } else {
       const status = await this.status(repository); const entry = status.files.find(entry => entry.path === file); if (!entry || entry.submodule) throw new Error('No text comparison for this entry.');
       if (request.source === 'staged') {
         baseLabel = 'HEAD'; contentLabel = 'Index';
-        if (status.head !== '(initial)' && entry.index !== 'A') base = await this.blob(root, `HEAD:${entry.oldPath ?? file}`);
-        if (entry.index !== 'D') content = await this.blob(root, `:${file}`);
+        if (status.head !== '(initial)' && entry.index !== 'A') baseSpec = `HEAD:${entry.oldPath ?? file}`;
+        if (entry.index !== 'D') contentSpec = `:${file}`;
       } else {
         baseLabel = 'Index'; contentLabel = 'Working tree';
-        if (entry.index !== '?') base = await this.blob(root, `:${file}`);
-        if (entry.worktree !== 'D') { const target = path.join(root, file); const stat = await fs.lstat(target); if (stat.isSymbolicLink()) content = await fs.readlink(target); else { if (stat.size > 2 * 1024 * 1024) throw new Error('File exceeds the 2 MiB comparison limit.'); content = await fs.readFile(target, 'utf8'); } }
+        if (entry.index !== '?') baseSpec = `:${file}`;
+        if (entry.worktree !== 'D') contentFile = path.join(root, file);
       }
     }
-    return { base, content, baseLabel, contentLabel, path: path.join(root, file), key: digest(`${root}:${file}:${baseLabel}:${contentLabel}:${base}:${content}`), binary: base.includes('\0') || content.includes('\0') };
+    const target = path.join(root, file);
+    if (isSpreadsheetSnapshotPath(file)) {
+      const workbook = await this.spreadsheet(root, baseSpec, contentSpec, contentFile).catch(() => undefined);
+      if (workbook) return { base: '', content: '', baseLabel, contentLabel, path: target, key: digest(`${root}:${file}:${baseLabel}:${contentLabel}:${workbook.fingerprint}`), spreadsheet: workbook.spreadsheet };
+    }
+    const base = baseSpec ? await this.blob(root, baseSpec) : '';
+    let content = contentSpec ? await this.blob(root, contentSpec) : '';
+    if (contentFile) { const stat = await fs.lstat(contentFile); if (stat.isSymbolicLink()) content = await fs.readlink(contentFile); else { if (stat.size > 2 * 1024 * 1024) throw new Error('File exceeds the 2 MiB comparison limit.'); content = await fs.readFile(contentFile, 'utf8'); } }
+    return { base, content, baseLabel, contentLabel, path: target, key: digest(`${root}:${file}:${baseLabel}:${contentLabel}:${base}:${content}`), binary: base.includes('\0') || content.includes('\0') };
+  }
+  private async spreadsheet(root: string, baseSpec: string | undefined, contentSpec: string | undefined, contentFile: string | undefined): Promise<{ spreadsheet: SpreadsheetComparison; fingerprint: string }> {
+    const base = baseSpec ? await this.blobBytes(root, baseSpec) : null;
+    let content = contentSpec ? await this.blobBytes(root, contentSpec) : null;
+    if (contentFile) {
+      const stat = await fs.lstat(contentFile);
+      if (!stat.isFile() || stat.size > SPREADSHEET_SNAPSHOT_MAX_BYTES) throw new Error('Workbook cannot be compared.');
+      content = await fs.readFile(contentFile);
+    }
+    return {
+      spreadsheet: { base: base ? await readSpreadsheetSnapshot(base) : null, content: content ? await readSpreadsheetSnapshot(content) : null },
+      fingerprint: `${base ? digest(base) : '-'}:${content ? digest(content) : '-'}`,
+    };
+  }
+  private async blobBytes(root: string, spec: string): Promise<Buffer> {
+    const size = Number((await guardGit(root, ['cat-file', '-s', spec])).trim());
+    if (size > SPREADSHEET_SNAPSHOT_MAX_BYTES) throw new Error('Workbook cannot be compared.');
+    return guardGitBytes(root, ['cat-file', 'blob', spec]);
   }
 }

@@ -17,6 +17,7 @@ import {
   type XlsxCellValue,
 } from './xlsx-edit';
 import { createOfficeAgentTools, officeDocumentKind } from './office-tools';
+import { OfficeBackupStore, readOfficeBackup } from './office-backups';
 
 async function makeWorkbook(filePath: string): Promise<void> {
   const workbook = new ExcelJS.Workbook();
@@ -106,11 +107,13 @@ describe('xlsx edit core', () => {
     const original = await readFile(file);
     const { fingerprint } = await inspectXlsxFile(file);
     const proposal = await planXlsxEdit(file, fingerprint, [{ op: 'setCell', sheet: 'Sales', ref: 'B2', value: 42 }]);
-    const record = await commitXlsxProposal(proposal, root, new Date('2026-10-21T00:00:00Z'));
-    expect(record.backupPath.startsWith(path.join(root, '.easyview', 'ai-backups'))).toBe(true);
-    expect(Buffer.compare(await readFile(record.backupPath), original)).toBe(0);
+    const backups = new OfficeBackupStore(path.join(root, 'app-data'));
+    const record = await commitXlsxProposal(proposal, backups, new Date('2026-10-21T00:00:00Z'));
+    expect(record.backup).toMatchObject({ kind: 'file' });
+    expect(Buffer.compare(await readOfficeBackup(record.backup), original)).toBe(0);
+    expect(await readdir(root)).not.toContain('.easyview');
     expect(await readCell(file, 'Sales', 'B2')).toBe(42);
-    await expect(commitXlsxProposal(proposal, root)).rejects.toThrow();
+    await expect(commitXlsxProposal(proposal, backups)).rejects.toThrow();
     await undoXlsxCommit(record);
     expect(Buffer.compare(await readFile(file), original)).toBe(0);
   });
@@ -118,7 +121,7 @@ describe('xlsx edit core', () => {
   it('refuses undo once the file changed after the commit', async () => {
     const { fingerprint } = await inspectXlsxFile(file);
     const proposal = await planXlsxEdit(file, fingerprint, [{ op: 'setCell', sheet: 'Sales', ref: 'B2', value: 42 }]);
-    const record = await commitXlsxProposal(proposal, root);
+    const record = await commitXlsxProposal(proposal, new OfficeBackupStore(path.join(root, 'app-data')));
     await makeWorkbook(file);
     await writeFile(file, Buffer.concat([await readFile(file), Buffer.from([0])]));
     await expect(undoXlsxCommit(record)).rejects.toThrow();
@@ -155,6 +158,23 @@ describe('xlsx range ops and scale', () => {
     expect(proposal.diff.changes).toContainEqual({ sheet: 'Sales', ref: 'D2', before: null, after: '=B2*C2' });
     expect(proposal.diff.changes).toContainEqual({ sheet: 'Sales', ref: 'D3', before: null, after: '=B3*C3' });
     expect(proposal.diff.total).toBe(7);
+  });
+
+  it('setRange values fills each cell from a matching grid', async () => {
+    const { fingerprint } = await inspectXlsxFile(file);
+    const proposal = await planXlsxEdit(file, fingerprint, [
+      { op: 'setRange', sheet: 'Sales', range: 'A4:C5', values: [['Kiwi', 1, 2], ['Plum', 3, 4]] },
+    ]);
+    expect(proposal.diff.changes).toContainEqual({ sheet: 'Sales', ref: 'A4', before: null, after: 'Kiwi' });
+    expect(proposal.diff.changes).toContainEqual({ sheet: 'Sales', ref: 'C5', before: null, after: 4 });
+    expect(proposal.diff.total).toBe(6);
+  });
+
+  it('rejects setRange values with the wrong shape and multi-line values copied into a range', () => {
+    expect(xlsxSheetOpsSchema.safeParse([{ op: 'setRange', sheet: 'Sales', range: 'A4:C5', values: [['Kiwi', 1]] }]).success).toBe(false);
+    expect(xlsxSheetOpsSchema.safeParse([{ op: 'setRange', sheet: 'Sales', range: 'A4:B4', value: 1, values: [[1, 2]] }]).success).toBe(false);
+    expect(xlsxSheetOpsSchema.safeParse([{ op: 'setRange', sheet: 'Sales', range: 'A4:E13', value: 'A-030\t示例功能30\nA-031\t示例功能31' }]).success).toBe(false);
+    expect(xlsxSheetOpsSchema.safeParse([{ op: 'setRange', sheet: 'Sales', range: 'A4', value: 'line1\nline2' }]).success).toBe(true);
   });
 
   it('transformRange multiplies numbers, replaces text and skips other types', async () => {
@@ -225,7 +245,7 @@ describe('office agent tools', () => {
     let decision = false;
     const shown: unknown[] = [];
     const tools = createOfficeAgentTools({
-      kind: 'xlsx', filePath: file, backupRoot: root,
+      kind: 'xlsx', filePath: file, backups: new OfficeBackupStore(path.join(root, 'app-data')),
       confirmEdit: async (proposal) => { shown.push(proposal); return { accepted: decision }; },
     });
     const inspected = await run(tools, 'inspect_workbook', { path: '/etc/passwd' });
@@ -237,12 +257,12 @@ describe('office agent tools', () => {
     expect(await run(tools, 'apply_sheet_ops', { fingerprint: inspected.fingerprint, ops })).toMatchObject({ status: 'applied', changedCells: 1 });
     expect(await readCell(file, 'Sales', 'C3')).toBe(99);
     expect(shown).toHaveLength(2);
-    expect(await readdir(path.join(root, '.easyview', 'ai-backups'))).toHaveLength(1);
+    expect(await readdir(path.join(root, 'app-data'))).toHaveLength(1);
   });
 
   it('returns no-change without asking the user', async () => {
     let asked = false;
-    const tools = createOfficeAgentTools({ kind: 'xlsx', filePath: file, backupRoot: root, confirmEdit: async () => { asked = true; return { accepted: true }; } });
+    const tools = createOfficeAgentTools({ kind: 'xlsx', filePath: file, backups: new OfficeBackupStore(path.join(root, 'app-data')), confirmEdit: async () => { asked = true; return { accepted: true }; } });
     const { fingerprint } = await run(tools, 'inspect_workbook', {});
     expect(await run(tools, 'apply_sheet_ops', { fingerprint, ops: [{ op: 'setCell', sheet: 'Sales', ref: 'B2', value: 3 }] })).toEqual({ status: 'no-change' });
     expect(asked).toBe(false);

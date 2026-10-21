@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, realpath } from 'node
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import ExcelJS from 'exceljs';
 import { VersionGuardService, guardDiagnostics } from './version-guard';
 import type { GuardBranch, GuardComparison, GuardFile, GuardHistory } from '@easyview/contracts';
 const temps: string[] = []; const services: VersionGuardService[] = [];
@@ -27,6 +28,14 @@ it('discovers every nested repository, submodule and worktree without including 
   const below = new VersionGuardService({ roots: () => [path.join(repo, 'deep')], beforeStage: async () => {}, discard: async () => false, trash: async () => {} }); services.push(below);
   expect((await below.discover()).map(item => item.rootPath)).toEqual([nested]);
 });
+it('initializes the open folder as a Git repository once', async () => {
+  const root = await realpath(await mkdtemp(path.join(tmpdir(), 'version-guard-init-'))); temps.push(root);
+  const service = new VersionGuardService({ roots: () => [root], beforeStage: async () => {}, discard: async () => false, trash: async () => {} }); services.push(service);
+  expect(await service.discover()).toEqual([]);
+  expect(await service.handle({ method: 'init' })).toEqual([root]);
+  expect((await service.discover()).map(item => item.rootPath)).toEqual([root]);
+  await expect(service.handle({ method: 'init' })).rejects.toThrow('already exists');
+});
 it('keeps index and worktree distinct and commits only staged changes including unusual paths', async () => {
   const { repo, service } = await fixture(); await service.discover();
   const name = '中文 file\nname.txt'; await writeFile(path.join(repo, name), 'one\n'); await writeFile(path.join(repo, 'other'), 'untouched');
@@ -48,6 +57,21 @@ it('commits staged content, preserves unstaged edits, and unstages before and af
   const history = await service.handle({ method: 'history', repository: repo }) as GuardHistory; expect(history.entries).toHaveLength(2); expect(history.entries[0].message).toBe('second\n\nbody');
   const files = await service.handle({ method: 'commitFiles', repository: repo, revision: history.entries[0].hash }) as GuardFile[]; expect(files[0].path).toBe(name);
   const initial = await service.handle({ method: 'comparison', repository: repo, revision: history.entries[1].hash, paths: [name], source: 'commit' }) as GuardComparison; expect(initial.base).toBe(''); expect(initial.content).toBe('one\n');
+});
+it('compares workbook versions cell by cell instead of reporting a binary change', async () => {
+  const { repo, service } = await fixture(); await service.discover();
+  const save = async (rows: unknown[][]) => { const workbook = new ExcelJS.Workbook(); workbook.addWorksheet('数据').addRows(rows); await workbook.xlsx.writeFile(path.join(repo, 'book.xlsx')); };
+  await save([['名称', '数量'], ['苹果', 3]]); git(repo, 'add', '.'); git(repo, 'commit', '-qm', 'book');
+  await save([['名称', '数量'], ['苹果', 5], ['梨', 2]]);
+  const diff = await service.handle({ method: 'comparison', repository: repo, paths: ['book.xlsx'], source: 'working' }) as GuardComparison;
+  expect(diff.binary).toBeUndefined();
+  expect(diff.spreadsheet).toEqual({
+    base: [{ name: '数据', rows: [['名称', '数量'], ['苹果', '3']] }],
+    content: [{ name: '数据', rows: [['名称', '数量'], ['苹果', '5'], ['梨', '2']] }],
+  });
+  await writeFile(path.join(repo, 'broken.xlsx'), 'not a zip'); git(repo, 'add', 'broken.xlsx');
+  const broken = await service.handle({ method: 'comparison', repository: repo, paths: ['broken.xlsx'], source: 'staged' }) as GuardComparison;
+  expect(broken.spreadsheet).toBeUndefined(); expect(broken.content).toBe('not a zip');
 });
 it('fetches and pushes the configured upstream and never performs a background network poll', async () => {
   const { root, repo, service } = await fixture(); const remote = path.join(root, 'remote.git'); git(root, 'init', '--bare', '-q', remote);

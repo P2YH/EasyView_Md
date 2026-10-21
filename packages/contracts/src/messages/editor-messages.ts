@@ -191,7 +191,7 @@ export type HostToEditorMessage =
   | { type: 'aiChat.tool'; requestId: string; phase: 'call' | 'result'; toolName: string; input: unknown; output?: unknown }
   | { type: 'aiChat.applyPatches'; requestId: string; operationId: string; path: string; patches: AiTextPatch[] }
   | { type: 'aiChat.officeProposal'; requestId: string; proposalId: string; fileName: string; changes: AiOfficeCellChange[]; total: number; structural: string[]; truncated: boolean }
-  | { type: 'aiChat.officeCommitted'; requestId: string; commitId: string; filePath: string; backupPath: string }
+  | { type: 'aiChat.officeCommitted'; requestId: string; commitId: string; filePath: string; backup: string }
   | { type: 'aiChat.officeUndone'; requestId: string; commitId: string; filePath?: string; error?: string }
   | { type: 'aiChat.error'; requestId: string; message: string; aborted?: boolean }
   | { type: 'aiChat.settingsResponse'; requestId: string; settings: AiChatSettings; hasApiKey: boolean; hasWebSearchApiKey: boolean }

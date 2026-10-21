@@ -3,7 +3,7 @@
  *
  * Every edit is staged in memory first: callers get a cell-level diff and a
  * proposal; only `commitXlsxProposal` touches disk, after re-checking the
- * fingerprint, backing up the original, and writing atomically. `undoXlsxCommit`
+ * fingerprint, keeping the original restorable, and writing atomically. `undoXlsxCommit`
  * restores the backup as long as the file was not changed after the commit.
  */
 
@@ -13,6 +13,7 @@ import path from 'node:path';
 import ExcelJS from 'exceljs';
 import { z } from 'zod';
 import { writeFileAtomically } from '../filesystem/file-write';
+import { readOfficeBackup, type OfficeBackupRef, type OfficeBackupStore } from './office-backups';
 import { tAi } from './ai.i18n';
 
 export const XLSX_MAX_FILE_BYTES = 20 * 1024 * 1024;
@@ -56,10 +57,22 @@ export const xlsxSheetOpSchema = z.discriminatedUnion('op', [
     op: z.literal('setRange'),
     sheet: sheetName,
     range: z.string().regex(RANGE_REF),
+    /** One value copied into every cell of the range. */
     value: cellValueSchema.optional(),
+    /** Row-major grid with exactly the range's shape; each cell gets its own value. */
+    values: z.array(z.array(cellValueSchema)).min(1).optional(),
     /** May use {row} / {col} placeholders, e.g. "=B{row}*C{row}". */
     formula: z.string().min(1).max(8192).optional(),
-  }).refine((op) => (op.value === undefined) !== (op.formula === undefined), { message: 'setRange needs exactly one of value or formula' }),
+  })
+    .refine((op) => [op.value, op.values, op.formula].filter((item) => item !== undefined).length === 1, { message: 'setRange needs exactly one of value, values or formula' })
+    .refine((op) => {
+      if (op.values === undefined) return true;
+      const r = parseRange(op.range);
+      return op.values.length === r.bottom - r.top + 1 && op.values.every((line) => line.length === r.right - r.left + 1);
+    }, { message: 'setRange values must be a row-major grid with exactly the same rows and columns as range' })
+    .refine((op) => !(typeof op.value === 'string' && /[\n\t]/.test(op.value) && parseRange(op.range).cells > 1), {
+      message: 'setRange value is copied into every cell; to fill different data per cell use values (2D grid), and to append rows use insertRows',
+    }),
   z.object({
     op: z.literal('transformRange'),
     sheet: sheetName,
@@ -144,7 +157,7 @@ export interface XlsxProposal {
 
 export interface XlsxCommitRecord {
   filePath: string;
-  backupPath: string;
+  backup: OfficeBackupRef;
   writtenFingerprint: string;
 }
 
@@ -294,7 +307,9 @@ function applyOp(workbook: ExcelJS.Workbook, op: XlsxSheetOp): string | null {
       for (let row = r.top; row <= r.bottom; row += 1) {
         const line = sheet.getRow(row);
         for (let col = r.left; col <= r.right; col += 1) {
-          line.getCell(col).value = op.formula !== undefined ? fillFormula(op.formula, row, col) : (op.value ?? null);
+          line.getCell(col).value = op.formula !== undefined
+            ? fillFormula(op.formula, row, col)
+            : op.values !== undefined ? op.values[row - r.top][col - r.left] : (op.value ?? null);
         }
       }
       return null;
@@ -423,33 +438,25 @@ export async function planXlsxEdit(
   })(), timeoutMs);
 }
 
-function backupStamp(date: Date): string {
-  return date.toISOString().replace(/[:.]/g, '-');
-}
-
 /**
- * Writes an accepted proposal: re-checks the fingerprint, backs the original up
- * under `<backupRoot>/.easyview/ai-backups/<timestamp>/`, then writes atomically.
+ * Writes an accepted proposal: re-checks the fingerprint, keeps the original
+ * restorable through `backups` (Git snapshot or app-data copy), then writes atomically.
  */
 export async function commitXlsxProposal(
   proposal: XlsxProposal,
-  backupRoot: string,
+  backups: OfficeBackupStore,
   now: Date = new Date(),
 ): Promise<XlsxCommitRecord> {
   const current = await readXlsxBytes(proposal.filePath);
   if (fingerprintBytes(current) !== proposal.baseFingerprint) throw new Error(tAi('xlsx.fingerprintStale'));
-  const backupDir = path.join(backupRoot, '.easyview', 'ai-backups', `${backupStamp(now)}-${proposal.id.slice(0, 8)}`);
-  await fs.mkdir(backupDir, { recursive: true });
-  const backupPath = path.join(backupDir, path.basename(proposal.filePath));
-  await fs.writeFile(backupPath, current, { flag: 'wx' });
+  const backup = await backups.save(proposal.filePath, current, proposal.id, now);
   await writeFileAtomically(proposal.filePath, proposal.buffer);
-  return { filePath: proposal.filePath, backupPath, writtenFingerprint: proposal.nextFingerprint };
+  return { filePath: proposal.filePath, backup, writtenFingerprint: proposal.nextFingerprint };
 }
 
 /** Restores the backup of a commit unless the file was changed after that commit. */
 export async function undoXlsxCommit(record: XlsxCommitRecord): Promise<void> {
   const current = await readXlsxBytes(record.filePath);
   if (fingerprintBytes(current) !== record.writtenFingerprint) throw new Error(tAi('xlsx.undoStale'));
-  const backup = await fs.readFile(record.backupPath);
-  await writeFileAtomically(record.filePath, backup);
+  await writeFileAtomically(record.filePath, await readOfficeBackup(record.backup));
 }

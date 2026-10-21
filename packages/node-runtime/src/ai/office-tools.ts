@@ -23,6 +23,7 @@ import {
   type XlsxProposal,
 } from './xlsx-edit';
 import { tAi } from './ai.i18n';
+import type { OfficeBackupStore } from './office-backups';
 
 export type OfficeDocumentKind = 'xlsx';
 
@@ -35,8 +36,8 @@ export interface ActiveOfficeDocument {
   kind: OfficeDocumentKind;
   /** Absolute path of the opened file. */
   filePath: string;
-  /** Directory that receives `.easyview/ai-backups/`. */
-  backupRoot: string;
+  /** Keeps the pre-edit file restorable for undo. */
+  backups: OfficeBackupStore;
   /** Shows the diff to the user and resolves once they press Apply or Reject. */
   confirmEdit: (proposal: { id: string; fileName: string; diff: XlsxDiff }) => Promise<OfficeEditDecision>;
   /** Called after a successful write so the host can refresh the preview and offer undo. */
@@ -74,7 +75,7 @@ export function createOfficeAgentTools(document: ActiveOfficeDocument): ToolSet 
         if (!decision.accepted) {
           return { status: 'rejected' as const, reason: decision.reason ?? tAi('xlsx.rejected') };
         }
-        const record = await commitXlsxProposal(proposal, document.backupRoot);
+        const record = await commitXlsxProposal(proposal, document.backups);
         await document.onCommitted?.(record, proposal);
         return {
           status: 'applied' as const,

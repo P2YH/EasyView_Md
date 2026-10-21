@@ -28,6 +28,21 @@ function shouldIgnore(filePath) {
   return !KEEP_TOP_LEVEL.has(top);
 }
 
+/** EASYVIEW_MAC_SIGN_IDENTITY wins ("-" forces ad-hoc); otherwise the first local Developer ID / Apple Development identity. */
+function macSigningIdentity(execFileSync) {
+  const configured = process.env.EASYVIEW_MAC_SIGN_IDENTITY?.trim();
+  if (configured) return configured;
+  try {
+    const output = execFileSync('security', ['find-identity', '-v', '-p', 'codesigning'], { encoding: 'utf8' });
+    const names = [...output.matchAll(/^\s*\d+\)\s+[0-9A-F]{40}\s+"([^"]+)"/gm)].map((match) => match[1]);
+    return names.find((name) => name.startsWith('Developer ID Application:'))
+      ?? names.find((name) => name.startsWith('Apple Development:'))
+      ?? '-';
+  } catch {
+    return '-';
+  }
+}
+
 module.exports = {
   packagerConfig: {
     asar: { unpack: '**/node_modules/node-pty/**/*' },
@@ -62,16 +77,20 @@ module.exports = {
   hooks: {
     // Electron binaries are only linker-signed (ad-hoc) and leave the bundle resources unsealed,
     // which `codesign --verify --deep --strict` rejects and Gatekeeper may report as "damaged".
-    // Without a Developer ID, seal the whole bundle with a complete ad-hoc signature.
+    // Seal the whole bundle. Prefer a stable keychain identity: an ad-hoc signature's designated
+    // requirement is the cdhash, which changes on every build, so the Keychain re-prompts for
+    // "EasyView_Md Safe Storage" after each reinstall. Fall back to ad-hoc when none is available.
     postPackage: async (_forgeConfig, { platform, outputPaths }) => {
       if (platform !== 'darwin') return;
       const { execFileSync } = require('node:child_process');
       const fs = require('node:fs');
+      const identity = macSigningIdentity(execFileSync);
+      console.log(`[easyview-desktop] codesign identity: ${identity === '-' ? 'ad-hoc' : identity}`);
       for (const outputPath of outputPaths) {
         for (const entry of fs.readdirSync(outputPath)) {
           if (!entry.endsWith('.app')) continue;
           const app = path.join(outputPath, entry);
-          execFileSync('codesign', ['--force', '--deep', '--sign', '-', app], { stdio: 'inherit' });
+          execFileSync('codesign', ['--force', '--deep', '--sign', identity, app], { stdio: 'inherit' });
           execFileSync('codesign', ['--verify', '--deep', '--strict', '--verbose=2', app], { stdio: 'inherit' });
         }
       }

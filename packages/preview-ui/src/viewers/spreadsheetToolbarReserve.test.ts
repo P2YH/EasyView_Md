@@ -31,7 +31,8 @@ describe('reserveToolbarChrome', () => {
     expect(toolbar.getBoundingClientRect().width).toBe(100);
   });
 
-  it('is idempotent and re-lays-out the toolbar when the slot resizes', () => {
+  it('is idempotent and re-lays-out the toolbar after the engine has initialised', () => {
+    vi.useFakeTimers();
     let callback: (() => void) | undefined;
     const observe = vi.fn();
     vi.stubGlobal('ResizeObserver', class { constructor(cb: () => void) { callback = cb; } observe = observe; disconnect() {} });
@@ -43,7 +44,10 @@ describe('reserveToolbarChrome', () => {
     const onResize = vi.fn();
     window.addEventListener('resize', onResize);
     callback?.();
+    expect(onResize).not.toHaveBeenCalled();
+    vi.runAllTimers();
     expect(onResize).toHaveBeenCalledTimes(1);
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 });

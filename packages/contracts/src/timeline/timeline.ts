@@ -23,6 +23,8 @@ export interface TimelineComparison {
   content: string;
   baseLabel: string;
   contentLabel: string;
+  /** Present for workbooks; the viewer renders a cell comparison instead of a text diff. */
+  spreadsheet?: import('../spreadsheet-diff').SpreadsheetComparison;
 }
 export interface LocalHistorySettings {
   enabled: boolean;

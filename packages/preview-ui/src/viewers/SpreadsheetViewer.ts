@@ -88,7 +88,9 @@ export function reserveToolbarChrome(toolbar: HTMLElement, slot: HTMLElement): v
   };
   const win = toolbar.ownerDocument.defaultView;
   if (win && typeof ResizeObserver !== 'undefined') {
-    new ResizeObserver(() => win.dispatchEvent(new Event('resize'))).observe(slot);
+    // x-spreadsheet fills its button list in a setTimeout(0) queued at construction; a resize
+    // dispatched before that throws inside its moreResize, so queue ours behind it.
+    new ResizeObserver(() => { win.setTimeout(() => win.dispatchEvent(new Event('resize')), 0); }).observe(slot);
   }
 }
 

@@ -14,6 +14,7 @@ import { createAiAgentTools } from './agent-tools';
 import { tAi } from './ai.i18n';
 import { createOfficeAgentTools, officeDocumentKind, type OfficeEditDecision } from './office-tools';
 import { undoXlsxCommit, type XlsxCommitRecord, type XlsxDiff } from './xlsx-edit';
+import { OfficeBackupStore, describeOfficeBackup, type OfficeBackupRef } from './office-backups';
 
 export interface AiChatSecretStore {
   getApiKey(): Promise<string | null>;
@@ -44,9 +45,9 @@ export interface AiChatHostOptions {
   officeEdits?: {
     /** Overrides how a proposal is shown; defaults to posting `aiChat.officeProposal`. */
     showProposal?(requestId: string, proposal: { id: string; fileName: string; diff: XlsxDiff }): void;
-    /** Directory that receives `.easyview/ai-backups/`; defaults to the workspace root or the file's folder. */
-    backupRoot?(filePath: string): string | null;
-    onCommitted?(requestId: string, commit: { id: string; filePath: string; backupPath: string }): void;
+    /** App-data directory for backups of files outside Git; defaults to `ai-backups/` beside the settings file. */
+    backupDirectory?: string;
+    onCommitted?(requestId: string, commit: { id: string; filePath: string; backup: OfficeBackupRef }): void;
   };
 }
 
@@ -62,6 +63,7 @@ export class AiChatHost {
   private readonly activeRequests = new Map<string, AbortController>();
   private readonly officeProposals = new Map<string, { requestId: string; resolve(decision: OfficeEditDecision): void }>();
   private readonly officeCommits = new Map<string, XlsxCommitRecord>();
+  private officeBackups?: OfficeBackupStore;
 
   constructor(private readonly options: AiChatHostOptions) {}
 
@@ -343,12 +345,12 @@ export class AiChatHost {
         Object.assign(tools, createOfficeAgentTools({
           kind: officeKind,
           filePath,
-          backupRoot: office.backupRoot?.(filePath) ?? toolContext.workspaceRootPath ?? path.dirname(filePath),
+          backups: this.officeBackups ??= new OfficeBackupStore(office.backupDirectory ?? path.join(path.dirname(this.options.settingsFilePath), 'ai-backups')),
           confirmEdit: (proposal) => this.confirmOfficeEdit(requestId, proposal, controller.signal),
           onCommitted: (record, proposal) => {
             this.officeCommits.set(proposal.id, record);
-            this.options.postMessage({ type: 'aiChat.officeCommitted', requestId, commitId: proposal.id, filePath: record.filePath, backupPath: record.backupPath });
-            office.onCommitted?.(requestId, { id: proposal.id, filePath: record.filePath, backupPath: record.backupPath });
+            this.options.postMessage({ type: 'aiChat.officeCommitted', requestId, commitId: proposal.id, filePath: record.filePath, backup: describeOfficeBackup(record.backup) });
+            office.onCommitted?.(requestId, { id: proposal.id, filePath: record.filePath, backup: record.backup });
           },
         }));
       }

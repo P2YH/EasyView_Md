@@ -1,6 +1,7 @@
 import type { TimelineComparison } from '@easyview/contracts';
 import { ChangeViewController, type PreparedHistoryDiff } from '../controllers/ChangeViewController';
 import { tTimeline } from './timeline.i18n';
+import { SpreadsheetDiffView } from './SpreadsheetDiffView';
 /** A transient, isolated Change surface. No host transport or write-capable editor is mounted. */
 export class HistoryView {
   private controller?: ChangeViewController;
@@ -10,9 +11,15 @@ export class HistoryView {
   private workerObjectUrl?: string;
   private workerDeadline?: ReturnType<typeof setTimeout>;
   private navigationIndex = -1;
+  private spreadsheet?: SpreadsheetDiffView;
   constructor(private readonly root: HTMLElement, private comparison: TimelineComparison | null, workerUrl: string) {
     root.classList.add('easyview-history-view');
     if (!comparison) throw new Error(tTimeline('history.missingComparison'));
+    if (comparison.spreadsheet) {
+      root.style.cssText = 'height:100%;min-height:0;display:flex;flex-direction:column';
+      this.spreadsheet = new SpreadsheetDiffView(root, comparison);
+      return;
+    }
     const bar = document.createElement('div'); bar.className = 'easyview-history-toolbar';
     if (!document.getElementById('easyview-history-styles')) { const style = document.createElement('style'); style.id = 'easyview-history-styles'; style.textContent = '.easyview-history-toolbar button,.easyview-history-toolbar select{font:inherit;font-size:12px;color:var(--vscode-editor-foreground);background:var(--vscode-editorWidget-background);border:1px solid var(--vscode-panel-border,#555);border-radius:4px;padding:4px 8px}.easyview-history-toolbar button{cursor:pointer}.easyview-history-toolbar button:hover{background:var(--vscode-list-hoverBackground,#ffffff16)}'; document.head.append(style); }
     bar.style.cssText = 'display:flex;gap:12px;padding:10px;align-items:center;flex:0 0 auto;border-bottom:1px solid var(--vscode-panel-border,#444)';
@@ -67,5 +74,5 @@ export class HistoryView {
   }
   private diff?: PreparedHistoryDiff;
   private stopWorker(): void { if (this.workerDeadline) { clearTimeout(this.workerDeadline); this.workerDeadline = undefined; } if (this.workerObjectUrl) { URL.revokeObjectURL(this.workerObjectUrl); this.workerObjectUrl = undefined; } if (this.worker) { this.worker.onmessage = null; this.worker.onerror = null; this.worker.terminate(); this.worker = undefined; } }
-  dispose(): void { this.destroyed = true; this.workerFetch.abort(); this.stopWorker(); this.controller?.dispose(); this.controller = undefined; this.diff = undefined; this.comparison = null; this.root.replaceChildren(); }
+  dispose(): void { this.spreadsheet?.dispose(); this.spreadsheet = undefined; this.destroyed = true; this.workerFetch.abort(); this.stopWorker(); this.controller?.dispose(); this.controller = undefined; this.diff = undefined; this.comparison = null; this.root.replaceChildren(); }
 }

@@ -80,7 +80,9 @@ test('Agent edits an xlsx preview only after Apply, can undo, and refuses an ext
     await edit.locator('.ai-chat-office-btn.apply').click();
     await expect.poll(() => cellB2(xlsx)).toBe(7);
     await expect(edit).toHaveClass(/\bapplied\b/);
-    expect((await readdir(path.join(workspace, '.easyview', 'ai-backups'))).length).toBe(1);
+    // The workspace sits in an ignored folder, so the pre-edit copy goes to app data, never into the workspace.
+    expect((await readdir(path.join(userData, 'ai-backups'))).length).toBe(1);
+    expect(await readdir(workspace)).not.toContain('.easyview');
     await edit.locator('.ai-chat-office-btn.undo').click();
     await expect.poll(() => cellB2(xlsx)).toBe(3);
     await expect(edit).toHaveClass(/\bundone\b/);

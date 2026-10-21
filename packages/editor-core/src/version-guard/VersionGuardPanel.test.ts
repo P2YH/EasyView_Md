@@ -26,6 +26,23 @@ function client(): GuardClient & { calls: GuardRequest[] } {
 const flush = () => new Promise(resolve => setTimeout(resolve, 0));
 
 describe('VersionGuardPanel', () => {
+  it('offers to create a Git repository when the open folder has none', async () => {
+    const guard = client(); const base = guard.request; let initialized = false;
+    guard.request = vi.fn(async (request: GuardRequest) => {
+      if (request.method === 'init') { guard.calls.push(request); initialized = true; return ['/repo']; }
+      if (request.method === 'discover' && !initialized) { guard.calls.push(request); return []; }
+      return base(request);
+    });
+    const panel = new VersionGuardPanel({ client: guard }); document.body.append(panel.element);
+    panel.setVisible(true); for (let i = 0; i < 5; i++) await flush();
+    const init = panel.element.querySelector<HTMLButtonElement>('.guard-init');
+    expect(init?.textContent).toBe('创建 Git 仓库');
+    init!.click(); for (let i = 0; i < 8; i++) await flush();
+    expect(guard.calls.map(call => call.method)).toContain('init');
+    expect(panel.element.querySelector('.guard-init')).toBeNull();
+    expect(panel.element.querySelector('.guard-repo-title')).not.toBeNull();
+    panel.dispose();
+  });
   it('keeps the commit file list stable across status refreshes (no flicker)', async () => {
     const guard = client(); const panel = new VersionGuardPanel({ client: guard }); document.body.append(panel.element);
     panel.setVisible(true); for (let i = 0; i < 5; i++) await flush();

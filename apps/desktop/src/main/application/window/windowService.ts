@@ -332,10 +332,8 @@ export function createMenu(): void {
     {
       label: tMenu('edit'),
       submenu: [
-        // Off macOS a registered accelerator pre-empts the page and runs native contenteditable undo,
-        // bypassing the editors' own history; let the editors' keymaps handle the keys instead.
-        { role: 'undo', label: tMenu('edit.undo'), registerAccelerator: isMac },
-        { role: 'redo', label: tMenu('edit.redo'), registerAccelerator: isMac },
+        { role: 'undo', label: tMenu('edit.undo') },
+        { role: 'redo', label: tMenu('edit.redo') },
         { type: 'separator' },
         { role: 'cut', label: tMenu('edit.cut') },
         { role: 'copy', label: tMenu('edit.copy') },

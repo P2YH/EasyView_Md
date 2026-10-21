@@ -283,6 +283,8 @@ jobs:
             gh release edit "$RELEASE_TAG" --draft=false
           fi
           node website/scripts/easyview-release.mjs verify release-assets "$RELEASE_VERSION"
+          published_at=$(gh release view "$RELEASE_TAG" --json publishedAt --jq .publishedAt)
+          echo "RELEASE_PUBLISHED_AT=$published_at" >> "$GITHUB_ENV"
       - name: Sync published downloads over SSH
         env:
           DEPLOY_SSH_KEY: ${{ secrets.EASYVIEW_DEPLOY_SSH_KEY }}
@@ -310,7 +312,7 @@ jobs:
           set -euo pipefail
           # Fetch before editing so unrelated website changes are preserved.
           git pull --ff-only origin main
-          node scripts/easyview-release.mjs update-site sites/easyview/index.html "$RELEASE_VERSION" --extension-version "$EXTENSION_VERSION"
+          node scripts/easyview-release.mjs update-site sites/easyview/index.html "$RELEASE_VERSION" --extension-version "$EXTENSION_VERSION" --published-at "$RELEASE_PUBLISHED_AT"
           git diff --check
           git add sites/easyview/index.html
           if git diff --cached --quiet; then

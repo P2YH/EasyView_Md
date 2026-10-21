@@ -109,7 +109,7 @@ bash ../WonderXY-ART/scripts/prepare-easyview-downloads.sh <固定文件名产�
 bash ../WonderXY-ART/scripts/prepare-easyview-downloads.sh <固定文件名产物目录> X.Y.Z <临时输出目录> --extension-version A.B.C
 node ../WonderXY-ART/scripts/easyview-release.mjs verify <临时输出目录> X.Y.Z [--extension-version A.B.C]
 bash ../WonderXY-ART/scripts/sync-easyview-downloads.sh <临时输出目录> X.Y.Z --dry-run
-node ../WonderXY-ART/scripts/easyview-release.mjs update-site <index.html副本> X.Y.Z --extension-version A.B.C --dry-run
+node ../WonderXY-ART/scripts/easyview-release.mjs update-site <index.html副本> X.Y.Z --extension-version A.B.C --published-at YYYY-MM-DDTHH:MM:SSZ --dry-run
 ```
 
-prepare 的 dry-run 验证五个源文件存在且非空，不创建输出目录。sync 的 dry-run 验证清单和五个文件的大小、SHA-256 与版本，不读取密钥、不执行 SSH 或 rsync。update-site 的 dry-run 验证桌面端两处文字、三条链接以及扩展的一处文字、一条链接标记存在，不写文件。缺失、空文件、校验不符或页面标记数量异常会立即失败。
+prepare 的 dry-run 验证五个源文件存在且非空，不创建输出目录。sync 的 dry-run 验证清单和五个文件的大小、SHA-256 与版本，不读取密钥、不执行 SSH 或 rsync。update-site 的 dry-run 验证桌面端两处文字、三条链接、扩展的一处文字、一条链接以及一处 Release 发布时间标记存在，不写文件；发布时间取 GitHub Release 的 `publishedAt`（UTC），官网下载区按访问者本地时间显示。缺失、空文件、校验不符或页面标记数量异常会立即失败。

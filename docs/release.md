@@ -85,7 +85,7 @@ WonderXY-ART 原有部署 secrets 仍需有效：`DEPLOY_SSH_KEY`、`DEPLOY_HOST
 2. 在要发布的提交上创建 tag：`git tag vX.Y.Z`。
 3. 推送这个 tag：`git push origin vX.Y.Z`。
 
-发布流程的第一个 job `ci-gate` 会检查被 tag 的提交在 `ci.yml`、`extension-e2e.yml`、`desktop-build.yml` 上都已有成功运行（只读 Actions API，不重跑测试；仍在运行时最多等 50 分钟；失败或缺失则立即终止发布）。所以第 3 步之前应等主分支上这三个 workflow 全绿，可用 `npm run check:release-gate -- --sha <提交>` 在本地做同样检查。紧急情况下手动 **Run workflow** 时勾选 `skip_ci_gate` 可跳过（会留下警告）。
+发布流程的第一个 job `ci-gate` 会检查被 tag 的提交在 `ci.yml`、`extension-e2e.yml`、`desktop-build.yml` 上都已有成功运行（只读 Actions API，不重跑测试；仍在运行时最多等 50 分钟；失败或缺失则立即终止发布）。所以第 3 步之前应等主分支上这三个 workflow 全绿，可用 `npm run check:release-gate -- --sha <提交>` 在本地做同样检查，用 `npm run watch:run -- <运行ID>` 查看某次运行各 job 的步骤进度条。紧急情况下手动 **Run workflow** 时勾选 `skip_ci_gate` 可跳过（会留下警告）。
 
 随后检查 EasyView 的 **Desktop Release** 运行成功、GitHub Release 附件齐全、WonderXY-ART 的 **Deploy** 成功，以及官网版本文字和下载文件校验值一致。主分支推送本身只执行日常 CI，不创建 Release。
 

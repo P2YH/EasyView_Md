@@ -39,6 +39,7 @@
     "verify:release": "npm run verify:quick && npm run test:e2e:all",
     "verify:all": "npm run verify:release && npm run package:vscode && npm run verify:vscode-package && npm run package:desktop",
     "check:release-gate": "node tooling/release/check-ci-gate.mjs",
+    "watch:run": "node tooling/release/watch-run.mjs",
     "check:editor-cycles": "node tooling/verify/check-editor-cycles.mjs",
     "verify:vscode-package": "npm run verify:package --workspace easyview-md",
     "check:architecture": "node tooling/verify/check-architecture.mjs",

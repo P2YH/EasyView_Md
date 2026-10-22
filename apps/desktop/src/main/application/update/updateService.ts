@@ -65,13 +65,29 @@ export async function setAutoCheck(enabled: boolean): Promise<void> {
   menuRefresher();
 }
 
+// release.json has no Cache-Control, so Chromium's heuristic cache would serve a stale version for hours.
 async function fetchWithTimeout(url: string, accept: string): Promise<Response> {
   const response = await net.fetch(url, {
     headers: { Accept: accept, 'User-Agent': `EasyView_Md/${app.getVersion()}` },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    cache: 'no-store',
   });
   if (!response.ok) throw new Error(`HTTP ${response.status} for ${new URL(url).pathname}`);
   return response;
+}
+
+// net.fetch leaves Response.url empty after following redirects and rejects redirect: 'manual'.
+function redirectTarget(url: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const request = net.request({ url, redirect: 'manual', cache: 'no-store' });
+    const timer = setTimeout(() => { request.abort(); reject(new Error(`timed out resolving ${new URL(url).pathname}`)); }, REQUEST_TIMEOUT_MS);
+    const settle = (finish: () => void) => { clearTimeout(timer); request.abort(); finish(); };
+    request.on('redirect', (_status, _method, redirectUrl) => settle(() => resolve(redirectUrl)));
+    request.on('response', (response) => settle(() => reject(new Error(`HTTP ${response.statusCode} without redirect for ${new URL(url).pathname}`))));
+    request.on('error', (error) => settle(() => reject(error)));
+    request.setHeader('User-Agent', `EasyView_Md/${app.getVersion()}`);
+    request.end();
+  });
 }
 
 async function fetchLatestRelease(): Promise<ReleaseInfo> {
@@ -86,11 +102,10 @@ async function fetchLatestRelease(): Promise<ReleaseInfo> {
   }
   ulog('warn', `release API unavailable, falling back to release page: ${String(apiError)}`);
   try {
-    const response = await fetchWithTimeout(LATEST_RELEASE_PAGE, 'text/html');
-    void response.body?.cancel();
-    const release = parseReleaseFromTagUrl(response.url);
+    const target = await redirectTarget(LATEST_RELEASE_PAGE);
+    const release = parseReleaseFromTagUrl(target);
     if (release) return release;
-    throw new Error(`unexpected release page url ${response.url}`);
+    throw new Error(`unexpected release page url ${target}`);
   } catch (error) {
     ulog('warn', `release page fallback failed: ${String(error)}`);
   }

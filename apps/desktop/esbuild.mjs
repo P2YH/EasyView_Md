@@ -28,7 +28,7 @@ const common = {
   logLevel: 'info',
 };
 
-const buildResults = await Promise.all([
+const [, , , , rendererBuild] = await Promise.all([
   build({
     ...common,
     entryPoints: [path.join(appDir, 'src/main/entry/main.ts')],
@@ -90,7 +90,6 @@ await build({ bundle: true, entryPoints: [path.join(workspaceDir, 'packages/edit
 
 await build({ bundle: true, entryPoints: [path.join(workspaceDir, 'packages/preview-ui/src/workers/spreadsheet-worker.ts')], outfile: path.join(rendererDir, 'workers/spreadsheet-worker.js'), platform: 'browser', format: 'iife', target: 'chrome128', minify: production });
 
-const rendererBuild = buildResults[3];
 if (production && rendererBuild.metafile) {
   await writeFile(path.join(rendererDir, 'build-meta.json'), JSON.stringify(rendererBuild.metafile, null, 2));
 }

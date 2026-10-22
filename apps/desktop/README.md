@@ -37,7 +37,7 @@ Windows 安装包（NSIS 安装向导）在 Forge `make` 之后生成，只能�
 npm run make:nsis --workspace @easyview/desktop
 ```
 
-`scripts/make-nsis.mjs` 用 electron-builder（配置 `electron-builder.nsis.cjs`）把 Forge 产物 `out/EasyView_Md-win32-x64` 打成 `out/nsis/EasyView_Md-win-x64-setup.exe`。向导可选“仅为我安装”（无需管理员）或“为所有用户安装”（需管理员），并可修改安装目录。安装时把 EasyView_Md 加入 `.md` / `.markdown` / `.mdx` 的“打开方式”列表（`build/installer.nsh`），不改默认打开程序。macOS 生成 ZIP，并通过系统 `hdiutil` 生成 DMG。
+`scripts/make-nsis.mjs` 用 electron-builder（配置 `electron-builder.nsis.cjs`）把 Forge 产物 `out/EasyView_Md-win32-x64` 打成 `out/nsis/EasyView_Md-win-x64-setup.exe`。向导可选“仅为我安装”（无需管理员）或“为所有用户安装”（需管理员），并可修改安装目录；已安装过时沿用原安装范围，并自动卸载 2.0.14 及以前的 Squirrel 安装，保证只保留一个版本。安装时把 EasyView_Md 加入 `.md` / `.markdown` / `.mdx` 的“打开方式”列表（`build/installer.nsh`），不改默认打开程序。macOS 生成 ZIP，并通过系统 `hdiutil` 生成 DMG。
 
 ## 安全边界
 

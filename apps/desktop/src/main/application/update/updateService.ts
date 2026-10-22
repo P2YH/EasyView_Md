@@ -9,6 +9,11 @@ import {
   normalizeUpdateSettings, parseGitHubRelease, parseMirrorRelease, parseReleaseFromTagUrl, parseSha256Sums, type ReleaseAsset, type ReleaseInfo,
   selectInstallerAsset, shouldPrompt, trimNotes, type UpdateSettings, WEBSITE_URL, windowsInstallKind, withMirrorAssets,
 } from './updateCore';
+import { installOnQuit, replaceableBundle, stageFromDmg } from './macAppUpdate';
+import {
+  closeUpdateProgressDialog, openUpdateProgressDialog, setUpdateDialogCancelHandler, setUpdateProgressPercent,
+  setUpdateProgressState, updateDialogParent, waitForUpdateDialogAction,
+} from './updateProgressDialog';
 import { cleanupUpdateDirectory, findVerifiedDownload } from './updateStorage';
 import { tUpdate } from './updateService.i18n';
 
@@ -182,6 +187,7 @@ async function promptForRelease(release: ReleaseInfo, current: string): Promise<
 
 function setProgress(value: number): void {
   for (const window of BrowserWindow.getAllWindows()) window.setProgressBar(value);
+  if (value >= 0) setUpdateProgressPercent(Math.round(value * 100));
 }
 
 export function cancelUpdateDownload(): void {
@@ -227,6 +233,10 @@ async function downloadUpdate(release: ReleaseInfo, asset: ReleaseAsset): Promis
     const current = attemptController;
     stallTimer = setTimeout(() => current?.abort(new Error('download stalled')), DOWNLOAD_STALL_MS);
   };
+  const title = tUpdate('prompt.title');
+  await openUpdateProgressDialog(updateDialogParent());
+  setUpdateProgressState({ phase: 'downloading', title, message: tUpdate('downloading', { version: release.version }), percent: 0 });
+  setUpdateDialogCancelHandler(() => cancelUpdateDownload());
   try {
     await cleanupUpdateDirectory({ root: updatesRoot(), currentVersion: app.getVersion(), keepVersion: release.version, maxRetained: 1, log: (m) => ulog('info', `cleanup: ${m}`) });
     await mkdir(dir, { recursive: true });
@@ -235,6 +245,7 @@ async function downloadUpdate(release: ReleaseInfo, asset: ReleaseAsset): Promis
     const reused = await findVerifiedDownload(finalPath, expected, (m) => ulog('warn', m));
     if (reused) {
       ulog('info', `reusing verified download ${asset.name}`);
+      setUpdateProgressState({ phase: 'downloading', title, message: tUpdate('downloading', { version: release.version }), percent: 100 });
     } else {
       const sources = assetDownloadSources(mirrored.assets.find((candidate) => candidate.name === asset.name) ?? asset);
       ulog('info', `downloading ${asset.name} (${asset.size} bytes) to ${dir} via ${sources.map((source) => new URL(source.url).host).join(', ')}`);
@@ -291,27 +302,89 @@ async function downloadUpdate(release: ReleaseInfo, asset: ReleaseAsset): Promis
       ulog('info', `downloaded and verified ${asset.name} (${received} bytes)`);
     }
     setProgress(-1);
-    const openError = await shell.openPath(finalPath);
-    if (openError) throw new Error(`failed to open installer: ${openError}`);
-    await showBox({
-      type: 'info',
-      message: tUpdate('installer.opened', { version: release.version }),
-      detail: tUpdate(process.platform === 'darwin' ? 'installer.macDetail' : 'installer.detail'),
-    });
+    if (process.platform === 'darwin' && await finishMacInPlaceUpdate(release.version, finalPath, path.join(dir, 'EasyView_Md.app'))) return;
+    await finishInstallerUpdate(release.version, finalPath);
   } catch (error) {
     const cancelled = controller.signal.aborted && String(controller.signal.reason).includes('cancelled');
     ulog(cancelled ? 'info' : 'error', `download ${cancelled ? 'cancelled' : 'failed'}: ${String(error)}`);
     await rm(partPath, { force: true });
     setProgress(-1);
-    if (!cancelled) {
-      const { response } = await showBox({ type: 'error', message: tUpdate('download.failed'), detail: String(error instanceof Error ? error.message : error), buttons: [tUpdate('prompt.website'), tUpdate('download.close')], defaultId: 0, cancelId: 1 });
-      if (response === 0) void shell.openExternal(WEBSITE_URL);
+    if (cancelled) {
+      closeUpdateProgressDialog();
+    } else {
+      setUpdateProgressState({
+        phase: 'failed',
+        title,
+        message: tUpdate('download.failed'),
+        detail: String(error instanceof Error ? error.message : error),
+      });
+      const action = await waitForUpdateDialogAction();
+      closeUpdateProgressDialog();
+      if (action === 'website') void shell.openExternal(WEBSITE_URL);
     }
   } finally {
     clearTimeout(stallTimer);
+    setUpdateDialogCancelHandler(undefined);
     download = undefined;
     menuRefresher();
   }
+}
+
+/** Stages the DMG into the running bundle and waits for Restart/Later in the same progress dialog. */
+async function finishMacInPlaceUpdate(version: string, dmgPath: string, stagedApp: string): Promise<boolean> {
+  const target = await replaceableBundle();
+  if (!target) {
+    ulog('info', `in-place update unavailable for ${process.execPath}; offering the installer instead`);
+    return false;
+  }
+  const title = tUpdate('prompt.title');
+  let cancelled = false;
+  setUpdateDialogCancelHandler(() => { cancelled = true; cancelUpdateDownload(); });
+  setUpdateProgressState({ phase: 'preparing', title, message: tUpdate('progress.preparing', { version }) });
+  try {
+    await stageFromDmg(dmgPath, stagedApp);
+  } catch (error) {
+    ulog('warn', `staging ${version} from DMG failed, offering the installer instead: ${String(error)}`);
+    return false;
+  }
+  if (cancelled) {
+    closeUpdateProgressDialog();
+    return true;
+  }
+  setUpdateDialogCancelHandler(undefined);
+  setUpdateProgressState({
+    phase: 'ready',
+    title,
+    message: tUpdate('ready.message', { version }),
+    detail: tUpdate('ready.detail'),
+    readyAction: 'restart',
+  });
+  const action = await waitForUpdateDialogAction();
+  const relaunch = action === 'restart';
+  installOnQuit(target, stagedApp, relaunch);
+  ulog('info', `${version} staged; replacing ${target} on quit${relaunch ? ' and relaunching now' : ''}`);
+  closeUpdateProgressDialog();
+  if (relaunch) app.quit();
+  return true;
+}
+
+/** Keeps the progress dialog open until the user installs or dismisses; then opens the downloaded installer. */
+async function finishInstallerUpdate(version: string, installerPath: string): Promise<void> {
+  const title = tUpdate('prompt.title');
+  setUpdateDialogCancelHandler(undefined);
+  setUpdateProgressState({
+    phase: 'ready',
+    title,
+    message: tUpdate('ready.message', { version }),
+    detail: tUpdate('ready.installDetail'),
+    readyAction: 'install',
+  });
+  const action = await waitForUpdateDialogAction();
+  closeUpdateProgressDialog();
+  if (action !== 'install') return;
+  const openError = await shell.openPath(installerPath);
+  if (openError) throw new Error(`failed to open installer: ${openError}`);
+  if (process.platform === 'win32') app.quit();
 }
 
 export async function startUpdateService(): Promise<void> {

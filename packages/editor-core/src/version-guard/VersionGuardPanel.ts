@@ -1,4 +1,4 @@
-import type { GuardBranch, GuardClient, GuardCommit, GuardFile, GuardHistory, GuardRepository, GuardRequest, GuardStatus, GuardUiState } from '@easyview/contracts';
+import { isMarkdownFilePath, type GuardBranch, type GuardClient, type GuardCommit, type GuardFile, type GuardHistory, type GuardRepository, type GuardRequest, type GuardStatus, type GuardUiState } from '@easyview/contracts';
 import { LruCache, windowedList } from './guardList';
 import { formatGuard, tGuard } from './guard.i18n';
 /** `header: false` drops the built-in title bar when the host already shows a title and refresh action. */
@@ -425,7 +425,7 @@ function fileIcon(name: string): string {
   const lower = name.toLowerCase(); const ext = lower.split('.').pop() ?? '';
   if (lower.endsWith('.excalidraw') || lower.endsWith('.excalidraw.json') || lower.endsWith('.excalidraw.md')) return ICONS.excalidraw;
   if (ext === 'json' || ext === 'jsonc') return ICONS.json;
-  if (ext === 'md' || ext === 'markdown' || ext === 'mdx') return ICONS.markdown;
+  if (isMarkdownFilePath(lower)) return ICONS.markdown;
   if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp', 'ico', 'avif'].includes(ext)) return ICONS.image;
   if (['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'css', 'html', 'py', 'java', 'go', 'rs', 'sh', 'vue', 'yml', 'yaml', 'xml'].includes(ext)) return ICONS.code;
   return ICONS.file;

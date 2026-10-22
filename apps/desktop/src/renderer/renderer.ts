@@ -5,7 +5,7 @@ import './bootLocale';
 import { TimelinePanel, RpcTimelineClient, showHistorySettingsDialog } from '@easyview/editor-core/timeline';
 import type { TimelineUiState } from '@easyview/contracts';
 import type { HostToEditorMessage, EditorToHostMessage } from '@easyview/contracts';
-import { readLocalProductTheme } from '@easyview/contracts';
+import { isMarkdownFilePath, readLocalProductTheme } from '@easyview/contracts';
 import { applyDesktopProductAppearance } from './productThemeControl';
 import { AI_CHAT_ICON_HTML, createEasyViewEditor, createLazyAiChatPanel, EditorAppearanceStore, type AiChatPanel, type EasyViewEditorInstance } from '@easyview/editor-core';
 import { defaultDesktopPanelLayout, isDesktopAppearanceCommand, normalizeDesktopPanelLayout } from '../contracts';
@@ -460,7 +460,7 @@ function publishMenuState(): void {
   api.menu.publishState({
     ...state,
     hasActiveDocument: currentTab?.kind === 'editor',
-    isMarkdownDocument: currentTab?.kind === 'editor' && (!currentTab.filePath || /\.(md|markdown|mdx)$/i.test(currentTab.filePath)),
+    isMarkdownDocument: currentTab?.kind === 'editor' && (!currentTab.filePath || isMarkdownFilePath(currentTab.filePath)),
     themeMode: appearance.mode,
     themeDepth: Math.round(appearance.depth * 100),
     accent: appearance.accent,

@@ -1,0 +1,28 @@
+---
+description: Documentation style guide sample (Cursor rule file)
+globs: docs/**/*.md
+alwaysApply: false
+---
+
+# Documentation Style Guide
+
+Demonstrates how an `.mdc` rule previews: the front matter shows as a key/value table and the body renders as Markdown.
+
+## Basics
+
+- **Lead with the conclusion**, then the supporting detail.
+- Write dates as exact dates, for example 2026-10-21.
+- Quote code with `inline code` or a fenced block.
+
+## Checklist
+
+| Item | Requirement |
+|---|---|
+| Heading levels | Never skip a level |
+| Acceptance criteria | Observable, with numeric thresholds |
+
+```bash
+npm run verify:quick
+```
+
+> A rule file describes conventions, not implementation details.

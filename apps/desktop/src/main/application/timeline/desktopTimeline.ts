@@ -2,7 +2,7 @@ import { dialog } from 'electron';
 import path from 'node:path';
 import { realpath } from 'node:fs/promises';
 import { TimelineChannel, readHistoryText } from '@easyview/node-runtime';
-import { isTimelineMarkdown, type TimelineRequestMessage, type TimelineComparison } from '@easyview/contracts';
+import { isMarkdownFilePath, type TimelineRequestMessage, type TimelineComparison } from '@easyview/contracts';
 import { desktopHistory } from '../document/desktopHistory';
 import { readDocument, publishSaveOutcome } from '../document/documentWorkflow';
 import { getMainWindow, workspaceRoot, documentSessions, tabRegistry, syncTabState, sendToWindow, sendEditorMessage, editorDocumentMessage, windowSessions } from '../host/desktopRuntime';
@@ -29,7 +29,7 @@ export async function handleDesktopTimeline(sender: Electron.WebContents, messag
     channel = desktopHistory().then((service) => new TimelineChannel({
       service,
       authorize: async (filePath) => {
-        const root = workspaceRoot(); if (!root || !filePath || !isTimelineMarkdown(filePath)) throw new Error(tTimeline('authorize.selectMarkdown'));
+        const root = workspaceRoot(); if (!root || !filePath || !isMarkdownFilePath(filePath)) throw new Error(tTimeline('authorize.selectMarkdown'));
         const resolved = await realpath(path.resolve(root, filePath)); const canonicalRoot = await realpath(root);
         const relative = path.relative(canonicalRoot, resolved);
         if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) throw new Error(tTimeline('authorize.outsideWorkspace'));

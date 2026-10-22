@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { isMarkdownFilePath } from '@easyview/contracts';
 import { isMarkdownDocument } from './markdownModel';
 import {
   applyAssociationPin,
@@ -94,7 +95,7 @@ function nativeMarkdownTabs(): vscode.Uri[] {
       if (seen.has(key)) continue;
       const document = vscode.workspace.textDocuments.find((item) => item.uri.toString() === key);
       if (document && !isMarkdownDocument(document)) continue;
-      if (!document && !/\.(md|markdown|mdx)$/i.test(uri.fsPath)) continue;
+      if (!document && !isMarkdownFilePath(uri.fsPath)) continue;
       seen.add(key);
       uris.push(uri);
     }

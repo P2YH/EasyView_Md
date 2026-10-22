@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { isMarkdownFilePath } from '@easyview/contracts';
 import * as vscode from 'vscode';
 import { DocumentImageAssets } from '@easyview/node-runtime';
 import { isDiskBackedMarkdownUri, markdownUriKey, toDiskFileUri } from './markdownUri';
@@ -37,12 +38,12 @@ export class MarkdownImageAssets implements vscode.Disposable {
   }
 
   private record(document: vscode.TextDocument): ImageAssetDocument | undefined {
-    if (!isDiskBackedMarkdownUri(document.uri) || !/\.(?:md|markdown|mdx)$/i.test(document.uri.fsPath)) return;
+    if (!isDiskBackedMarkdownUri(document.uri) || !isMarkdownFilePath(document.uri.fsPath)) return;
     return this.records.get(markdownUriKey(document.uri));
   }
 
   private open(document: vscode.TextDocument): void {
-    if (!isDiskBackedMarkdownUri(document.uri) || !/\.(?:md|markdown|mdx)$/i.test(document.uri.fsPath)) return;
+    if (!isDiskBackedMarkdownUri(document.uri) || !isMarkdownFilePath(document.uri.fsPath)) return;
     const key = markdownUriKey(document.uri);
     const uri = document.uri.toString();
     const existing = this.records.get(key);

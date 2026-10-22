@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import path from 'node:path';
 import { readFile, stat, realpath } from 'node:fs/promises';
 import { TimelineChannel, TimelineService, discoverHostHistoryRoots, contentHash, readHistoryText, migrateRenamedHistory } from '@easyview/node-runtime';
-import { DEFAULT_LOCAL_HISTORY_SETTINGS, isTimelineMarkdown, type LocalHistorySettings, type TimelineComparison, type TimelineEntry, type TimelineResultMessage } from '@easyview/contracts';
+import { DEFAULT_LOCAL_HISTORY_SETTINGS, isMarkdownFilePath, type LocalHistorySettings, type TimelineComparison, type TimelineEntry, type TimelineResultMessage } from '@easyview/contracts';
 import { resolveMarkdownDiskUri } from '../application/document/openMarkdownEditor';
 import { MarkdownEditorProvider } from '../adapters/vscode/provider';
 import { getLocale } from '@easyview/contracts/i18n';
@@ -17,7 +17,7 @@ export class VscodeTimeline {
   constructor(private context: vscode.ExtensionContext) {
     this.subscriptions.push(vscode.workspace.onDidSaveTextDocument((document) => {
       const disk = resolveMarkdownDiskUri(document.uri);
-      if (!isTimelineMarkdown(disk.fsPath) || disk.scheme !== 'file') return;
+      if (!isMarkdownFilePath(disk.fsPath) || disk.scheme !== 'file') return;
       void this.capture(disk.fsPath, document.getText(), tTimeline('label.saved'));
     }));
     this.subscriptions.push(vscode.workspace.onDidRenameFiles((event) => {
@@ -55,7 +55,7 @@ export class VscodeTimeline {
       authorize: async (filePath) => {
         const folder = root(); if (!folder || !filePath) throw new Error(tTimeline('error.selectWorkspaceFile'));
         const resolved = await realpath(path.resolve(folder, filePath)), relative = path.relative(await realpath(folder), resolved);
-        if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative) || !isTimelineMarkdown(resolved)) throw new Error(tTimeline('error.notWorkspaceMarkdown'));
+        if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative) || !isMarkdownFilePath(resolved)) throw new Error(tTimeline('error.notWorkspaceMarkdown'));
         return resolved;
       },
       reveal: (entry) => { const panel = this.panels.get(`${entry.filePath}:${entry.source}:${entry.id}`); if (!panel) return false; panel.reveal(); return true; },

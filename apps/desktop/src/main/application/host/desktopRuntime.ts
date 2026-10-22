@@ -5,8 +5,10 @@ import {
   shell,
 } from 'electron';
 import {
+  isMarkdownFilePath,
   operationFailure,
   operationSuccess,
+  stripMarkdownExtension,
 } from '@easyview/contracts';
 import { TerminalService } from '@easyview/node-runtime';
 import type { AppStateStore } from '../document/appState';
@@ -213,7 +215,7 @@ export function assertTrustedRenderer(event: { sender: Electron.WebContents }): 
 }
 
 export function isMarkdownPath(filePath: string): boolean {
-  return /\.(md|markdown|mdx)$/i.test(filePath);
+  return isMarkdownFilePath(filePath);
 }
 
 export function markdownFileName(value: unknown, session?: DocumentSession): string | null {
@@ -235,7 +237,7 @@ function pathExtname(filePath: string): string {
 }
 
 export function fileNameWithoutExtension(fileName: string): string {
-  return fileName.replace(/\.(md|markdown|mdx)$/i, '');
+  return stripMarkdownExtension(fileName);
 }
 
 export function documentResult(session: DocumentSession): DocumentOpenResult {

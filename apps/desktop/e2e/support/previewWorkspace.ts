@@ -1,9 +1,12 @@
 import { _electron as electron, expect, type ElectronApplication, type Page } from '@playwright/test';
 import { copyFile, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { copySampleFiles } from '../../../../tests/fixtures/sampleFiles';
 import { resumeRestoredSession, terminateElectron } from './electronApp';
 
 export const previewFixtures = path.resolve(process.cwd(), '../../tests/fixtures/preview');
+/** Workspace folder holding a copy of the repo's `样例文件/` samples (see tests/fixtures/sampleFiles.ts). */
+export const SAMPLE_WORKSPACE_FOLDER = '样例文件';
 
 export interface PreviewWorkspace {
   application: ElectronApplication;
@@ -22,6 +25,7 @@ export async function launchPreviewWorkspace(extra: Record<string, string> = {},
   for (const name of ['sample.csv', 'sample.doc', 'sample.docx', 'sample.html', 'sample.json', 'sample.pdf', 'sample.png', 'sample.pptx', 'sample.svg', 'sample.xlsx', 'sample.zip']) {
     await copyFile(path.join(previewFixtures, name), path.join(workspace, name));
   }
+  copySampleFiles(path.join(workspace, SAMPLE_WORKSPACE_FOLDER));
   const markdown = path.join(workspace, 'notes.md');
   await writeFile(markdown, '# Notes\n\nBody text.\n\n## Second\n\nMore.\n');
   for (const [name, content] of Object.entries(extra)) await writeFile(path.join(workspace, name), content);

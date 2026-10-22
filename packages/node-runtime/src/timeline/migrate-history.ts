@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { opendir, stat, realpath } from 'node:fs/promises';
-import { isTimelineMarkdown } from '@easyview/contracts';
+import { isMarkdownFilePath } from '@easyview/contracts';
 import type { LocalHistoryStore } from './local-history';
 /** Runs only for an explicit rename; visits the moved subtree, never the history library. */
 export async function migrateRenamedHistory(store: LocalHistoryStore, oldPath: string, nextPath: string): Promise<void> {
@@ -13,9 +13,9 @@ export async function migrateRenamedHistory(store: LocalHistoryStore, oldPath: s
       for await (const entry of directory) {
         const child = path.join(relative, entry.name);
         if (entry.isDirectory()) await visit(child);
-        else if (entry.isFile() && isTimelineMarkdown(entry.name)) await store.migrate(path.join(canonicalOld, child), path.join(canonicalNext, child));
+        else if (entry.isFile() && isMarkdownFilePath(entry.name)) await store.migrate(path.join(canonicalOld, child), path.join(canonicalNext, child));
       }
     };
     await visit('');
-  } else if (isTimelineMarkdown(canonicalNext)) await store.migrate(canonicalOld, canonicalNext);
+  } else if (isMarkdownFilePath(canonicalNext)) await store.migrate(canonicalOld, canonicalNext);
 }

@@ -65,6 +65,8 @@ suite('EasyView image asset lifecycle', () => {
     assert.equal(await editor.edit(builder => builder.delete(new vscode.Range(
       fixture.document.positionAt(0), fixture.document.positionAt(fixture.document.getText().length)))), true);
     await waitFor(async () => !await exists(fixture.directory));
+    // `undo` targets whatever holds keyboard focus, which isn't necessarily the editor in a fresh window.
+    await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
     await vscode.commands.executeCommand('undo');
     await waitFor(() => exists(fixture.image));
     assert.deepEqual(await fs.readFile(fixture.image), bytes);

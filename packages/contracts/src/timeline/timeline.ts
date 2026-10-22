@@ -35,7 +35,6 @@ export interface LocalHistorySettings {
 export const DEFAULT_LOCAL_HISTORY_SETTINGS: LocalHistorySettings = {
   enabled: true, maxFileSize: 256, maxFileEntries: 50, mergeWindow: 10,
 };
-export const isTimelineMarkdown = (filePath: string): boolean => /\.(md|markdown|mdx)$/i.test(filePath);
 export interface TimelineUiState { expanded: boolean; height: number }
 export interface TimelineClient {
   configureSettings?(): Promise<void>;

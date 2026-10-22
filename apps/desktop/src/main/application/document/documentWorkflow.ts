@@ -4,7 +4,7 @@ import { app, dialog } from 'electron';
 import { promises as fs, watch } from 'node:fs';
 import path from 'node:path';
 import { hashContent, minimalTextPatch } from '@easyview/editor-sync';
-import type { OperationResult } from '@easyview/contracts';
+import { MARKDOWN_FILE_EXTENSIONS, type OperationResult } from '@easyview/contracts';
 import type { DesktopTabSnapshot, DocumentOpenResult, SaveDocumentResult } from '../../../contracts';
 import { PreviewSessionError } from '../preview/PreviewSession';
 import {
@@ -73,6 +73,7 @@ export async function watchDocumentSession(session: DocumentSession): Promise<bo
 }
 
 const reloadTimers = new Map<string, NodeJS.Timeout>();
+const MARKDOWN_DIALOG_EXTENSIONS = MARKDOWN_FILE_EXTENSIONS.map((extension) => extension.slice(1));
 export async function reloadIfChanged(session: DocumentSession): Promise<void> {
   if (!session.filePath) return;
   const previous = reloadTimers.get(session.tabId);
@@ -299,7 +300,7 @@ export async function readDocument(filePath: string): Promise<OperationResult<Do
 export async function chooseAndReadDocument(): Promise<OperationResult<DocumentOpenResult | null>> {
   const chosen = await dialog.showOpenDialog(getMainWindow()!, {
     properties: ['openFile'],
-    filters: [{ name: 'Markdown', extensions: ['md', 'markdown', 'mdx'] }],
+    filters: [{ name: 'Markdown', extensions: MARKDOWN_DIALOG_EXTENSIONS }],
   });
   if (chosen.canceled || !chosen.filePaths[0]) return success(null);
   return readDocument(chosen.filePaths[0]);
@@ -332,7 +333,7 @@ export async function saveAsSession(
   const session = required.value;
   const chosen = await dialog.showSaveDialog(getMainWindow()!, {
     defaultPath: markdownFileName(suggestedFileName, session) ?? 'Untitled.md',
-    filters: [{ name: 'Markdown', extensions: ['md', 'markdown', 'mdx'] }],
+    filters: [{ name: 'Markdown', extensions: MARKDOWN_DIALOG_EXTENSIONS }],
   });
   if (chosen.canceled || !chosen.filePath) return success(null);
   if (!isMarkdownPath(chosen.filePath)) {

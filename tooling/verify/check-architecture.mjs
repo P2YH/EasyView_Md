@@ -95,7 +95,7 @@ for (const required of [
   'resources/demo',
   'resources/editor/fonts',
   'resources/editor/styles',
-  'apps/vscode-extension/.vscode-test.mjs',
+  'apps/vscode-extension/playwright.e2e.config.ts',
   'apps/vscode-extension/src/adapters/vscode',
   'apps/vscode-extension/src/application/document',
   'apps/vscode-extension/src/application/export',

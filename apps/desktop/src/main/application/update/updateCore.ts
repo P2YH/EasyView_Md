@@ -159,6 +159,16 @@ export function windowsInstallKind(execPath: string, exists: (file: string) => b
   return 'portable';
 }
 
+/**
+ * The .app bundle an update replaces in place, or undefined for a Gatekeeper App Translocation copy.
+ * Callers must still check that the bundle's folder is writable (a mounted DMG is not).
+ */
+export function macReplaceableBundle(execPath: string): string | undefined {
+  const match = /^(.+?\.app)\/Contents\/MacOS\/[^/]+$/.exec(execPath);
+  if (!match || match[1].includes('/AppTranslocation/')) return undefined;
+  return match[1];
+}
+
 export function selectInstallerAsset(assets: ReleaseAsset[], info: PlatformInfo): ReleaseAsset | undefined {
   let name: string | undefined;
   if (info.platform === 'darwin' && info.arch === 'arm64') name = 'EasyView_Md-mac-arm64.dmg';

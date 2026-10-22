@@ -30,7 +30,7 @@ import {
   stageFile as stageGitFile,
   stageFileContent as stageGitFileContent,
 } from '@easyview/node-runtime';
-import { isEasyViewThemeMode } from '@easyview/contracts';
+import { isEasyViewThemeMode, isMarkdownFilePath } from '@easyview/contracts';
 import { isDiskBackedMarkdownUri } from './markdownUri';
 import { resolveMarkdownDiskUri } from './openMarkdownEditor';
 import { renameMarkdownResource } from './renameMarkdownResource';
@@ -198,7 +198,7 @@ function hasCjkText(value: string): boolean {
 function commitMessageSubject(fileName: string, status: string, diff: string): string {
   const baseName = path.basename(fileName);
   const lower = baseName.toLowerCase();
-  const scope = /\.(md|markdown|mdx)$/i.test(baseName) || lower === 'readme' ? 'docs' : 'chore';
+  const scope = isMarkdownFilePath(baseName) || lower === 'readme' ? 'docs' : 'chore';
   const additions = (diff.match(/^\+/gm) ?? []).length;
   const deletions = (diff.match(/^-/gm) ?? []).length;
 

@@ -1,6 +1,6 @@
 import { VscodeTimeline } from '../timeline/vscodeTimeline';
 import type { TimelineChannel } from '@easyview/node-runtime';
-import type { TimelineRequestMessage } from '@easyview/contracts';
+import { isMarkdownFilePath, type TimelineRequestMessage } from '@easyview/contracts';
 import * as vscode from 'vscode';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
@@ -33,7 +33,6 @@ const FOCUS_ON_STARTUP_SETTING = 'workspace.focusFilesOnStartup';
 const FOCUS_ON_STARTUP_DELAY_MS = 250;
 const WEBVIEW_READY_TIMEOUT_MS = 5_000;
 const WEBVIEW_READY_RETRIES = 2;
-const MARKDOWN_EXTENSION = /\.(md|markdown|mdx)$/i;
 
 export function registerWorkspaceExplorer(context: vscode.ExtensionContext): vscode.Disposable {
   const treeService = new WorkspaceTreeService();
@@ -497,7 +496,7 @@ class WorkspaceExplorerViewProvider implements vscode.WebviewViewProvider, vscod
       new vscode.RelativePattern(rootFolder.uri, '**/*'),
     );
     this.watcher.onDidCreate((uri) => this.queueFileEvent(uri));
-    this.watcher.onDidChange((uri) => { this.queueFileEvent(uri); if (isTimelineMarkdownPath(uri.fsPath)) void this.timeline.capture(uri.fsPath); });
+    this.watcher.onDidChange((uri) => { this.queueFileEvent(uri); if (isMarkdownFilePath(uri.fsPath)) void this.timeline.capture(uri.fsPath); });
     this.watcher.onDidDelete((uri) => this.queueFileEvent(uri));
   }
 
@@ -1070,7 +1069,7 @@ async function openWorkspaceResource(
   options?: { preserveFocus?: boolean },
 ): Promise<void> {
   const preserveFocus = options?.preserveFocus === true;
-  if (MARKDOWN_EXTENSION.test(uri.path)) {
+  if (isMarkdownFilePath(uri.path)) {
     // Always open via easyviewMd: — direct file:// CustomTextEditor hits Cursor's
     // nested-git TextDocument sync failure before resolveCustomTextEditor runs.
     await openMarkdownInEasyViewEditor(uri, context, {
@@ -1212,4 +1211,3 @@ function getNonce(): string {
   return text;
 }
 
-const isTimelineMarkdownPath = (filePath: string) => /\.(md|markdown|mdx)$/i.test(filePath);

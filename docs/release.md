@@ -2,7 +2,7 @@
 
 ## 流程与版本来源
 
-`.github/workflows/release.yml` 由推送 `v*` tag 触发，也支持手动输入已有 tag。发布版本必须是稳定版 `vX.Y.Z`，且去掉 `v` 后与该 tag 下的 `apps/desktop/package.json` 版本完全一致，否则在构建前失败。手动运行也只检出 `refs/tags/<tag>`，不能使用分支代替。
+`.github/workflows/release.yml` 由推送 `v*` tag 触发，也支持手动输入已有 tag。发布版本必须是稳定版 `vX.Y.Z`，且去掉 `v` 后与该 tag 下的 `apps/desktop/package.json` 版本完全一致，否则在构建前失败。同一份 `package.json` 的 `releaseDate`（`YYYY-MM-DD`）写入应用内「关于」弹窗的发布时间，发版前与 GitHub Release 发布日对齐。手动运行也只检出 `refs/tags/<tag>`，不能使用分支代替。
 
 同一 matrix 在 `macos-14` 原生 arm64 和 `windows-latest` 原生 x64 上构建。构建后执行现有包内容检查与打包应用运行检查。聚合 job 生成校验与清单，再通过 `gh` 创建 Release，附件如下：
 
@@ -21,7 +21,7 @@ Release 先创建为草稿，上传完成后公开。失败重跑时，草稿继
 
 所有桌面发布共用一个 concurrency 队列，避免同时写固定下载文件名。GitHub 不保证排队顺序，也可能替换尚未开始的 pending run；应等上一版完成再发下一版。手动重跑历史 tag 会把官网下载切回该版本，应只重跑准备对外提供的版本。固定下载路径逐文件替换，整组文件不是原子切换；同步失败时官网 HTML 不更新，但部分安装包可能已经替换，应及时重跑同步。
 
-Windows 官网安装包 `EasyView_Md-win-x64-setup.exe` 是 NSIS 安装向导：Windows job 在 Forge `make` 之后运行 `npm run make:nsis --workspace @easyview/desktop`，用 electron-builder 把 Forge 产物重新打包，程序文件与 ZIP、商店版一致。随后 `.github/scripts/windows-install-test.ps1` 分别以“仅为我”（`/currentuser`）和“所有用户”（`/allusers`）静默安装到含空格的自定义目录，校验版本、卸载项、“打开方式”注册和快捷方式，启动冒烟测试后静默卸载并检查清理，失败则阻止发布。2.0.14 及以前的 Squirrel 安装不会被自动卸载，用户可在“应用和功能”中自行移除。
+Windows 官网安装包 `EasyView_Md-win-x64-setup.exe` 是 NSIS 安装向导：Windows job 在 Forge `make` 之后运行 `npm run make:nsis --workspace @easyview/desktop`，用 electron-builder 把 Forge 产物重新打包，程序文件与 ZIP、商店版一致。随后 `.github/scripts/windows-install-test.ps1` 分别以“仅为我”（`/currentuser`）和“所有用户”（`/allusers`）静默安装到含空格的自定义目录，校验版本、卸载项、“打开方式”注册和快捷方式，启动冒烟测试后静默卸载并检查清理，失败则阻止发布。升级时保持单一安装：已有安装则沿用其安装范围（两种范围都有时按“所有用户”安装，并移除“仅为我”的副本），2.0.14 及以前的 Squirrel 安装在复制新程序文件后、创建快捷方式前静默卸载（`build/installer.nsh`）。
 
 VSIX 随同一 tag 构建与发布，但扩展版本号独立维护。现有 Desktop Build 仅保留应用打包与运行验证，不制作发布安装包；旧 `desktop-release.yml` 已由新流程替代。
 

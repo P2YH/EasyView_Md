@@ -47,6 +47,7 @@ export type ToolbarShortcutConfig = Record<ToolbarShortcutAction, string>;
 
 const SHORTCUT_STORAGE_KEY = 'mdpre-toolbar-shortcuts';
 const EXTERNAL_FOLLOW_STORAGE_KEY = 'mdpre-external-follow-scroll';
+const TOOLBAR_PINNED_STORAGE_KEY = 'easyview.md.toolbarPinned';
 
 const DEFAULT_SHORTCUTS: ToolbarShortcutConfig = {
   openWithEasyView: 'Alt+E',
@@ -248,6 +249,22 @@ function readStoredExternalFollowEnabled(): boolean {
   return true;
 }
 
+function readStoredToolbarPinned(): boolean {
+  try {
+    return localStorage.getItem(TOOLBAR_PINNED_STORAGE_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+}
+
+function writeStoredToolbarPinned(pinned: boolean): void {
+  try {
+    localStorage.setItem(TOOLBAR_PINNED_STORAGE_KEY, String(pinned));
+  } catch {
+    // Storage can be unavailable in restricted contexts.
+  }
+}
+
 function ensureFileHeaderCompactStyles(): void {
   const styleId = 'easyview-file-header-compact-styles';
   if (document.getElementById(styleId)) return;
@@ -258,6 +275,35 @@ function ensureFileHeaderCompactStyles(): void {
       padding: 2.4px 12px;
       min-height: 0;
     }
+    body.easyview-vscode-editor:not(.easyview-toolbar-collapsed) .file-header-bar {
+      position: relative !important;
+      transform: none !important;
+      opacity: 1 !important;
+      box-shadow: none !important;
+      transition: none !important;
+    }
+    body.easyview-vscode-editor:not(.easyview-toolbar-collapsed) .file-header-bar::before { display: none; }
+    body.easyview-vscode-editor:not(.easyview-toolbar-collapsed) #editor-body { height: auto !important; }
+    body.easyview-vscode-editor.easyview-toolbar-collapsed .file-header-bar { display: none !important; }
+    .file-header-show-toolbar {
+      position: fixed;
+      top: 8px;
+      right: 12px;
+      z-index: 999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      padding: 0;
+      border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, .35));
+      border-radius: 4px;
+      background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+      color: var(--vscode-foreground, inherit);
+      cursor: pointer;
+    }
+    .file-header-show-toolbar:hover { background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, .15)); }
+    body.easyview-toolbar-collapsed .file-header-show-toolbar { display: inline-flex; }
     .file-header-name {
       font-size: 15.6px;
       padding: 0 4.8px;
@@ -680,6 +726,7 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
   const bar = document.createElement('div');
   bar.className = 'file-header-bar';
   let moreMenu: HTMLElement | null = null;
+  let showToolbarBtn: HTMLButtonElement | null = null;
   let toolbarResizeObserver: ResizeObserver | null = null;
 
   let shortcutConfig = readStoredShortcuts();
@@ -1573,6 +1620,31 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
       toolbarResizeObserver.observe(bar);
     }
   } else {
+    const pinBtn = document.createElement('button');
+    pinBtn.className = 'file-header-btn file-header-pin-btn';
+    pinBtn.title = tFileHeader('toolbar.hide');
+    pinBtn.setAttribute('aria-label', pinBtn.title);
+    pinBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 15 6-6 6 6"/></svg>';
+    const syncToolbarPinned = (pinned: boolean): void => {
+      document.body.classList.toggle('easyview-toolbar-collapsed', !pinned);
+    };
+    pinBtn.addEventListener('click', () => {
+      writeStoredToolbarPinned(false);
+      syncToolbarPinned(false);
+    });
+    syncToolbarPinned(readStoredToolbarPinned());
+    rightGroup.appendChild(pinBtn);
+    showToolbarBtn = document.createElement('button');
+    showToolbarBtn.type = 'button';
+    showToolbarBtn.className = 'file-header-show-toolbar';
+    showToolbarBtn.title = tFileHeader('toolbar.show');
+    showToolbarBtn.setAttribute('aria-label', showToolbarBtn.title);
+    showToolbarBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
+    showToolbarBtn.addEventListener('click', () => {
+      writeStoredToolbarPinned(true);
+      syncToolbarPinned(true);
+    });
+    document.body.appendChild(showToolbarBtn);
     bar.appendChild(leftGroup);
     bar.appendChild(nameEl);
     bar.appendChild(rightGroup);
@@ -1794,6 +1866,7 @@ export function createFileHeader(deps: FileHeaderDeps): FileHeader {
       destroyed = true;
       appearanceSubscription.unsubscribe();
       toolbarResizeObserver?.disconnect();
+      showToolbarBtn?.remove();
       if (depthCloseTimer != null) {
         window.clearTimeout(depthCloseTimer);
         depthCloseTimer = null;

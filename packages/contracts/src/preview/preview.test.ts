@@ -4,6 +4,12 @@ import { resolvePreviewRoute } from './preview';
 describe('preview routes', () => {
   it('keeps Markdown in the editor and routes supported preview formats', () => {
     expect(resolvePreviewRoute('notes.md')).toBeNull();
+    expect(resolvePreviewRoute('rule.mdc')).toBeNull();
+    expect(resolvePreviewRoute('clip.MP4')).toMatchObject({ route: 'video', mimeType: 'video/mp4' });
+    expect(resolvePreviewRoute('clip.m4v')?.route).toBe('video');
+    expect(resolvePreviewRoute('song.MP3')).toMatchObject({ route: 'audio', mimeType: 'audio/mpeg' });
+    expect(resolvePreviewRoute('voice.m4a')).toMatchObject({ route: 'audio', mimeType: 'audio/mp4' });
+    for (const name of ['a.wav', 'a.ogg', 'a.oga', 'a.flac']) expect(resolvePreviewRoute(name)?.route).toBe('audio');
     expect(resolvePreviewRoute('request.http')?.route).toBe('http');
     expect(resolvePreviewRoute('font.woff2')?.route).toBe('font');
     expect(resolvePreviewRoute('archive.tar.gz')?.route).toBe('archive');

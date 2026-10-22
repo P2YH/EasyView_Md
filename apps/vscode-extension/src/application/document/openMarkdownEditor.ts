@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { isMarkdownFilePath } from '@easyview/contracts';
 import { createHash } from 'node:crypto';
 import * as path from 'node:path';
 import { logOpenWithDebug } from './openWithDebug';
@@ -124,7 +125,7 @@ export async function rematerializeFileSchemeEasyViewMarkdownTabs(
       if (!(tab.input instanceof vscode.TabInputCustom)) continue;
       if (tab.input.viewType !== VIEW_TYPE) continue;
       if (tab.input.uri.scheme !== 'file') continue;
-      if (!/\.(md|markdown|mdx)$/i.test(tab.input.uri.fsPath)) continue;
+      if (!isMarkdownFilePath(tab.input.uri.fsPath)) continue;
       victims.push({ tab, uri: tab.input.uri, viewColumn: group.viewColumn });
     }
   }

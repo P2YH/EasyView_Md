@@ -17,7 +17,9 @@ export type PreviewRoute =
   | 'archive'
   | 'font'
   | 'http'
-  | 'java-class';
+  | 'java-class'
+  | 'video'
+  | 'audio';
 
 export interface PreviewRouteDefinition {
   readonly route: PreviewRoute;
@@ -29,6 +31,8 @@ export interface PreviewRouteDefinition {
 }
 
 const MEBIBYTE = 1024 * 1024;
+/** Audio is read into memory (for the live spectrum), so it gets a tighter cap than streamed video. */
+const AUDIO_MAX_BYTES = 512 * MEBIBYTE;
 
 export const PREVIEW_ROUTES: readonly PreviewRouteDefinition[] = [
   { route: 'text', suffixes: ['.txt', '.log', '.json', '.jsonc', '.yaml', '.yml', '.xml', '.ini', '.conf', '.properties', '.toml'], maxSourceBytes: 32 * MEBIBYTE, mimeType: 'text/plain; charset=utf-8' },
@@ -45,6 +49,13 @@ export const PREVIEW_ROUTES: readonly PreviewRouteDefinition[] = [
   { route: 'font', suffixes: ['.ttf', '.otf', '.woff', '.woff2'], maxSourceBytes: 64 * MEBIBYTE, mimeType: 'application/octet-stream' },
   { route: 'http', suffixes: ['.http', '.rest'], maxSourceBytes: 4 * MEBIBYTE, mimeType: 'text/plain; charset=utf-8' },
   { route: 'java-class', suffixes: ['.class'], maxSourceBytes: 16 * MEBIBYTE, mimeType: 'application/java-vm' },
+  // Streamed with byte ranges, never read into memory, so the cap only guards against absurd files.
+  { route: 'video', suffixes: ['.mp4', '.m4v'], maxSourceBytes: 16 * 1024 * MEBIBYTE, mimeType: 'video/mp4' },
+  { route: 'audio', suffixes: ['.mp3'], maxSourceBytes: AUDIO_MAX_BYTES, mimeType: 'audio/mpeg' },
+  { route: 'audio', suffixes: ['.m4a'], maxSourceBytes: AUDIO_MAX_BYTES, mimeType: 'audio/mp4' },
+  { route: 'audio', suffixes: ['.wav'], maxSourceBytes: AUDIO_MAX_BYTES, mimeType: 'audio/wav' },
+  { route: 'audio', suffixes: ['.ogg', '.oga'], maxSourceBytes: AUDIO_MAX_BYTES, mimeType: 'audio/ogg' },
+  { route: 'audio', suffixes: ['.flac'], maxSourceBytes: AUDIO_MAX_BYTES, mimeType: 'audio/flac' },
 ] as const;
 
 const ROUTES_BY_LONGEST_SUFFIX = [...PREVIEW_ROUTES]

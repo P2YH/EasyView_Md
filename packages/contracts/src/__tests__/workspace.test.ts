@@ -68,8 +68,10 @@ describe('workspace contracts', () => {
     for (const name of ['demo.zip', 'demo.rar', 'demo.7z', 'backup.tar.gz']) {
       expect(resolveWorkspaceTreeIcon({ kind: 'file', name })).toMatchObject({ id: 'seti:zip', codicon: 'file-zip' });
     }
-    const office = ['a.docx', 'a.xlsx', 'a.pptx', 'a.pdf', 'a.png'].map((name) => resolveWorkspaceTreeIcon({ kind: 'file', name }).svg);
-    expect(new Set(office).size).toBe(5);
+    for (const name of ['rule.mdc', 'page.mdx']) expect(resolveWorkspaceTreeIcon({ kind: 'file', name }).svg).toBe(markdown.svg);
+    for (const name of ['clip.mp4', 'clip.m4v']) expect(resolveWorkspaceTreeIcon({ kind: 'file', name })).toMatchObject({ id: 'seti:video', codicon: 'file-media' });
+    const office = ['a.docx', 'a.xlsx', 'a.pptx', 'a.pdf', 'a.png', 'a.mp4', 'a.mp3'].map((name) => resolveWorkspaceTreeIcon({ kind: 'file', name }).svg);
+    expect(new Set(office).size).toBe(7);
     for (const svg of office) expect(svg).toContain('fill="#fff"');
     expect(resolveWorkspaceTreeIcon({ kind: 'file', name: 'scan.heic' }).id).toBe('seti:image');
     expect(resolveWorkspaceTreeIcon({ kind: 'file', name: '.gitignore' }).id).toBe('seti:git');

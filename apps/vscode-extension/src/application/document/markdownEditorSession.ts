@@ -1,4 +1,5 @@
 import * as path from 'path';
+import { stripMarkdownExtension } from '@easyview/contracts';
 import { markdownImageAssets } from './markdownImageAssets';
 import * as vscode from 'vscode';
 import { isEditorToHostMessage } from '@easyview/contracts/protocol';
@@ -124,7 +125,7 @@ export class MarkdownEditorSession implements vscode.Disposable {
     webviewPanel: this.panel,
     document: this.document,
     extensionContext: this.options.context,
-    getFilename: () => path.basename(this.diskUri.fsPath).replace(/\.(md|markdown|mdx)$/i, ''),
+    getFilename: () => stripMarkdownExtension(path.basename(this.diskUri.fsPath)),
     getCanonicalContent: () => this.adapter.content,
     waitForImageAssets: () => markdownImageAssets.whenIdle(this.document),
     applyCanonicalContent: async (content, settings) => {
@@ -315,7 +316,7 @@ export class MarkdownEditorSession implements vscode.Disposable {
     const content = this.adapter.content;
     this.post({
       type: 'documentSnapshot', documentId: this.documentId, revision: this.sync.snapshot.revision,
-      content, contentHash: hashContent(content), filename: path.basename(this.diskUri.fsPath).replace(/\.(md|markdown|mdx)$/i, ''),
+      content, contentHash: hashContent(content), filename: stripMarkdownExtension(path.basename(this.diskUri.fsPath)),
       filePath: this.diskUri.fsPath, fullWidth: settings.fullWidth, tocVisible: settings.tocVisible, tableWrap: settings.tableWrap,
       tableFirstRowStickyDefault: this.options.getTableFirstRowStickyDefault(),
       initialCursorLine: pendingCursor?.line ?? editor?.selection.active.line ?? 0,

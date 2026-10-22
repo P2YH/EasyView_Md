@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { terminateElectron } from '../../desktop/e2e/support/electronApp';
+import { keepElectronInBackground, terminateElectron } from '../../desktop/e2e/support/electronApp';
 test('VS Code development extension opens Timeline versions in a read-only Change tab', async()=>{
   test.setTimeout(120000);
   const temporary=await mkdtemp(join(tmpdir(),'easyview-timeline-vscode-')),workspace=join(temporary,'workspace');await mkdir(workspace);
@@ -14,6 +14,7 @@ test('VS Code development extension opens Timeline versions in a read-only Chang
   const executablePath = process.env.VSCODE_EXECUTABLE_PATH;
   if (!executablePath) throw new Error('Set VSCODE_EXECUTABLE_PATH to the VS Code executable before running this test');
   const application=await electron.launch({executablePath,args:[`--user-data-dir=${join(temporary,'data')}`,`--extensions-dir=${join(temporary,'extensions')}`,`--extensionDevelopmentPath=${resolve(__dirname,'..')}`,'--disable-workspace-trust','--skip-welcome','--skip-release-notes',workspace],timeout:60000});
+  await keepElectronInBackground(application);
   try{
     const page=await application.firstWindow();
     let sidebar:Frame|undefined;

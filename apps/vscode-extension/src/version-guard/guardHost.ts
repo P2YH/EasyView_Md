@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { VersionGuardService } from '@easyview/node-runtime';
-import { guardTimelineComparison, type GuardRequest, type GuardComparison } from '@easyview/contracts';
+import { guardTimelineComparison, isMarkdownFilePath, type GuardRequest, type GuardComparison } from '@easyview/contracts';
 import { getLocale } from '@easyview/contracts/i18n';
 import { resolveMarkdownDiskUri, openMarkdownInEasyViewEditor } from '../application/document/openMarkdownEditor';
 import { MarkdownEditorProvider } from '../adapters/vscode/provider';
@@ -75,7 +75,7 @@ export function registerVersionGuard(context: vscode.ExtensionContext): vscode.D
           if (request?.method === 'active') { active(); value = true; }
           else if (request?.method === 'openFile') {
             const repo = await service.repository(request.repository); const [file] = await service.files(repo, request.paths); const uri = vscode.Uri.file(path.join(repo.rootPath, file));
-            if (/\.(md|markdown|mdx)$/i.test(file)) await openMarkdownInEasyViewEditor(uri, context); else await vscode.commands.executeCommand('vscode.open', uri); value = true;
+            if (isMarkdownFilePath(file)) await openMarkdownInEasyViewEditor(uri, context); else await vscode.commands.executeCommand('vscode.open', uri); value = true;
           } else if (request?.method === 'openDiff') {
             const comparison = guardTimelineComparison(await service.handle({ ...request, method: 'comparison' }) as GuardComparison);
             const panel = vscode.window.createWebviewPanel('easyviewMd.versionGuardDiff', `${path.basename(comparison.entry.filePath)} · ${comparison.contentLabel}`, vscode.ViewColumn.Active, { enableScripts: true, localResourceRoots: [dist] }); panels.add(panel);

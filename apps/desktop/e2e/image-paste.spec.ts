@@ -14,6 +14,24 @@ async function copyImage(app: ElectronApplication, bytes: Buffer) {
     clipboard.writeImage(nativeImage.createFromBuffer(Buffer.from(base64, 'base64')));
   }, bytes.toString('base64'));
 }
+type ClipboardSnapshot = { text: string; html: string; rtf: string; image: string };
+// The paste must go through the real system clipboard; keep whatever the user had copied.
+function saveClipboard(app: ElectronApplication): Promise<ClipboardSnapshot> {
+  return app.evaluate(({ clipboard }) => ({
+    text: clipboard.readText(), html: clipboard.readHTML(), rtf: clipboard.readRTF(),
+    image: clipboard.readImage().isEmpty() ? '' : clipboard.readImage().toPNG().toString('base64'),
+  }));
+}
+async function restoreClipboard(app: ElectronApplication | undefined, saved: ClipboardSnapshot | undefined) {
+  if (!app || !saved) return;
+  await app.evaluate(({ clipboard, nativeImage }, { text, html, rtf, image }) => {
+    clipboard.clear();
+    clipboard.write({
+      ...(text ? { text } : {}), ...(html ? { html } : {}), ...(rtf ? { rtf } : {}),
+      ...(image ? { image: nativeImage.createFromBuffer(Buffer.from(image, 'base64')) } : {}),
+    });
+  }, saved).catch(() => undefined);
+}
 async function command(app: ElectronApplication, name: string) {
   await app.evaluate(({ BrowserWindow }, value) => {
     BrowserWindow.getAllWindows()[0].webContents.send('desktop.menuCommand', value);
@@ -43,8 +61,10 @@ test('pastes system clipboard images in render and source modes with plugin-comp
       expandedRelativePaths: [], explorerVisible: true, outlineVisible: false, explorerWidth: 280, outlineWidth: 280 },
   }));
   let application: ElectronApplication | undefined;
+  let userClipboard: ClipboardSnapshot | undefined;
   try {
     application = await electron.launch({ args: [appDir, `--user-data-dir=${userData}`] });
+    userClipboard = await saveClipboard(application);
     let page = await application.firstWindow();
     await resumeRestoredSession(page);
     const paragraph = page.locator('#editor .ProseMirror p').last();
@@ -125,6 +145,7 @@ test('pastes system clipboard images in render and source modes with plugin-comp
     expect(await readdir(assets)).toHaveLength(4);
     expect(await readFile(join(directory, 'second.md'), 'utf8')).toBe('# Second\n\nUntouched\n');
   } finally {
+    await restoreClipboard(application, userClipboard);
     await terminateElectron(application);
     await rm(directory, { recursive: true, force: true });
   }

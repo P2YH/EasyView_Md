@@ -56,7 +56,7 @@ export function BasicPreviewShell({ descriptor, children }: React.PropsWithChild
 }
 
 export function needsBasicPreviewToolbar(descriptor: PreviewDescriptor): boolean {
-  return ['text', 'svg', 'html', 'http', 'java-class'].includes(descriptor.route)
+  return ['text', 'svg', 'html', 'http', 'java-class', 'video', 'audio'].includes(descriptor.route)
     || (descriptor.route === 'image' && /\.(heic|heif)$/i.test(descriptor.fileName))
     || (descriptor.route === 'powerpoint' && /\.ppt$/i.test(descriptor.fileName));
 }

@@ -442,9 +442,9 @@ export class TableOfContents {
         position: relative;
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: 4px;
         min-height: 28px;
-        padding: 2px 6px;
+        padding: 2px 4px;
         border-radius: 8px;
         transition: background 120ms ease, color 120ms ease;
       }
@@ -514,15 +514,15 @@ export class TableOfContents {
         opacity: 1;
       }
       .toc-item-actions {
-        display: inline-flex;
+        display: none;
         align-items: center;
         gap: 2px;
-        opacity: 0;
-        transition: opacity 120ms ease;
       }
       .toc-item:hover .toc-item-actions,
-      .toc-item.active .toc-item-actions {
-        opacity: 1;
+      .toc-item:focus-within .toc-item-actions,
+      .toc-item.active .toc-item-actions,
+      .toc-item.dragging .toc-item-actions {
+        display: inline-flex;
       }
       .toc-item-action {
         width: 20px;
@@ -551,9 +551,11 @@ export class TableOfContents {
       .toc-item-drag-handle:active {
         cursor: grabbing;
       }
-      .toc-table-controls { display:flex; align-items:center; justify-content:center; padding:8px 12px 10px; }
-      .toc-table-mode-group { display:grid; grid-template-columns:1fr 1fr; width:min(100%, 224px); align-items:stretch; border:1px solid var(--vscode-input-border,rgba(128,128,128,.3)); border-radius:8px; overflow:hidden; background:var(--vscode-input-background,rgba(128,128,128,.12)); }
-      .toc-table-mode-option { height:22px; min-width:0; padding:0 12px; border:0; border-right:1px solid var(--vscode-input-border,rgba(128,128,128,.3)); background:transparent; color:var(--vscode-editor-foreground,#ccc); cursor:pointer; font:inherit; font-size:12px; font-weight:600; }
+      .toc-table-controls { position:relative; display:flex; align-items:center; justify-content:center; padding:0 34px 2px; }
+      .toc-table-controls > .toc-dock-grip { position:absolute; left:8px; }
+      .toc-table-controls > .toc-sidebar-unpin { position:absolute; right:6px; }
+      .toc-table-mode-group { display:grid; grid-template-columns:1fr 1fr; flex:0 1 200px; align-items:stretch; border:1px solid var(--vscode-input-border,rgba(128,128,128,.3)); border-radius:6px; overflow:hidden; background:var(--vscode-input-background,rgba(128,128,128,.12)); }
+      .toc-table-mode-option { height:20px; min-width:0; padding:0 8px; border:0; border-right:1px solid var(--vscode-input-border,rgba(128,128,128,.3)); background:transparent; color:var(--vscode-editor-foreground,#ccc); cursor:pointer; font:inherit; font-size:11px; font-weight:600; }
       .toc-table-mode-option:last-child { border-right:0; }
       .toc-table-mode-option.active {
         background: var(--mdpre-accent, var(--vscode-button-background, #65aaf5));
@@ -571,7 +573,7 @@ export class TableOfContents {
         gap: 4px;
         flex: 1;
         min-width: 0;
-        padding: 4px 8px 4px 4px;
+        padding: 4px;
         border: 0;
         border-radius: 6px;
         background: transparent;
@@ -600,7 +602,6 @@ export class TableOfContents {
         width: 22px;
         height: 22px;
         flex-shrink: 0;
-        margin-left: 4px;
         padding: 0;
         border: 0;
         border-radius: 4px;
@@ -619,10 +620,9 @@ export class TableOfContents {
         opacity: 0.35;
         cursor: default;
       }
-      .toc-table-item[data-depth="1"] .toc-table-node-toggle { margin-left: 4px; }
-      .toc-table-item[data-depth="2"] .toc-table-node-toggle { margin-left: 16px; }
-      .toc-table-item[data-depth="3"] .toc-table-node-toggle { margin-left: 28px; }
-      .toc-table-item[data-depth="4"] .toc-table-node-toggle { margin-left: 40px; }
+      .toc-table-item[data-depth="2"] .toc-table-node-toggle { margin-left: 12px; }
+      .toc-table-item[data-depth="3"] .toc-table-node-toggle { margin-left: 24px; }
+      .toc-table-item[data-depth="4"] .toc-table-node-toggle { margin-left: 36px; }
       .toc-table-node-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; } .toc-table-node-count { color:var(--vscode-descriptionForeground,#888); font-size:10px; }
       .toc-table-empty { padding:16px 12px; color:var(--vscode-descriptionForeground,#888); font-size:12px; }
       .toc-table-row-match { outline:2px solid var(--mdpre-accent,var(--vscode-focusBorder,#409eff)); outline-offset:-2px; }
@@ -630,6 +630,16 @@ export class TableOfContents {
       .toc-item-drag-handle svg {
         width: 13px;
         height: 13px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .toc-level-toggle-btn { display: inline-flex; align-items: center; justify-content: center; }
+      .toc-level-toggle-btn svg {
+        width: 14px;
+        height: 14px;
         stroke: currentColor;
         fill: none;
         stroke-width: 2;
@@ -719,6 +729,7 @@ export class TableOfContents {
       controls.appendChild(btn);
       this.levelButtons.push({ level: option.level, el: btn });
     });
+
     this.sidebar.appendChild(controls);
     this.refreshLevelControls();
 
@@ -1165,11 +1176,10 @@ export class TableOfContents {
         this.deleteHeadingSection(heading.pos);
       });
 
+      actions.appendChild(levelTag);
       actions.appendChild(dragBtn);
       actions.appendChild(deleteBtn);
 
-      // Level badge sits left of the expand/collapse toggle.
-      item.appendChild(levelTag);
       item.appendChild(toggleBtn);
       item.appendChild(text);
       item.appendChild(actions);
@@ -1796,10 +1806,13 @@ export class TableOfContents {
   private refreshLevelControls(): void {
     if (this.levelToggleBtn) {
       const isAll = this.maxVisibleLevel === null;
-      this.levelToggleBtn.textContent = isAll ? '▾' : '▸';
+      this.levelToggleBtn.innerHTML = isAll
+        ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 20 5-5 5 5"/><path d="m7 4 5 5 5-5"/></svg>'
+        : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>';
       this.levelToggleBtn.title = isAll
         ? tHeading('toc.collapseToLevel1')
         : tHeading('toc.expandAllLevels');
+      this.levelToggleBtn.setAttribute('aria-label', this.levelToggleBtn.title);
       this.levelToggleBtn.classList.toggle('active', isAll);
     }
     this.levelButtons.forEach((entry) => {

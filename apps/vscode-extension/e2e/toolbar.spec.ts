@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import ExcelJS from 'exceljs';
-import { terminateElectron } from '../../desktop/e2e/support/electronApp';
+import { keepElectronInBackground, terminateElectron } from '../../desktop/e2e/support/electronApp';
 
 /**
  * Real VS Code + development extension: xlsx toolbar edits must reach disk through the
@@ -34,6 +34,7 @@ async function launch(file: 'book.xlsx' | 'doc.docx') {
   const { copyFile } = await import('node:fs/promises');
   await copyFile(resolve(__dirname, '../../../tests/fixtures/preview/sample.docx'), join(workspace, 'doc.docx'));
   const application = await electron.launch({ executablePath, args: [`--user-data-dir=${join(temporary, 'data')}`, `--extensions-dir=${join(temporary, 'extensions')}`, `--extensionDevelopmentPath=${resolve(__dirname, '..')}`, '--disable-workspace-trust', '--skip-welcome', '--skip-release-notes', workspace, join(workspace, file)], timeout: 60_000 });
+  await keepElectronInBackground(application);
   const page = await application.firstWindow();
   await application.evaluate(({ BrowserWindow }) => { const win = BrowserWindow.getAllWindows()[0]; win.setBounds({ x: 0, y: 0, width: 1700, height: 1000 }); });
   return { application, page, workspace, temporary };

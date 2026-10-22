@@ -70,13 +70,32 @@ The same spec also covers:
 ## Preview types (`toolbar-preview.spec.ts`)
 | Type | Buttons covered |
 |---|---|
-| csv | search, zoom, download, theme |
+| csv, tsv, ods | search, zoom, download, theme |
 | doc | sidebar, search, zoom, download, print (直接 + 遮罩/盖章 designer), open as HTML, theme |
 | pdf | the doc set plus zoom reset |
-| png (images) | zoom, download, print, HTML, theme |
+| xmind | the pdf set |
+| drawio | search, zoom, download, print, HTML, theme |
+| png, jpg | zoom, download, print, HTML, theme |
+| tiff | the png set plus rotate (angle label 0° → 90° → 0° → turned) |
 | pptx | the doc set plus slideshow |
+| epub, psd, ttf | search, download, HTML, theme |
 | html | source/preview toggle, theme |
-| json, svg, zip, txt | theme (the only button) |
+| http | 发送: a loopback request is refused by the private-address guard before connecting; theme |
+| heic | theme; the sandboxed decoder iframe must render (its script is inlined at build time) |
+| mp4, m4v; mp3, m4a, wav, ogg, flac | theme; playback uses EasyView's own player controls (see Media below) |
+| json, svg, zip, tar, tgz, yaml, txt, ppt, class | theme (the only button) |
+
+Content-area controls (epub 目录/翻页, psd layer toggles, archive 导出) are not in the top toolbar and are not covered here. `.icns` currently falls back to "unsupported" and is not listed.
+
+## Preview refresh (`preview-refresh.spec.ts`)
+- Clicking an already-open xlsx preview in IndexArea keeps the rendered spreadsheet node (no re-render).
+- Rewriting the xlsx on disk reloads the visible preview; rewriting a txt shows the new text.
+
+## Media and Cursor rules
+- Desktop `preview-media.spec.ts` and VS Code `e2e/media.spec.ts`: an H.264/AAC mp4 loads, plays and (Desktop) seeks via byte ranges.
+- The same specs play the sample mp3: the live spectrum canvas rises while playing (Desktop: and falls back after pausing). Output goes through a zero-gain node, so the run is silent.
+- Desktop: while a video plays, its control bar hides once the pointer leaves and returns when it comes back; paused videos keep it visible.
+- The same specs open a `.mdc` rule in the Markdown editor: heading, bold text and the front-matter grid render, and the file on disk is unchanged.
 
 Code files (`.ts` etc.) open in the Markdown/code editor and are covered by the Markdown header tests.
 

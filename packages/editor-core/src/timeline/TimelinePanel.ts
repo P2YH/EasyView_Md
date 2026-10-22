@@ -1,4 +1,4 @@
-import { isTimelineMarkdown, type TimelineClient, type TimelineEntry, type TimelineSource, type TimelineUiState } from '@easyview/contracts';
+import { isMarkdownFilePath, type TimelineClient, type TimelineEntry, type TimelineSource, type TimelineUiState } from '@easyview/contracts';
 import { getLocale } from '@easyview/contracts/i18n';
 import { tTimeline } from './timeline.i18n';
 const SOURCES: TimelineSource[] = ['local', 'vscode', 'cursor', 'git'];
@@ -63,7 +63,7 @@ export class TimelinePanel {
     this.destroyed = true; this.stop(); this.action?.abort(); this.removeMenu();
     this.resizeObserver.disconnect(); this.endResize(); this.element.remove();
   }
-  private canLoad(): boolean { return !this.destroyed && this.visible && this.state.expanded && !!this.filePath && isTimelineMarkdown(this.filePath); }
+  private canLoad(): boolean { return !this.destroyed && this.visible && this.state.expanded && !!this.filePath && isMarkdownFilePath(this.filePath); }
   private connect(): void {
     if (!this.canLoad()) return;
     this.subscription = this.client.watch(this.filePath!, this.refresh);
@@ -115,7 +115,7 @@ export class TimelinePanel {
     if (error) { const notice = document.createElement('div'); notice.className = 'easyview-timeline-notice'; notice.textContent = error; list.append(notice); }
     if (!this.entries.length) {
       const empty = document.createElement('div'); empty.className = 'easyview-timeline-notice';
-      empty.textContent = !this.filePath || !isTimelineMarkdown(this.filePath) ? tTimeline('selectSavedMarkdown') : tTimeline('empty'); list.append(empty);
+      empty.textContent = !this.filePath || !isMarkdownFilePath(this.filePath) ? tTimeline('selectSavedMarkdown') : tTimeline('empty'); list.append(empty);
     }
     const canvas = document.createElement('div'); canvas.style.position = 'relative'; canvas.style.height = `${this.entries.length * ROW_HEIGHT}px`;
     list.append(canvas);

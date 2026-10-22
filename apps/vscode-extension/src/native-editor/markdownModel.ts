@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { isMarkdownFilePath } from '@easyview/contracts';
 
 export interface HeadingInfo {
   level: number;
@@ -37,7 +38,7 @@ export interface MarkdownDocumentInfo {
 
 export function isMarkdownDocument(document: vscode.TextDocument): boolean {
   return ['markdown', 'mdx'].includes(document.languageId)
-    || /\.(md|markdown|mdx)$/i.test(document.uri.fsPath);
+    || isMarkdownFilePath(document.uri.fsPath);
 }
 
 export function slugifyHeading(text: string): string {

@@ -1,6 +1,7 @@
 {
   "name": "@easyview/desktop",
-  "version": "2.2.3",
+  "version": "2.2.4",
+  "releaseDate": "2026-10-22",
   "private": true,
   "description": "EasyView desktop application",
   "main": "dist/main/main.js",

@@ -1,5 +1,5 @@
-# Layer 2: VS Code extension e2e under xvfb. Runs the vscode-test suites (apps/vscode-extension/e2e/*.test.js)
-# and the Playwright suites that drive a real VS Code window (e2e/*.spec.ts), then packages
+# Layer 2: VS Code extension e2e under xvfb. Playwright drives a real VS Code window for every suite
+# (e2e/*.spec.ts; extension-host.spec.ts runs the in-host Mocha suites e2e/*.test.js), then packages
 # and verifies the VSIX.
 name: Extension E2E
 
@@ -27,7 +27,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: VS Code e2e (vscode-test + Playwright)
+      - name: VS Code e2e (Playwright)
         run: xvfb-run -a npm run test:e2e:vscode
       - uses: actions/upload-artifact@v4
         if: failure()

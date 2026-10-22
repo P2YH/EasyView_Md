@@ -38,3 +38,8 @@ Deploy/
 # Desktop e2e temporary workspaces (removed by each spec on dispose)
 apps/desktop/.*-e2e-*/
 .easyview/ai-backups/
+
+# All root-level dotfiles/dirs, except the ones the repo needs
+/.*
+!/.gitignore
+!/.github/

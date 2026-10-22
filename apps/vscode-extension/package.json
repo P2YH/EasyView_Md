@@ -2,7 +2,7 @@
   "name": "easyview-md",
   "displayName": "EasyView_Md",
   "description": "%extension.description%",
-  "version": "2.2.3",
+  "version": "2.2.4",
   "publisher": "zhangxy",
   "license": "MIT",
   "private": true,
@@ -84,6 +84,9 @@
           },
           {
             "filenamePattern": "*.mdx"
+          },
+          {
+            "filenamePattern": "*.mdc"
           }
         ],
         "priority": "option"
@@ -268,6 +271,30 @@
           },
           {
             "filenamePattern": "*.cbr"
+          },
+          {
+            "filenamePattern": "*.mp4"
+          },
+          {
+            "filenamePattern": "*.m4v"
+          },
+          {
+            "filenamePattern": "*.mp3"
+          },
+          {
+            "filenamePattern": "*.m4a"
+          },
+          {
+            "filenamePattern": "*.wav"
+          },
+          {
+            "filenamePattern": "*.ogg"
+          },
+          {
+            "filenamePattern": "*.oga"
+          },
+          {
+            "filenamePattern": "*.flac"
           }
         ],
         "priority": "option"

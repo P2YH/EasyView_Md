@@ -81,6 +81,9 @@ const EXTRA_EXTENSIONS: Record<string, IconDetails> = {
   '.xz': ['zip', 'yellow'],
   '.bmp': ['image', 'purple'],
   '.heic': ['image', 'purple'],
+  '.mdx': ['markdown', 'blue'],
+  '.mdc': ['markdown', 'blue'],
+  '.m4v': ['video', 'pink'],
 };
 
 /** Office-style back sheet: four horizontal bands, lightest on top. */
@@ -118,6 +121,17 @@ const MIND_MAP_MARK = /* @__PURE__ */ whiteMark(
     + 'M11.8 17.9h2.2a.6.6 0 0 1 .6.6v1.2a.6.6 0 0 1-.6.6h-2.2a.6.6 0 0 1-.6-.6v-1.2a.6.6 0 0 1 .6-.6z',
 );
 const IMAGE_MARK = /* @__PURE__ */ whiteMark('M4.5 20.5 8 15.8l2.4 3 1.9-2.3 3.2 4zM12.3 11.4a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2z');
+const PLAY_MARK = /* @__PURE__ */ whiteMark('M7 11.2v9.6l7.8-4.8z');
+const NOTE_MARK = /* @__PURE__ */ whiteMark(
+  'M14.5 11v7.3a2.1 2.1 0 1 1-1.5-2v-3.2l-4.6 1.1v5.1a2.1 2.1 0 1 1-1.5-2v-5.3z',
+);
+/** Film strip back sheet: dark frame, lighter picture area, sprocket holes down the right edge. */
+const FILM_STRIP = /* @__PURE__ */ '<rect x="9" y="3" width="21" height="26" rx="2" fill="#880E4F"/>'
+  + '<rect x="19" y="5" width="6" height="22" fill="#E91E63"/>'
+  + [5.5, 10.5, 15.5, 20.5, 25.5].map((y) => `<rect x="26.5" y="${y - 1}" width="2" height="2" rx=".4" fill="#F8BBD0"/>`).join('');
+/** Waveform back sheet: dark sheet with lighter level bars. */
+const WAVEFORM = /* @__PURE__ */ '<rect x="9" y="3" width="21" height="26" rx="2" fill="#00695C"/>'
+  + [[20, 12, 8], [23, 8, 16], [26, 13, 6]].map(([x, y, h]) => `<rect x="${x}" y="${y}" width="2" height="${h}" rx="1" fill="#80CBC4"/>`).join('');
 
 /** Full-colour glyphs that are inserted as-is instead of being painted with the Seti colour. */
 const FULL_COLOR_ICONS: Record<string, string> = /* @__PURE__ */ (() => ({
@@ -155,6 +169,8 @@ const FULL_COLOR_ICONS: Record<string, string> = /* @__PURE__ */ (() => ({
     '#5E35B1',
     IMAGE_MARK,
   ),
+  video: officeIcon(FILM_STRIP, '#C2185B', PLAY_MARK),
+  audio: officeIcon(WAVEFORM, '#00796B', NOTE_MARK),
 }))();
 
 /** Single-colour Seti-style glyphs for formats missing from the upstream Seti icon font. */

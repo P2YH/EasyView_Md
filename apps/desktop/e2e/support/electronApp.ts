@@ -41,6 +41,36 @@ export async function terminateElectron(application: ElectronApplication | undef
   await application.close();
 }
 
+/**
+ * For Electron apps we don't control (VS Code) on local runs. Hidden VS Code windows get re-shown
+ * and their webviews stop painting, so windows stay "shown" but fully transparent and click-through,
+ * never take focus, and have no Dock icon. CI and EASYVIEW_E2E_HEADED=1 keep normal windows.
+ */
+export async function keepElectronInBackground(application: ElectronApplication): Promise<void> {
+  if (process.env.CI || process.env.EASYVIEW_E2E_HEADED === '1') return;
+  // VS Code resets its main-process context right after launch; retry until the patch lands.
+  for (let attempt = 1; ; attempt += 1) {
+    try { await ghostWindows(application); return; } catch (error) {
+      if (attempt >= 20 || !String(error).includes('Execution context was destroyed')) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+}
+
+function ghostWindows(application: ElectronApplication): Promise<void> {
+  return application.evaluate(({ app, BrowserWindow }) => {
+    if (process.platform === 'darwin') app.setActivationPolicy('accessory');
+    for (const method of ['focus', 'moveTop'] as const) BrowserWindow.prototype[method] = function noop() {};
+    const ghost = (window: Electron.BrowserWindow) => {
+      window.setOpacity(0);
+      window.setIgnoreMouseEvents(true);
+      window.setSkipTaskbar(true);
+    };
+    BrowserWindow.getAllWindows().forEach(ghost);
+    app.on('browser-window-created', (_event, window) => ghost(window));
+  });
+}
+
 /** Launch shows the welcome page over restored tabs; enter the restored session like a user would. */
 export async function resumeRestoredSession(page: Page): Promise<void> {
   await page.locator('#desktop-welcome [data-action="resume"]').click();

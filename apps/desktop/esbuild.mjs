@@ -1,5 +1,6 @@
 import { build } from 'esbuild';
-import { cp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
@@ -38,6 +39,12 @@ const buildResults = await Promise.all([
     ...common,
     entryPoints: [path.join(appDir, 'src/preload/preload.ts')],
     outfile: path.join(distDir, 'preload/preload.js'),
+    format: 'cjs',
+  }),
+  build({
+    ...common,
+    entryPoints: [path.join(appDir, 'src/preload/updateDialogPreload.ts')],
+    outfile: path.join(distDir, 'preload/updateDialogPreload.js'),
     format: 'cjs',
   }),
   build({
@@ -91,7 +98,7 @@ if (production && rendererBuild.metafile) {
 await Promise.all([
   cp(path.join(appDir, 'src/renderer/index.html'), path.join(rendererDir, 'index.html')),
   cp(path.join(appDir, 'src/renderer/desktop.css'), path.join(rendererDir, 'desktop.css')),
-  cp(path.join(appDir, 'src/renderer/preview/heic-host.html'), path.join(rendererDir, 'heic-host.html')),
+  writeHeicHostHtml(),
   cp(path.join(workspaceDir, 'packages/editor-core/src/webview.css'), path.join(rendererDir, 'webview.css')),
   cp(path.join(workspaceDir, 'packages/preview-ui/src/preview.css'), path.join(rendererDir, 'preview.css')),
   cp(path.join(workspaceDir, 'resources/editor/styles/xterm.css'), path.join(rendererDir, 'xterm.css')),
@@ -124,3 +131,16 @@ for (const asset of ['ppt-native.wasm', 'ppt-font-cjk.otf', 'worker.mjs', 'frame
 }
 
 if (watch) console.log('Desktop build completed. Use the Electron dev runner to reload the application.');
+
+// The HEIC host runs in an `allow-scripts` sandbox (opaque origin), which Chromium forbids from
+// loading file:// subresources, so the decoder is inlined and pinned by its CSP hash.
+async function writeHeicHostHtml() {
+  const template = await readFile(path.join(appDir, 'src/renderer/preview/heic-host.html'), 'utf8');
+  const script = (await readFile(path.join(rendererDir, 'heic-host.js'), 'utf8')).replace(/<\/script/gi, '<\\/script');
+  const hash = createHash('sha256').update(script).digest('base64');
+  const html = template
+    .replace("script-src 'self'", `script-src 'sha256-${hash}'`)
+    .replace('<script src="./heic-host.js"></script>', () => `<script>${script}</script>`);
+  if (!html.includes(hash) || html.includes('src="./heic-host.js"')) throw new Error('heic-host.html template no longer matches the inlining step');
+  await writeFile(path.join(rendererDir, 'heic-host.html'), html);
+}

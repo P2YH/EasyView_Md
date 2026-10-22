@@ -12,6 +12,8 @@ export const PHASE1_PREVIEW_ROUTES = [
   'powerpoint',
   'design',
   'archive',
+  'video',
+  'audio',
 ] as const satisfies readonly PreviewRoute[];
 
 export type Phase1PreviewRoute = (typeof PHASE1_PREVIEW_ROUTES)[number];
@@ -36,4 +38,6 @@ export const PHASE1_FILENAME_PATTERNS = [
   '*.zip', '*.jar', '*.war', '*.ear', '*.vsix', '*.apk', '*.cbz',
   '*.tar', '*.tar.gz', '*.tgz', '*.gz',
   '*.7z', '*.rar', '*.cbr',
+  '*.mp4', '*.m4v',
+  '*.mp3', '*.m4a', '*.wav', '*.ogg', '*.oga', '*.flac',
 ] as const;

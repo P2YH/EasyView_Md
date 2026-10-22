@@ -131,6 +131,12 @@ function loadViewer(
     case 'archive':
       return import('./viewers/ArchiveViewer').then(({ ArchiveViewer }) => (descriptor, host) =>
         React.createElement(ArchiveViewer, { descriptor, host }));
+    case 'video':
+      return import('./viewers/VideoViewer').then(({ VideoViewer }) => (descriptor) =>
+        React.createElement(VideoViewer, { descriptor }));
+    case 'audio':
+      return import('./viewers/AudioViewer').then(({ AudioViewer }) => (descriptor) =>
+        React.createElement(AudioViewer, { descriptor }));
     default:
       return Promise.reject(new Error(tPreview('shell.noViewer')));
   }

@@ -25,6 +25,7 @@ import {
 import {
   argvRequestsNewWindow,
   argvRequestsRestart,
+  backgroundTestRun,
   createMenu,
   createNewWindow,
   createWindow,
@@ -57,7 +58,7 @@ function focusMainWindow(): void {
   const window = getMainWindow();
   if (!window || window.isDestroyed()) return;
   if (window.isMinimized()) window.restore();
-  window.focus();
+  if (!backgroundTestRun) window.focus();
 }
 
 /** Builds the main window from saved state, opening `filePath` on top of the restored tabs. */
@@ -135,6 +136,8 @@ if (!hasSingleInstanceLock) {
   });
 
   app.whenReady().then(async () => {
+    // No Dock icon and no app activation, so a test run never takes focus from the user.
+    if (backgroundTestRun && process.platform === 'darwin') app.setActivationPolicy('accessory');
     setLocale(resolveLocalePreference(languagePreference, [...app.getPreferredSystemLanguages(), app.getLocale()]));
     if (!getPendingOpenPath()) setPendingOpenPath(findMarkdownArgument(process.argv));
     const appStateStore = createAppStateStore(app.getPath('userData'), {

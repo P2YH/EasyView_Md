@@ -1,7 +1,7 @@
 import { migrateRenamedHistory } from '@easyview/node-runtime';
 import { DESKTOP_TAB_CLOSE_SHORTCUT } from '../../../contracts';
 import { captureDesktopHistoryPath, desktopHistory } from '../document/desktopHistory';
-import { isTimelineMarkdown } from '@easyview/contracts';
+import { isMarkdownFilePath } from '@easyview/contracts';
 import { Menu, clipboard, dialog, shell } from 'electron';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -83,7 +83,7 @@ export function startWorkspaceWatcher(rootPath: string): void {
         void previewSessions.staleRelativePaths(relativePaths).then((stale) => {
           if (stale.length) runInWindowContext(context, () => sendToWindow('preview.fileChanged', stale));
         }).catch((error) => console.warn('[Preview]', error));
-        for (const relativePath of relativePaths ?? []) if (isTimelineMarkdown(relativePath)) void captureDesktopHistoryPath(path.join(rootPath, relativePath)).catch((error) => { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') console.warn('[Timeline]', error); });
+        for (const relativePath of relativePaths ?? []) if (isMarkdownFilePath(relativePath)) void captureDesktopHistoryPath(path.join(rootPath, relativePath)).catch((error) => { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') console.warn('[Timeline]', error); });
       });
     },
   });

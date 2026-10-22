@@ -583,7 +583,6 @@ body:not([data-mdpre-accent='default'])[data-mdpre-accent] #file-preview-root { 
 .outline-minimap-item[data-depth="4"] { padding-left: 56px; }
 .outline-minimap-item:hover { background: var(--vscode-list-hoverBackground, rgba(128, 128, 128, .12)); opacity: 1; }
 .outline-minimap-item.active { color: var(--mdpre-accent, var(--vscode-focusBorder)); font-weight: 600; opacity: 1; }
-.toc-table-controls:has(.toc-sidebar-unpin) { gap: 6px; padding-right: 8px; }
 .toc-sidebar-unpin { flex: 0 0 24px; }
 
 /* Outline docked on the document's left: mirror the mini map. */
@@ -631,7 +630,6 @@ body.easyview-desktop #editor, body.easyview-desktop #editor.full-width { paddin
 .guard-width-resizer:hover::after, #version-guard-host.resizing .guard-width-resizer::after,
 #desktop-ai-chat-host .ai-chat-resizer:hover::after, #desktop-ai-chat-host .ai-chat-panel.resizing .ai-chat-resizer::after,
 body .toc-sidebar-resizer:hover::after, body .toc-sidebar.resizing .toc-sidebar-resizer::after { background: var(--vscode-focusBorder); }
-.toc-table-controls:has(.toc-dock-grip) { gap: 6px; padding-left: 8px; }
 body.dock-dragging, body.dock-dragging * { cursor: grabbing !important; user-select: none !important; }
 .dock-overlay { position: fixed; inset: 0; z-index: 100000; pointer-events: none; }
 .dock-zone {

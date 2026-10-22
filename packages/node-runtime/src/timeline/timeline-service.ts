@@ -4,7 +4,7 @@ import path from 'node:path';
 import { readFile, stat } from 'node:fs/promises';
 import { watch, type FSWatcher } from 'node:fs';
 import type { TimelineComparison, TimelineEntry, TimelinePage, TimelineSource } from '@easyview/contracts';
-import { isTimelineMarkdown } from '@easyview/contracts';
+import { isMarkdownFilePath } from '@easyview/contracts';
 import { LocalHistoryStore } from './local-history';
 import { type HostHistoryRoot, hostHistoryHash, hostHistoryUri } from './history-roots';
 import { listGitHistory, readGitVersion } from './git-history';
@@ -28,7 +28,7 @@ export class TimelineService {
     if (this.disposed) throw new Error(tTimeline('error.closed'));
     this.queries++;
     signal?.throwIfAborted();
-    if (!isTimelineMarkdown(filePath)) return { entries: [], errors: [] };
+    if (!isMarkdownFilePath(filePath)) return { entries: [], errors: [] };
     const paging = cursor ? JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as { offsets: Record<string, number>; git?: { revision: string; path: string } | null } : { offsets: {} as Record<string, number>, git: undefined };
     if (!paging.offsets || Object.values(paging.offsets).some((n) => !Number.isSafeInteger(n) || n < 0)) throw new Error(tTimeline('error.invalidPaging'));
     const all: Array<{ key: string; entry: TimelineEntry }> = [], errors: TimelinePage['errors'] = [];

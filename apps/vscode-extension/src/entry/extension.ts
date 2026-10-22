@@ -1,4 +1,5 @@
 import { registerVersionGuard } from '../version-guard/guardHost';
+import { isMarkdownFilePath } from '@easyview/contracts';
 import * as vscode from 'vscode';
 import { stageFile as stageGitFile } from '@easyview/node-runtime';
 import * as path from 'path';
@@ -36,14 +37,14 @@ import { tExtension } from './extension.i18n';
 
 function resolveCurrentMarkdownUri(): vscode.Uri | undefined {
   const activeDoc = vscode.window.activeTextEditor?.document;
-  if (activeDoc && /\.(md|markdown|mdx)$/i.test(activeDoc.uri.fsPath)) {
+  if (activeDoc && isMarkdownFilePath(activeDoc.uri.fsPath)) {
     return activeDoc.uri;
   }
 
   const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
   const tabInput = (activeTab as any)?.input;
   const uri = tabInput?.uri as vscode.Uri | undefined;
-  if (uri && /\.(md|markdown|mdx)$/i.test(uri.fsPath)) {
+  if (uri && isMarkdownFilePath(uri.fsPath)) {
     return uri;
   }
   return undefined;
@@ -68,7 +69,7 @@ async function migrateDefaultEditorLayoutState(context: vscode.ExtensionContext)
 
 function registerMirrorSavePropagation(): vscode.Disposable {
   return vscode.workspace.onDidSaveTextDocument(async (document) => {
-    if (!/\.(md|markdown|mdx)$/i.test(document.uri.fsPath)) return;
+    if (!isMarkdownFilePath(document.uri.fsPath)) return;
     const diskUri = resolveMarkdownDiskUri(document.uri);
     if (sameMarkdownResource(diskUri, document.uri)) return;
     try {
@@ -144,7 +145,7 @@ export function activate(context: vscode.ExtensionContext) {
       const activeEditor = vscode.window.activeTextEditor;
       const rawTargetUri = uri ?? activeEditor?.document.uri;
 
-      if (rawTargetUri && /\.(md|markdown|mdx)$/i.test(rawTargetUri.fsPath)) {
+      if (rawTargetUri && isMarkdownFilePath(rawTargetUri.fsPath)) {
         const diskUri = toDiskFileUri(
           rawTargetUri.scheme === 'file' || isDiskBackedMarkdownUri(rawTargetUri)
             ? (rawTargetUri.scheme === 'file' ? vscode.Uri.file(rawTargetUri.fsPath) : rawTargetUri)
@@ -262,7 +263,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('easyviewMd.openNativeEditor', async (uri?: vscode.Uri) => {
       const rawTargetUri = uri ?? resolveCurrentMarkdownUri();
 
-      if (rawTargetUri && /\.(md|markdown|mdx)$/i.test(rawTargetUri.fsPath)) {
+      if (rawTargetUri && isMarkdownFilePath(rawTargetUri.fsPath)) {
         const diskUri = toDiskFileUri(
           rawTargetUri.scheme === 'file'
             ? vscode.Uri.file(rawTargetUri.fsPath)

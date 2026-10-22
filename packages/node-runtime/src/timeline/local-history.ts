@@ -4,7 +4,7 @@ const ioQueue = new HistoryTaskQueue(2);
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, unlink, copyFile, rm } from 'node:fs/promises';
-import { DEFAULT_LOCAL_HISTORY_SETTINGS, isTimelineMarkdown, type LocalHistorySettings, type TimelineEntry } from '@easyview/contracts';
+import { DEFAULT_LOCAL_HISTORY_SETTINGS, isMarkdownFilePath, type LocalHistorySettings, type TimelineEntry } from '@easyview/contracts';
 import { writeFileAtomically } from '../filesystem/file-write';
 import { tTimeline } from './timeline.i18n';
 interface Snapshot extends TimelineEntry { hash: string; snapshot: string }
@@ -32,7 +32,7 @@ export class LocalHistoryStore {
     return readHistoryText(path.join(this.directory(entry.filePath), found.snapshot), signal);
   }
   capture(filePath: string, content: string, label = tTimeline('label.saved'), settings = DEFAULT_LOCAL_HISTORY_SETTINGS): Promise<void> {
-    if (!isTimelineMarkdown(filePath) || !settings.enabled || settings.maxFileEntries === 0 || Buffer.byteLength(content) > settings.maxFileSize * 1024) return Promise.resolve();
+    if (!isMarkdownFilePath(filePath) || !settings.enabled || settings.maxFileEntries === 0 || Buffer.byteLength(content) > settings.maxFileSize * 1024) return Promise.resolve();
     const key = path.resolve(filePath);
     if (!this.pending.has(key) && this.pending.size >= 64) return Promise.reject(new Error(tTimeline('error.captureBusy')));
     this.pending.set(key, { content, label, settings });

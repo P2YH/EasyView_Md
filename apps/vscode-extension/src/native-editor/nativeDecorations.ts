@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { isMarkdownFilePath } from '@easyview/contracts';
 import { SETTINGS_COMMENT_RE } from '@easyview/markdown-core/editor-settings';
 import { NATIVE_MARKDOWN_MONOSPACE_FONT_FAMILY } from './nativeEditorFont';
 import { NativeMermaidRenderer } from './nativeMermaidRenderer';
@@ -708,6 +709,6 @@ export class NativeMarkdownDecorator implements vscode.Disposable {
 
   private isMarkdownDocument(document: vscode.TextDocument): boolean {
     return ['markdown', 'mdx'].includes(document.languageId)
-      || /\.(md|markdown|mdx)$/i.test(document.uri.fsPath);
+      || isMarkdownFilePath(document.uri.fsPath);
   }
 }

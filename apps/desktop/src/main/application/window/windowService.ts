@@ -14,6 +14,7 @@ import { buildRecentFolderShellItems, windowsOpenFolderArguments } from './recen
 import { fileURLToPath } from 'node:url';
 import { requestRestart } from '../document/appLifecycle';
 import { flushDesktopEditors } from '../document/flushDesktopEditors';
+import { showAboutDialog } from '../help/aboutDialog';
 import { anonymizePath, buildFeedbackMailto, buildIssueUrl, FEEDBACK_REPO_URL, type FeedbackEnvironment } from '../help/feedbackLinks';
 import os from 'node:os';
 import { getLogsDirectory, log as appLog } from '../help/appLogger';
@@ -232,8 +233,10 @@ export async function openFolderFromShell(folderPath: string): Promise<void> {
     if (!window || window.isDestroyed()) continue;
     if (same(runInWindowContext(session.context, () => getWorkspaceState().rootPath))) {
       if (window.isMinimized()) window.restore();
-      window.show();
-      window.focus();
+      if (!backgroundTestRun) {
+        window.show();
+        window.focus();
+      }
       appLog('info', 'shell', 'focused existing window for recent folder');
       return;
     }
@@ -286,7 +289,7 @@ export function createMenu(): void {
     ...(isMac ? [{
       label: app.name,
       submenu: [
-        { role: 'about', label: tMenu('app.about') },
+        { label: tMenu('app.about'), click: () => { void showAboutDialog(); } },
         { type: 'separator' },
         ...appItems,
         { type: 'separator' },
@@ -423,12 +426,17 @@ export function createMenu(): void {
           { type: 'separator' as const },
         ]),
         { label: tMenu('help.homepage'), click: () => { void shell.openExternal(FEEDBACK_REPO_URL); } },
+        { type: 'separator' },
+        { label: tMenu('help.about'), click: () => { void showAboutDialog(); } },
       ],
     },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   syncShellMenu();
 }
+
+/** Local e2e runs keep every window hidden and unfocused so tests don't disturb the user. */
+export const backgroundTestRun = process.env.EASYVIEW_E2E_BACKGROUND === '1';
 
 export function createWindow(context: DesktopWindowContext = getWindowContext()): BrowserWindow {
   return runInWindowContext(context, () => {
@@ -459,6 +467,7 @@ export function createWindow(context: DesktopWindowContext = getWindowContext())
       sandbox: true,
       webSecurity: true,
       devTools: !app.isPackaged,
+      backgroundThrottling: !backgroundTestRun,
     },
   });
   setMainWindow(window);
@@ -471,7 +480,7 @@ export function createWindow(context: DesktopWindowContext = getWindowContext())
   // The renderer's <title> would otherwise replace the file/folder title the Dock and Window menu list.
   window.on('page-title-updated', (event) => event.preventDefault());
   window.once('ready-to-show', () => {
-    if (!window.isDestroyed()) window.show();
+    if (!window.isDestroyed() && !backgroundTestRun) window.show();
   });
   window.on('focus', () => {
     setActiveWindowContext(context);
@@ -493,7 +502,8 @@ export function createWindow(context: DesktopWindowContext = getWindowContext())
           width: 900,
           height: 700,
           autoHideMenuBar: true,
-          webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
+          show: !backgroundTestRun,
+          webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, backgroundThrottling: !backgroundTestRun },
         },
       };
     }

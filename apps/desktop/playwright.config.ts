@@ -2,6 +2,9 @@ import { defineConfig } from '@playwright/test';
 
 // Specs assert Chinese UI text; pin the language so results don't depend on the machine's locale.
 process.env.EASYVIEW_DESKTOP_LANGUAGE ??= 'zh-CN';
+// Local runs keep the app windowless and unfocused so they don't disturb the user;
+// CI keeps real windows. EASYVIEW_E2E_HEADED=1 shows the windows locally for debugging.
+if (!process.env.CI && process.env.EASYVIEW_E2E_HEADED !== '1') process.env.EASYVIEW_E2E_BACKGROUND ??= '1';
 
 export default defineConfig({
   testDir: './e2e',

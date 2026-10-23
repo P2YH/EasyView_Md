@@ -193,3 +193,4 @@ export * from './workspace-tree-icons';
 export * from './workspace-tree-menu-icons';
 export * from './workspace-tree-drop';
 export * from './workspace-tree-view';
+export * from './workspace-new-file';

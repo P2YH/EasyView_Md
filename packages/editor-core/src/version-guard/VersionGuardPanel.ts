@@ -308,7 +308,7 @@ export class VersionGuardPanel {
       }
       for (const file of [...node.files].sort((a, b) => a.path.localeCompare(b.path))) { visibleRows.push(() => { const row = this.fileRow(id, file, source, busy, conflict, true); row.style.paddingLeft = `${8 + depth * 12 + 16}px`; return row; }); }
     };
-    walk(tree, 0, ''); const viewport = document.createElement('div'); root.append(viewport); windowedList(viewport, visibleRows);
+    walk(tree, 0, ''); const viewport = document.createElement('div'); root.append(viewport); windowedList(viewport, visibleRows, this.body);
   }
   private fileRow(id: string, file: GuardFile, source: 'working' | 'staged' | 'commit', busy = false, conflict = false, nested = false): HTMLElement {
     const row = document.createElement('div'); row.className = 'guard-file'; row.title = file.oldPath ? `${file.oldPath} → ${file.path}` : file.path; row.dataset.path = file.path;
@@ -369,7 +369,7 @@ export class VersionGuardPanel {
       const description = document.createElement('pre'); description.textContent = `${commit.message}\n\n${commit.author} · ${new Date(commit.timestamp).toLocaleString()}\n${commit.hash}${commit.parents.length > 1 ? `\n${tGuard('first')}` : ''}`; this.footer.append(description);
       const filesRoot = document.createElement('div'); this.footer.append(filesRoot);
       const cached = this.commitFiles.get(`${id}:${commit.hash}`);
-      if (cached) { windowedList(filesRoot, cached.map(file => () => this.fileRow(id, file, 'commit'))); return; }
+      if (cached) { windowedList(filesRoot, cached.map(file => () => this.fileRow(id, file, 'commit')), this.footer); return; }
       const generation = this.generation;
       void this.options.client.request({ method: 'commitFiles', repository: id, revision: commit.hash }).then(files => { if (this.disposed || generation !== this.generation) return; this.commitFiles.set(`${id}:${commit.hash}`, files as GuardFile[]); if (this.ui.selected !== id || this.selectedCommit !== commit) return; this.renderHistory(); }).catch(error => this.error(error)); return;
     }
@@ -377,7 +377,7 @@ export class VersionGuardPanel {
     windowedList(entriesRoot, (this.histories.get(id)?.entries ?? []).map(commit => () => {
       const item = this.button(commit.message.split('\n')[0], `${commit.author} · ${new Date(commit.timestamp).toLocaleString()} · ${commit.hash.slice(0, 8)}`, () => { this.selectedCommit = commit; this.renderHistory(); }); item.className = 'guard-commit';
       const author = document.createElement('small'); author.textContent = ` ${commit.author} · ${new Date(commit.timestamp).toLocaleDateString()}`; item.append(author); return item;
-    }));
+    }), this.footer);
     if ((history?.entries.length ?? 0) >= 500) this.footer.append(this.button(tGuard('refresh'), tGuard('refresh'), () => { this.histories.delete(id); return this.loadHistory(); }));
     const cursor = this.histories.get(id)?.cursor; if (cursor) this.footer.append(this.button(tGuard('more'), tGuard('more'), () => this.loadHistory(cursor)));
   }

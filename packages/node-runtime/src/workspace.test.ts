@@ -16,10 +16,13 @@ import {
   WorkspaceOperationError,
 } from '@easyview/contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import JSZip from 'jszip';
+import ExcelJS from 'exceljs';
 import {
   applyEntryDeleted,
   applyEntryRenamed,
   getWorkspaceAncestorPaths,
+  initialContentsForNewFile,
   LocalWorkspaceGateway,
   normalizeWorkspaceRelativePath,
   parseWorkspaceTreeOrderConfig,
@@ -185,6 +188,41 @@ describe('LocalWorkspaceGateway and WorkspaceFileOperationService', () => {
     await service.delete('root', { relativePath: 'docs/guide.md' });
     await expect(fs.stat(path.join(root, 'docs', 'guide.md'))).rejects.toMatchObject({ code: 'ENOENT' });
     await service.delete('root', { relativePath: 'docs' });
+  });
+
+  it('seeds new Office Open XML files with a minimal valid package', async () => {
+    const root = await tempWorkspace();
+    const gateway = new LocalWorkspaceGateway([{ id: 'root', rootPath: root }]);
+
+    await gateway.create('root', { parentRelativePath: '', name: 'blank.docx', kind: 'file' });
+    await gateway.create('root', { parentRelativePath: '', name: 'blank.dotx', kind: 'file' });
+    await gateway.create('root', { parentRelativePath: '', name: 'blank.xlsx', kind: 'file' });
+    await gateway.create('root', { parentRelativePath: '', name: 'blank.md', kind: 'file' });
+
+    const docxBytes = await fs.readFile(path.join(root, 'blank.docx'));
+    const dotxBytes = await fs.readFile(path.join(root, 'blank.dotx'));
+    const xlsxBytes = await fs.readFile(path.join(root, 'blank.xlsx'));
+    expect(docxBytes.byteLength).toBeGreaterThan(0);
+    expect(dotxBytes.byteLength).toBeGreaterThan(0);
+    expect(xlsxBytes.byteLength).toBeGreaterThan(0);
+    expect(await fs.readFile(path.join(root, 'blank.md'), 'utf8')).toBe('');
+
+    const docxZip = await JSZip.loadAsync(docxBytes);
+    expect(docxZip.file('word/document.xml')).toBeTruthy();
+    const dotxZip = await JSZip.loadAsync(dotxBytes);
+    expect(dotxZip.file('word/document.xml')).toBeTruthy();
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(xlsxBytes as unknown as ArrayBuffer);
+    expect(workbook.worksheets.length).toBeGreaterThan(0);
+    // Empty ExcelJS sheets historically had columns === null (desktop forEach crash).
+    expect(workbook.worksheets[0]?.columns).not.toBeNull();
+
+    // Helper stays aligned with gateway create.
+    const seeded = await initialContentsForNewFile('report.DOCX');
+    expect(Buffer.isBuffer(seeded)).toBe(true);
+    expect((seeded as Buffer).byteLength).toBeGreaterThan(0);
+    expect(await initialContentsForNewFile('notes.txt')).toBe('');
   });
 
   it('rejects invalid names, traversal, overwrite, and non-recursive non-empty directory deletion', async () => {

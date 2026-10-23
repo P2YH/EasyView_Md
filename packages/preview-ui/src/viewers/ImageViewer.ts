@@ -2,18 +2,56 @@ import * as React from 'react';
 import { extension, h, UniversalFilePreview, loadingElement, ViewerError, usePreviewAppearance, type ViewerProps } from './shared';
 import { usePreviewAssets } from '../assets';
 import { tPreview } from '../preview.i18n';
+import { PreviewAppearanceContext } from '../appearanceContext';
+import {
+  DocumentRouteShell,
+  useDocumentRouteTheme,
+  useToolbarPinned,
+} from './DocumentRouteChrome';
 
 export function ImageViewer({ descriptor }: ViewerProps): React.ReactElement {
   const suffix = extension(descriptor.fileName);
   const assets = usePreviewAssets();
-  // HEIC needs an isolated decoder host (Desktop provides heicHostUrl in phase-2).
+  // HEIC needs an isolated decoder host; chrome matches other images (DocumentChrome).
   if (['.heic', '.heif'].includes(suffix)) {
     if (!assets.heicHostUrl) {
-      return h('div', { className: 'preview-viewer-message' }, tPreview('image.heicUnsupported'));
+      return h(DocumentImageShell, {
+        descriptor,
+        body: h('div', {
+          className: 'preview-viewer-message preview-viewer-unsupported',
+          role: 'status',
+        }, tPreview('image.heicUnsupported')),
+      });
     }
-    return h(HeicImageViewer, { descriptor, heicHostUrl: assets.heicHostUrl });
+    // DocumentChrome only — do not also wrap via PreviewShell BasicChrome.
+    return h(DocumentImageShell, {
+      descriptor,
+      body: h(HeicImageViewer, { descriptor, heicHostUrl: assets.heicHostUrl }),
+    });
   }
   return h(UniversalFilePreview, { descriptor, loadingLabel: tPreview('image.loadingViewer') });
+}
+
+function DocumentImageShell({
+  descriptor,
+  body,
+}: {
+  descriptor: ViewerProps['descriptor'];
+  body: React.ReactNode;
+}): React.ReactElement {
+  const { themeMode, cycleTheme, viewerVars } = useDocumentRouteTheme(descriptor.relativePath);
+  const { pinnedOpen, togglePinned } = useToolbarPinned();
+  return h(PreviewAppearanceContext.Provider, { value: themeMode },
+    h(DocumentRouteShell, {
+      className: 'preview-image-viewer preview-heic-shell',
+      themeMode,
+      style: viewerVars,
+      'data-ext': extension(descriptor.fileName),
+      onCycleTheme: cycleTheme,
+      pinnedOpen,
+      onTogglePinned: togglePinned,
+    }, body),
+  );
 }
 
 function HeicImageViewer({ descriptor, heicHostUrl }: ViewerProps & { heicHostUrl: string }): React.ReactElement {
@@ -61,7 +99,7 @@ function HeicImageViewer({ descriptor, heicHostUrl }: ViewerProps & { heicHostUr
     );
   }, [appearance.background, appearance.textColor, token]);
   if (error) return h(ViewerError, { error });
-  return h('div', { className: 'preview-image-viewer preview-heic-viewer' },
+  return h('div', { className: 'preview-heic-viewer' },
     !ready ? loadingElement(tPreview('image.heicDecoding')) : null,
     h('iframe', {
       ref: frame,

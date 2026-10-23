@@ -51,11 +51,11 @@ export type PreviewAppearance = {
 
 export const h = React.createElement;
 
-/** Collapse / expand use sideways chevrons (toolbar pin), not up/down. */
+/** Collapse = chevron up (bar slides up); expand = chevron down (bar slides down). */
 export function PreviewToolbarPinIcon(props: { expand: boolean }): React.ReactElement {
   return h('svg', { viewBox: '0 0 16 16', 'aria-hidden': true, className: 'preview-toolbar-pin-icon' }, h('path', {
-    // expand = point left «open»; collapse = point right «stow»
-    d: props.expand ? 'M10.2 2.6 4.8 8l5.4 5.4' : 'M5.8 2.6 11.2 8 5.8 13.4',
+    // expand=true → down; expand=false → up (matches Markdown / desktop toggle)
+    d: props.expand ? 'M3.5 6 8 10.5 12.5 6' : 'M3.5 10 8 5.5 12.5 10',
     fill: 'none',
     stroke: 'currentColor',
     strokeWidth: 2,
@@ -531,7 +531,7 @@ export function UniversalFilePreview({ descriptor, loadingLabel = tPreview('comm
   const appearance = appearanceFromThemeMode(themeMode);
   const needsPptxWorker = descriptor.route === 'powerpoint';
   const needsArchiveWorker = descriptor.route === 'archive';
-  const toolbarChrome = useFileViewerToolbarChromeSlot(rootRef, pinnedOpen && !!Viewer, !!assets.compactToolbars);
+  const toolbarChrome = useFileViewerToolbarChromeSlot(rootRef, !!Viewer, !!assets.compactToolbars);
   useLiftPreviewThemeSurface(themeMode);
   usePptxThumbnails(rootRef, needsPptxWorker && !!Viewer && !!pptxWorkerUrl, descriptor.contentUrl, descriptor.fileName);
   usePdfOutlineFirst(rootRef, descriptor.route === 'pdf' && !!Viewer);
@@ -639,7 +639,8 @@ export function UniversalFilePreview({ descriptor, loadingLabel = tPreview('comm
     theme: appearance.theme,
     locale: getLocale() === 'en' ? 'en-US' : 'zh-CN',
     styleIsolation: 'none',
-    toolbar: pinnedOpen ? { theme: false, position: 'top' } : false,
+    // Keep toolbar mounted; .is-toolbar-collapsed animates it upward (do not destroy).
+    toolbar: { theme: false, position: 'top' },
     pdf: { toolbar: false, thumbnails: true },
     ui: {
       density: 'compact',
@@ -703,6 +704,7 @@ export function UniversalFilePreview({ descriptor, loadingLabel = tPreview('comm
     ref: rootRef,
     className: `preview-universal-viewer${pinnedOpen ? ' is-toolbar-pinned' : ' is-toolbar-collapsed'}`,
     'data-preview-theme': themeMode,
+    'data-preview-chrome': 'document',
     style: viewerVars,
   },
     h(Viewer, {

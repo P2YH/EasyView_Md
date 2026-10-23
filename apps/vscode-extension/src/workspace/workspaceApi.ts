@@ -14,6 +14,7 @@ import {
   type WorkspaceTreeSortMode,
 } from '@easyview/contracts';
 import {
+  initialContentsForNewFile,
   joinWorkspaceRelativePath,
   normalizeWorkspaceRelativePath,
   parentWorkspaceRelativePath,
@@ -93,8 +94,15 @@ export class VscodeWorkspaceGateway implements WorkspaceGateway {
     if (request.kind === 'directory') {
       await vscode.workspace.fs.createDirectory(target);
     } else {
+      // Seed in the same createFile edit so custom editors never open a 0-byte OOXML stub.
+      const contents = await initialContentsForNewFile(request.name);
+      const bytes = typeof contents === 'string' ? Buffer.from(contents, 'utf8') : contents;
       const edit = new vscode.WorkspaceEdit();
-      edit.createFile(target, { overwrite: false, ignoreIfExists: false });
+      edit.createFile(target, {
+        overwrite: false,
+        ignoreIfExists: false,
+        contents: bytes,
+      });
       if (!await vscode.workspace.applyEdit(edit)) {
         throw new WorkspaceOperationError('IO_ERROR', tWorkspace('op.createFailed', { name: request.name }));
       }
@@ -577,7 +585,7 @@ export async function uniqueWorkspaceCreateName(
   parent: vscode.Uri,
   kind: 'file' | 'directory',
 ): Promise<string> {
-  const baseName = kind === 'directory' ? tWorkspace('op.defaultFolderName') : 'untitled.md';
+  const baseName = kind === 'directory' ? tWorkspace('op.defaultFolderName') : tWorkspace('op.defaultFileName');
   const extension = kind === 'directory' ? '' : path.posix.extname(baseName);
   const stem = kind === 'directory' ? baseName : path.posix.basename(baseName, extension);
   let index = 0;

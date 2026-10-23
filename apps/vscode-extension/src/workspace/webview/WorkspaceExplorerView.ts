@@ -26,6 +26,10 @@ import {
   workspaceEntryNameSelectionRange,
   type WorkspaceTreeSortMode,
   clampWorkspaceFontSizeOffset,
+  WORKSPACE_CREATABLE_FILE_TYPES,
+  unusedWorkspaceCreateFileName,
+  unusedWorkspaceCreateFolderName,
+  type WorkspaceCreatableFileTypeId,
 } from '@easyview/contracts';
 import type {
   WorkspaceExplorerEntry,
@@ -49,6 +53,8 @@ interface ContextMenuItem {
   label: string;
   shortcut?: string;
   disabled?: boolean;
+  /** When set, item opens a flyout instead of running action. */
+  submenu?: ContextMenuItem[];
   action: () => void;
 }
 
@@ -97,7 +103,7 @@ export class WorkspaceExplorerView {
   private showDotEntries = true;
   private showTimestampHover = true;
   private showNameHover = true;
-  private pendingCreate: { parentRelativePath: string; kind: 'file' | 'directory' } | null = null;
+  private pendingCreate: { parentRelativePath: string; kind: 'file' | 'directory'; extension?: string } | null = null;
   private renamePath: string | null = null;
   private settingsDialog: WorkspaceSettingsDialogHandle | null = null;
   private settingsQueue: Promise<void> = Promise.resolve();
@@ -109,6 +115,8 @@ export class WorkspaceExplorerView {
   private dropIntent: { targetRelativePath: string; target: WorkspaceTreeDropTarget } | null = null;
   private dropIndicator: HTMLElement | null = null;
   private contextMenuEl: HTMLElement | null = null;
+  private typeMenuEl: HTMLElement | null = null;
+  private contextSubmenuEl: HTMLElement | null = null;
   private timestampTooltipEl: HTMLElement | null = null;
   private selectionFollowsActive = true;
   private activeRelativePath: string | null = null;
@@ -121,6 +129,8 @@ export class WorkspaceExplorerView {
   private readonly handleWindowPointerDown = (event: PointerEvent): void => {
     if (!(event.target instanceof Node)) return;
     if (this.contextMenuEl?.contains(event.target)) return;
+    if (this.contextSubmenuEl?.contains(event.target)) return;
+    if (this.typeMenuEl?.contains(event.target)) return;
     this.closeContextMenu();
   };
   private readonly handleContextMenuPointerMove = (event: PointerEvent): void => {
@@ -204,7 +214,7 @@ export class WorkspaceExplorerView {
         this.hasClipboard = event.hasClipboard;
         break;
       case 'contextCommand':
-        void this.onContextCommand(event.command, event.relativePath);
+        void this.onContextCommand(event.command, event.relativePath, event.extension);
         break;
       case 'listChildrenResult': {
         const pending = this.pendingLists.get(event.requestId);
@@ -380,6 +390,7 @@ export class WorkspaceExplorerView {
   private async onContextCommand(
     command: Extract<WorkspaceExplorerEvent, { type: 'contextCommand' }>['command'],
     relativePath?: string,
+    extension?: string,
   ): Promise<void> {
     this.selectionFollowsActive = false;
     if (relativePath) this.select(relativePath);
@@ -390,9 +401,12 @@ export class WorkspaceExplorerView {
       case 'paste':
         await this.pasteAt(this.primarySelected ?? (this.displayMode === 'icons' ? this.iconDirectory : ''));
         break;
-      case 'beginCreateFile':
-        this.beginCreate(relativePath ?? this.primarySelectedDirectory() ?? (this.displayMode === 'icons' ? this.iconDirectory : ''), 'file');
+      case 'beginCreateFile': {
+        const parent = relativePath ?? this.primarySelectedDirectory() ?? (this.displayMode === 'icons' ? this.iconDirectory : '');
+        if (extension) this.beginCreate(parent, 'file', extension);
+        else this.openNewFileTypeMenuForParent(parent);
         break;
+      }
       case 'beginCreateFolder':
         this.beginCreate(relativePath ?? this.primarySelectedDirectory() ?? (this.displayMode === 'icons' ? this.iconDirectory : ''), 'directory');
         break;
@@ -646,6 +660,14 @@ export class WorkspaceExplorerView {
       if (event.target instanceof Element
         && event.target.closest('.workspace-entry, .workspace-icon-tile, .workspace-create-row, .workspace-icon-navigation')) return;
       this.clearSelection();
+    });
+    tree.addEventListener('contextmenu', (event) => {
+      if (event.target instanceof Element
+        && event.target.closest('.workspace-entry, .workspace-icon-tile, .workspace-create-row, .workspace-icon-navigation')) return;
+      event.preventDefault();
+      this.selectionFollowsActive = false;
+      const parent = this.displayMode === 'icons' ? this.iconDirectory : '';
+      void this.openBackgroundContextMenu(event.clientX, event.clientY, parent);
     });
     this.container.appendChild(tree);
     tree.scrollTop = previousScrollTop;
@@ -1037,9 +1059,10 @@ export class WorkspaceExplorerView {
         create.textContent = '＋';
         create.title = tExplorer('entry.newFile');
         create.disabled = !entry.writable;
+        create.setAttribute('aria-haspopup', 'menu');
         create.addEventListener('click', (event) => {
           event.stopPropagation();
-          this.beginCreate(entry.relativePath, 'file');
+          this.openNewFileTypeMenuAt(create, entry.relativePath);
         });
         row.appendChild(create);
       } else if (this.showCreatedAt || this.showUpdatedAt) {
@@ -1118,6 +1141,95 @@ export class WorkspaceExplorerView {
     if (this.timestampTooltipEl) this.timestampTooltipEl.hidden = true;
   }
 
+  private appendSubmenuItem(menu: HTMLElement, item: ContextMenuItem): void {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'workspace-menu-has-submenu';
+    button.setAttribute('aria-haspopup', 'menu');
+    const label = document.createElement('span');
+    label.className = 'workspace-menu-item-label';
+    label.textContent = item.label;
+    const chevron = document.createElement('span');
+    chevron.className = 'workspace-menu-item-chevron';
+    chevron.textContent = '›';
+    button.append(label, chevron);
+    const show = () => {
+      this.contextSubmenuEl?.remove();
+      const sub = document.createElement('div');
+      sub.className = 'workspace-file-context-menu workspace-context-submenu';
+      sub.setAttribute('role', 'menu');
+      for (const child of item.submenu ?? []) {
+        this.appendMenuItem(sub, {
+          label: child.label,
+          onClick: () => {
+            this.closeContextMenu();
+            child.action();
+          },
+        });
+      }
+      document.body.appendChild(sub);
+      this.contextSubmenuEl = sub;
+      const parentRect = button.getBoundingClientRect();
+      let left = parentRect.right - 4;
+      let top = parentRect.top;
+      sub.style.left = `${left}px`;
+      sub.style.top = `${top}px`;
+      const rect = sub.getBoundingClientRect();
+      if (rect.right > window.innerWidth) left = Math.max(0, parentRect.left - rect.width + 4);
+      if (rect.bottom > window.innerHeight) top = Math.max(0, window.innerHeight - rect.height - 4);
+      sub.style.left = `${left}px`;
+      sub.style.top = `${top}px`;
+    };
+    button.addEventListener('mouseenter', show);
+    button.addEventListener('focus', show);
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      show();
+    });
+    menu.appendChild(button);
+  }
+
+  private async openBackgroundContextMenu(x: number, y: number, parentRelativePath: string): Promise<void> {
+    this.closeContextMenu();
+    const focused = await this.requestOp((requestId) => ({ type: 'focusContextMenu', requestId }));
+    if (!focused.ok) {
+      this.showError(focused.message);
+      return;
+    }
+    this.container.focus({ preventScroll: true });
+    const items: ContextMenuItem[] = [
+      {
+        label: tExplorer('context.newFile'),
+        submenu: this.newFileTypeMenuItems(parentRelativePath),
+        action: () => undefined,
+      },
+      { label: tExplorer('context.newFolder'), action: () => this.beginCreate(parentRelativePath, 'directory') },
+    ];
+    const menu = document.createElement('div');
+    menu.className = 'workspace-file-context-menu';
+    menu.setAttribute('role', 'menu');
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
+    for (const item of items) {
+      if (item.submenu && item.submenu.length > 0) this.appendSubmenuItem(menu, item);
+      else {
+        this.appendMenuItem(menu, {
+          label: item.label,
+          onClick: () => {
+            this.closeContextMenu();
+            item.action();
+          },
+        });
+      }
+    }
+    document.body.appendChild(menu);
+    this.contextMenuEl = menu;
+    window.addEventListener('pointermove', this.handleContextMenuPointerMove, true);
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) menu.style.left = `${Math.max(0, x - rect.width)}px`;
+    if (rect.bottom > window.innerHeight) menu.style.top = `${Math.max(0, y - rect.height)}px`;
+  }
+
   private appendMenuItem(
     menu: HTMLElement,
     options: { label: string; shortcut?: string; disabled?: boolean; className?: string; onClick: () => void },
@@ -1166,6 +1278,10 @@ export class WorkspaceExplorerView {
         menu.appendChild(sep);
         continue;
       }
+      if (item.submenu && item.submenu.length > 0) {
+        this.appendSubmenuItem(menu, item);
+        continue;
+      }
       this.appendMenuItem(menu, {
         label: item.label,
         shortcut: item.shortcut,
@@ -1186,8 +1302,73 @@ export class WorkspaceExplorerView {
 
   private closeContextMenu(): void {
     window.removeEventListener('pointermove', this.handleContextMenuPointerMove, true);
+    this.contextSubmenuEl?.remove();
+    this.contextSubmenuEl = null;
     this.contextMenuEl?.remove();
     this.contextMenuEl = null;
+    this.closeTypeMenu();
+  }
+
+  private closeTypeMenu(): void {
+    this.typeMenuEl?.remove();
+    this.typeMenuEl = null;
+  }
+
+  private createTypeLabel(id: WorkspaceCreatableFileTypeId): string {
+    switch (id) {
+      case 'markdown': return tExplorer('create.type.markdown');
+      case 'word': return tExplorer('create.type.word');
+      case 'excel': return tExplorer('create.type.excel');
+      case 'text': return tExplorer('create.type.text');
+    }
+  }
+
+  private newFileTypeMenuItems(parentRelativePath: string): ContextMenuItem[] {
+    return WORKSPACE_CREATABLE_FILE_TYPES.map((type) => ({
+      label: this.createTypeLabel(type.id),
+      action: () => this.beginCreate(parentRelativePath, 'file', type.extension),
+    }));
+  }
+
+  private openNewFileTypeMenuForParent(parentRelativePath: string): void {
+    // Host command without a pre-chosen type: show a type menu near the tree top.
+    const tree = this.container.querySelector<HTMLElement>('.workspace-tree');
+    const rect = (tree ?? this.container).getBoundingClientRect();
+    this.openNewFileTypeMenu(parentRelativePath, rect.left + 8, rect.top + 8);
+  }
+
+  private openNewFileTypeMenuAt(anchor: HTMLElement, parentRelativePath: string): void {
+    const rect = anchor.getBoundingClientRect();
+    this.openNewFileTypeMenu(parentRelativePath, rect.left, rect.bottom);
+  }
+
+  private openNewFileTypeMenu(parentRelativePath: string, x: number, y: number): void {
+    this.closeContextMenu();
+    const menu = document.createElement('div');
+    menu.className = 'workspace-file-context-menu workspace-new-file-type-menu';
+    menu.setAttribute('role', 'menu');
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
+    for (const item of this.newFileTypeMenuItems(parentRelativePath)) {
+      this.appendMenuItem(menu, {
+        label: item.label,
+        onClick: () => {
+          this.closeTypeMenu();
+          item.action();
+        },
+      });
+    }
+    document.body.appendChild(menu);
+    this.typeMenuEl = menu;
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) menu.style.left = `${Math.max(0, x - rect.width)}px`;
+    if (rect.bottom > window.innerHeight) menu.style.top = `${Math.max(0, y - rect.height)}px`;
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && menu.contains(event.target)) return;
+      this.closeTypeMenu();
+      window.removeEventListener('pointerdown', onPointerDown, true);
+    };
+    window.addEventListener('pointerdown', onPointerDown, true);
   }
 
   private buildContextMenuItems(entry: WorkspaceExplorerEntry): ContextMenuItem[] {
@@ -1205,7 +1386,11 @@ export class WorkspaceExplorerView {
       }
     } else if (writable) {
       items.push(
-        { label: tExplorer('context.newFile'), action: () => this.beginCreate(entry.relativePath, 'file') },
+        {
+          label: tExplorer('context.newFile'),
+          submenu: this.newFileTypeMenuItems(entry.relativePath),
+          action: () => undefined,
+        },
         { label: tExplorer('context.newFolder'), action: () => this.beginCreate(entry.relativePath, 'directory') },
       );
     }
@@ -1343,6 +1528,10 @@ export class WorkspaceExplorerView {
         anchorRelativePath: this.anchor,
       });
       await this.loadDirectory(parentRelativePath(result.entry.relativePath));
+      // Match a normal tree click: selection alone is not enough — open the file.
+      if (result.entry.kind !== 'directory') {
+        this.post({ type: 'open', relativePath: result.entry.relativePath });
+      }
       return;
     }
     await this.loadDirectory(parentRelativePath(relativePath));
@@ -1398,16 +1587,28 @@ export class WorkspaceExplorerView {
     await Promise.all(parents.map((parent) => this.loadDirectory(parent)));
   }
 
-  private beginCreate(parentRelativePathValue: string, kind: 'file' | 'directory'): void {
+  private beginCreate(parentRelativePathValue: string, kind: 'file' | 'directory', extension?: string): void {
     if (parentRelativePathValue) {
       this.expanded.add(parentRelativePathValue);
       this.post({ type: 'setExpanded', relativePath: parentRelativePathValue, expanded: true });
       void this.loadDirectory(parentRelativePathValue);
     }
     this.renamePath = null;
-    this.pendingCreate = { parentRelativePath: parentRelativePathValue, kind };
+    const normalizedExt = kind === 'file'
+      ? (extension && extension.startsWith('.') ? extension : extension ? `.${extension}` : '.md')
+      : undefined;
+    this.pendingCreate = { parentRelativePath: parentRelativePathValue, kind, extension: normalizedExt };
     this.setEditing(true);
     this.render();
+  }
+
+  private defaultCreateName(kind: 'file' | 'directory', extension?: string): string {
+    const existing = (this.entriesByDirectory.get(this.pendingCreate?.parentRelativePath ?? '') ?? []).map((entry) => entry.name);
+    if (kind === 'directory') {
+      return unusedWorkspaceCreateFolderName(tExplorer('create.defaultFolderName'), existing);
+    }
+    const ext = extension && extension.startsWith('.') ? extension : `.${extension || 'md'}`;
+    return unusedWorkspaceCreateFileName(tExplorer('create.defaultFileStem'), ext, existing);
   }
 
   private renderCreateInput(depth: number): HTMLElement {
@@ -1416,12 +1617,20 @@ export class WorkspaceExplorerView {
     wrapper.style.paddingInlineStart = `${28 + depth * 16}px`;
     const input = document.createElement('input');
     input.autofocus = true;
-    input.value = this.pendingCreate?.kind === 'file' ? 'untitled.md' : 'untitled';
+    const pending = this.pendingCreate;
+    input.value = pending
+      ? this.defaultCreateName(pending.kind, pending.extension)
+      : unusedWorkspaceCreateFileName(tExplorer('create.defaultFileStem'), '.md', []);
     wrapper.appendChild(input);
+    let submitting = false;
+    const commit = (): void => {
+      if (submitting || !pending || this.pendingCreate !== pending) return;
+      submitting = true;
+      void this.createEntry(pending, input.value);
+    };
     wrapper.addEventListener('submit', (event) => {
       event.preventDefault();
-      const pending = this.pendingCreate;
-      if (pending) void this.createEntry(pending, input.value);
+      commit();
     });
     input.addEventListener('keydown', (event) => {
       event.stopPropagation();
@@ -1432,13 +1641,11 @@ export class WorkspaceExplorerView {
       }
     });
     input.addEventListener('focus', () => this.setEditing(true));
-    input.addEventListener('blur', () => {
-      if (!this.pendingCreate) return;
-      // Keep editing flag until create settles or Escape cancels.
-    });
+    input.addEventListener('blur', commit);
     requestAnimationFrame(() => {
+      if (!input.isConnected) return;
       input.focus();
-      input.select();
+      input.setSelectionRange(...workspaceEntryNameSelectionRange(input.value));
     });
     return wrapper;
   }
@@ -1480,6 +1687,10 @@ export class WorkspaceExplorerView {
       });
     }
     await this.loadDirectory(pending.parentRelativePath);
+    // Confirming the create name must select AND open (same as clicking an existing file).
+    if (result.entry && result.entry.kind !== 'directory') {
+      this.post({ type: 'open', relativePath: result.entry.relativePath });
+    }
   }
 
   private async copyEntries(relativePaths: string[]): Promise<void> {

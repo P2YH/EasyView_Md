@@ -3,12 +3,13 @@ import * as path from 'path';
 import { randomUUID } from 'node:crypto';
 import {
   isEasyViewThemeMode,
+  isWritablePreviewRoute,
   resolvePreviewRoute,
   type EasyViewThemeMode,
   type PreviewDescriptor,
   type PreviewTextResult,
 } from '@easyview/contracts';
-import { isPhase1PreviewRoute, PHASE1_FILENAME_PATTERNS } from '@easyview/preview-ui/phase1';
+import { isDesktopOnlyPreviewRoute, isPhase1PreviewRoute, PHASE1_FILENAME_PATTERNS } from '@easyview/preview-ui/phase1';
 import {
   productThemeBootstrapScript,
   readPreviewFileTheme,
@@ -121,7 +122,10 @@ export class FilePreviewProvider implements vscode.CustomReadonlyEditorProvider<
     };
 
     if (!route || !isPhase1PreviewRoute(route.route)) {
-      webviewPanel.webview.html = errorHtml(tPreview('unsupportedType'));
+      const message = route && isDesktopOnlyPreviewRoute(route.route)
+        ? tPreview('desktopOnlyType', { route: route.route })
+        : tPreview('unsupportedType');
+      webviewPanel.webview.html = errorHtml(message);
       return;
     }
 
@@ -265,11 +269,11 @@ export class FilePreviewProvider implements vscode.CustomReadonlyEditorProvider<
       }
       if (message.type === 'writeBytes' && typeof message.id === 'string') {
         try {
-          if (route.route !== 'spreadsheet' && route.route !== 'word') {
+          if (!isWritablePreviewRoute(route.route)) {
             throw new Error(tPreview('writeUnsupported'));
           }
           const bytes = decodePreviewBytes(message.bytes, message.encoding);
-          if (!bytes || bytes.byteLength === 0) throw new Error(tPreview('writeInvalid'));
+          if (!bytes || (bytes.byteLength === 0 && route.route !== 'text')) throw new Error(tPreview('writeInvalid'));
           if (bytes.byteLength > route.maxSourceBytes) {
             throw new Error(tPreview('writeTooLarge', { size: (route.maxSourceBytes / (1024 * 1024)).toFixed(0) }));
           }

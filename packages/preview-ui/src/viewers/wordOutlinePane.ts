@@ -9,6 +9,14 @@ import {
   type WordOutlineNode,
   type WordOutlineRow,
 } from './wordOutline';
+import {
+  readWordOutlinePinned,
+  readWordOutlineSide,
+  writeWordOutlinePinned,
+  writeWordOutlineSide,
+  type WordOutlineSide,
+} from './wordOutlinePrefs';
+import { writePreviewSidebarHidden } from '../previewSidebarToggle';
 import { tPreview } from '../preview.i18n';
 
 export interface WordOutlineLabels {
@@ -18,6 +26,10 @@ export interface WordOutlineLabels {
   inferredHint: string;
   expand: string;
   collapse: string;
+  pin: string;
+  unpin: string;
+  miniMapLabel: string;
+  dock: string;
 }
 
 export function wordOutlineLabels(): WordOutlineLabels {
@@ -28,6 +40,10 @@ export function wordOutlineLabels(): WordOutlineLabels {
     inferredHint: tPreview('word.outlineInferredHint'),
     expand: tPreview('word.outlineExpand'),
     collapse: tPreview('word.outlineCollapse'),
+    pin: tPreview('word.outlinePin'),
+    unpin: tPreview('word.outlineUnpin'),
+    miniMapLabel: tPreview('word.outlineMiniMap'),
+    dock: tPreview('word.outlineDock'),
   };
 }
 
@@ -47,8 +63,11 @@ export interface WordOutlineSource {
 
 export interface WordOutlineController {
   pane: HTMLElement;
+  minimap: HTMLElement;
   /** Re-collect headings now (otherwise debounced through `observe`). */
   refresh(): void;
+  setPinned(pinned: boolean): void;
+  setSide(side: WordOutlineSide): void;
   dispose(): void;
 }
 
@@ -59,11 +78,26 @@ const REFRESH_DEBOUNCE_MS = 300;
 /** Give a slow document about 30 s to lay out before showing the empty state. */
 const MAX_RETRIES = 120;
 const SCROLL_THROTTLE_MS = 80;
+const MINI_MAP_MAX_DASHES = 28;
 const CHEVRON = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const PIN_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 5 3 3v2H7v-2l3-3-1-5Z"/><path d="M12 14v6"/></svg>';
+const UNPIN_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.2"/><path d="M15 4.5v15"/><path d="m9 9 3 3-3 3"/></svg>';
+const DOCK_GRIP_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/></svg>';
+
+function layoutHosts(container: HTMLElement): HTMLElement[] {
+  const hosts = new Set<HTMLElement>([container]);
+  const shell = container.closest<HTMLElement>('.file-viewer-web-shell');
+  const viewer = container.closest<HTMLElement>('.preview-universal-viewer');
+  const mount = container.closest<HTMLElement>('.preview-word-mount') ?? (container.classList.contains('preview-word-mount') ? container : null);
+  if (shell) hosts.add(shell);
+  if (viewer) hosts.add(viewer);
+  if (mount) hosts.add(mount);
+  return [...hosts];
+}
 
 /**
- * Left outline rail for Word documents. The list is virtualised with fixed-height rows so very
- * long documents (thousands of headings) keep a small DOM.
+ * Word outline chrome: virtualised sidebar + Markdown-like pulse minimap (popup + pin) with
+ * left/right docking inside the preview shell (not Markdown panelDock / TableOfContents).
  */
 export function installWordOutline(
   container: HTMLElement,
@@ -74,12 +108,22 @@ export function installWordOutline(
   const doc = container.ownerDocument;
   const win = doc.defaultView ?? window;
 
+  let pinned = readWordOutlinePinned();
+  let side: WordOutlineSide = readWordOutlineSide();
+
   const pane = doc.createElement('nav');
   pane.className = 'preview-word-outline';
   pane.dataset.state = 'loading';
   pane.setAttribute('aria-label', labels.title);
+
   const head = doc.createElement('div');
   head.className = 'preview-word-outline-head';
+  const grip = doc.createElement('span');
+  grip.className = 'preview-word-outline-dock-grip';
+  grip.dataset.wordOutlineDock = '1';
+  grip.title = labels.dock;
+  grip.setAttribute('aria-label', labels.dock);
+  grip.innerHTML = DOCK_GRIP_ICON;
   const title = doc.createElement('span');
   title.className = 'preview-word-outline-title';
   title.textContent = labels.title;
@@ -88,7 +132,14 @@ export function installWordOutline(
   badge.textContent = labels.inferred;
   badge.title = labels.inferredHint;
   badge.hidden = true;
-  head.append(title, badge);
+  const unpinBtn = doc.createElement('button');
+  unpinBtn.type = 'button';
+  unpinBtn.className = 'preview-word-outline-unpin';
+  unpinBtn.title = labels.unpin;
+  unpinBtn.setAttribute('aria-label', labels.unpin);
+  unpinBtn.innerHTML = UNPIN_ICON;
+  head.append(grip, title, badge, unpinBtn);
+
   const list = doc.createElement('div');
   list.className = 'preview-word-outline-list';
   list.setAttribute('role', 'tree');
@@ -100,7 +151,35 @@ export function installWordOutline(
   empty.className = 'preview-word-outline-empty';
   empty.textContent = labels.empty;
   pane.append(head, list, empty);
+
+  const minimap = doc.createElement('div');
+  minimap.className = 'preview-word-minimap';
+  minimap.hidden = true;
+  const rail = doc.createElement('div');
+  rail.className = 'preview-word-minimap-rail';
+  rail.setAttribute('aria-hidden', 'true');
+  rail.tabIndex = 0;
+  const panel = doc.createElement('nav');
+  panel.className = 'preview-word-minimap-panel';
+  panel.setAttribute('aria-label', labels.miniMapLabel);
+  const miniHead = doc.createElement('div');
+  miniHead.className = 'preview-word-minimap-header';
+  const miniTitle = doc.createElement('span');
+  miniTitle.textContent = labels.title;
+  const pinBtn = doc.createElement('button');
+  pinBtn.type = 'button';
+  pinBtn.className = 'preview-word-minimap-pin';
+  pinBtn.title = labels.pin;
+  pinBtn.setAttribute('aria-label', labels.pin);
+  pinBtn.innerHTML = PIN_ICON;
+  miniHead.append(miniTitle, pinBtn);
+  const miniList = doc.createElement('ul');
+  miniList.className = 'preview-word-minimap-list';
+  panel.append(miniHead, miniList);
+  minimap.append(rail, panel);
+
   container.insertBefore(pane, options.before ?? null);
+  container.insertBefore(minimap, pane.nextSibling);
 
   let headings: WordOutlineHeading[] = [];
   let signature = '';
@@ -116,13 +195,60 @@ export function installWordOutline(
   let debounceTimer: number | null = null;
   let retryTimer: number | null = null;
   let retries = 0;
+  let miniMapActiveId = -1;
   const rendered = new Map<number, HTMLElement>();
 
   const rowIndexOf = (id: number): number => rows.findIndex(row => row.node.id === id);
 
+  const applyChrome = (): void => {
+    const mode = pinned ? 'sidebar' : 'minimap';
+    const sidebarState = pinned ? 'visible' : 'hidden';
+    for (const host of layoutHosts(container)) {
+      host.dataset.wordOutlineMode = mode;
+      host.dataset.wordOutlineSide = side;
+      host.dataset.previewSidebar = sidebarState;
+    }
+    pane.classList.toggle('preview-word-outline-right', side === 'right');
+    pane.classList.toggle('preview-word-outline-left', side === 'left');
+    pane.hidden = !pinned;
+    minimap.classList.toggle('preview-word-minimap-left', side === 'left');
+    minimap.classList.toggle('preview-word-minimap-right', side === 'right');
+    const showMini = !pinned && headings.length > 0;
+    minimap.hidden = !showMini;
+    if (!showMini) minimap.classList.remove('is-open');
+    writePreviewSidebarHidden(!pinned);
+  };
+
+  const setPinned = (next: boolean): void => {
+    if (pinned === next) {
+      applyChrome();
+      return;
+    }
+    pinned = next;
+    writeWordOutlinePinned(pinned);
+    applyChrome();
+    container.dispatchEvent(new CustomEvent('easyview-word-outline-pinned', {
+      bubbles: true,
+      detail: { pinned },
+    }));
+    if (pinned) {
+      // Render immediately so pin works under tests without waiting for rAF.
+      rebuildRows();
+    } else {
+      renderMiniMap();
+    }
+  };
+
+  const setSide = (next: WordOutlineSide): void => {
+    if (side === next) return;
+    side = next;
+    writeWordOutlineSide(side);
+    applyChrome();
+  };
+
   const renderRows = (): void => {
     renderFrame = 0;
-    if (disposed) return;
+    if (disposed || !pinned) return;
     spacer.style.height = `${rows.length * WORD_OUTLINE_ROW_HEIGHT + 8}px`;
     const viewport = list.clientHeight || FALLBACK_VIEWPORT_ROWS * WORD_OUTLINE_ROW_HEIGHT;
     const first = Math.max(0, Math.floor(list.scrollTop / WORD_OUTLINE_ROW_HEIGHT) - OVERSCAN);
@@ -198,7 +324,7 @@ export function installWordOutline(
   };
 
   const scrollActiveIntoView = (): void => {
-    if (activeId < 0 || !nodes[activeId]) return;
+    if (activeId < 0 || !nodes[activeId] || !pinned) return;
     const index = rowIndexOf(visibleAncestor(nodes, collapsed, activeId));
     if (index < 0 || !list.clientHeight) return;
     const top = index * WORD_OUTLINE_ROW_HEIGHT;
@@ -208,11 +334,79 @@ export function installWordOutline(
     }
   };
 
+  const pickMiniMapRailHeadings = (minLevel: number): WordOutlineHeading[] => {
+    for (let depth = 3; depth >= 0; depth -= 1) {
+      const candidates = headings.filter((heading) => heading.level - minLevel <= depth);
+      if (candidates.length <= MINI_MAP_MAX_DASHES) return candidates;
+      if (depth === 0) {
+        return Array.from({ length: MINI_MAP_MAX_DASHES }, (_, index) =>
+          candidates[Math.floor((index * candidates.length) / MINI_MAP_MAX_DASHES)]!);
+      }
+    }
+    return [];
+  };
+
+  const highlightMiniMap = (): void => {
+    if (minimap.hidden || pinned) return;
+    const id = activeId >= 0 ? activeId : (headings.length ? 0 : -1);
+    if (id === miniMapActiveId) return;
+    miniMapActiveId = id;
+    miniList.querySelectorAll<HTMLElement>('.preview-word-minimap-item').forEach((item) => {
+      item.classList.toggle('active', Number(item.dataset.id) === id);
+    });
+    let activeDash: HTMLElement | null = null;
+    rail.querySelectorAll<HTMLElement>('.preview-word-minimap-dash').forEach((dash) => {
+      dash.classList.remove('active');
+      if (id >= 0 && Number(dash.dataset.id) <= id) activeDash = dash;
+    });
+    (activeDash as HTMLElement | null)?.classList.add('active');
+  };
+
+  const renderMiniMap = (): void => {
+    miniMapActiveId = -1;
+    rail.replaceChildren();
+    miniList.replaceChildren();
+    applyChrome();
+    if (pinned || !headings.length) return;
+
+    const minLevel = headings.reduce((min, heading) => Math.min(min, heading.level), Infinity);
+    for (const heading of pickMiniMapRailHeadings(minLevel)) {
+      const index = headings.indexOf(heading);
+      const dash = doc.createElement('span');
+      dash.className = 'preview-word-minimap-dash';
+      dash.dataset.id = String(index);
+      dash.dataset.depth = String(Math.min(3, heading.level - minLevel));
+      rail.appendChild(dash);
+    }
+    headings.forEach((heading, index) => {
+      const item = doc.createElement('li');
+      const button = doc.createElement('button');
+      button.type = 'button';
+      button.className = 'preview-word-minimap-item';
+      button.dataset.id = String(index);
+      button.dataset.depth = String(Math.min(4, heading.level - minLevel));
+      button.textContent = heading.text || labels.empty;
+      button.title = heading.text;
+      button.addEventListener('click', () => {
+        bindScroller();
+        source.reveal(heading, scroller);
+        pinnedUntil = Date.now() + 600;
+        activeId = index;
+        highlightMiniMap();
+        win.setTimeout(() => { pinnedUntil = 0; tops = null; }, 650);
+      });
+      item.appendChild(button);
+      miniList.appendChild(item);
+    });
+    highlightMiniMap();
+  };
+
   const setActive = (id: number): void => {
     if (id === activeId) return;
     activeId = id;
     scrollActiveIntoView();
-    renderRows();
+    if (pinned) renderRows();
+    else highlightMiniMap();
   };
 
   const updateActive = (): void => {
@@ -281,15 +475,17 @@ export function installWordOutline(
       headings = next;
       signature = nextSignature;
       nodes = buildWordOutlineTree(headings);
-      const sameShape = previous.length === nodes.length && previous.every((node, i) => node.heading.level === nodes[i].heading.level);
+      const sameShape = previous.length === nodes.length && previous.every((node, i) => node.heading.level === nodes[i]!.heading.level);
       collapsed = sameShape ? new Set([...previousCollapsed].filter(id => nodes[id]?.children.length)) : defaultCollapsed(nodes);
       if (!sameShape) activeId = -1;
       pane.dataset.state = headings.length ? 'ready' : 'empty';
       badge.hidden = !headings.some(h => h.inferred);
       rebuildRows();
+      renderMiniMap();
     } else {
       headings = next;
       pane.dataset.state = headings.length ? 'ready' : 'empty';
+      applyChrome();
     }
     updateActive();
   };
@@ -341,6 +537,163 @@ export function installWordOutline(
     }
   };
 
+  const openMiniPopup = (): void => {
+    if (pinned || minimap.hidden) return;
+    minimap.classList.add('is-open');
+    const active = miniList.querySelector<HTMLElement>('.preview-word-minimap-item.active');
+    if (active) miniList.scrollTop = active.offsetTop - (miniList.clientHeight - active.offsetHeight) / 2;
+  };
+
+  const onRailActivate = (event: Event): void => {
+    event.preventDefault();
+    if (minimap.classList.contains('is-open')) minimap.classList.remove('is-open');
+    else openMiniPopup();
+  };
+
+  const onMiniEnter = (): void => {
+    const active = miniList.querySelector<HTMLElement>('.preview-word-minimap-item.active');
+    if (active) miniList.scrollTop = active.offsetTop - (miniList.clientHeight - active.offsetHeight) / 2;
+  };
+
+  const onDocPointerDown = (event: PointerEvent): void => {
+    if (!minimap.classList.contains('is-open')) return;
+    const target = event.target as Node | null;
+    if (target && minimap.contains(target)) return;
+    minimap.classList.remove('is-open');
+  };
+
+  // Self-contained left/right dock (preview shell only; does not use desktop panelDock).
+  let dockCleanup: (() => void) | null = null;
+  const beginDockDrag = (startX: number, startY: number): void => {
+    dockCleanup?.();
+    const overlay = doc.createElement('div');
+    overlay.className = 'preview-word-outline-dock-overlay';
+    const host = container.closest<HTMLElement>('.preview-word-mount, .file-viewer-web-shell, .preview-universal-viewer') ?? container;
+    const area = host.getBoundingClientRect();
+    const zoneW = Math.min(220, area.width / 3);
+    const zones: Array<{ side: WordOutlineSide; el: HTMLElement; rect: DOMRect }> = [];
+    for (const dockSide of ['left', 'right'] as const) {
+      if (dockSide === side) continue;
+      const rect = new DOMRect(
+        dockSide === 'left' ? area.left : area.right - zoneW,
+        area.top,
+        zoneW,
+        area.height,
+      );
+      const el = doc.createElement('div');
+      el.className = 'preview-word-outline-dock-zone';
+      el.dataset.side = dockSide;
+      Object.assign(el.style, {
+        left: `${rect.left}px`,
+        top: `${rect.top}px`,
+        width: `${rect.width}px`,
+        height: `${rect.height}px`,
+      });
+      const label = doc.createElement('span');
+      label.className = 'preview-word-outline-dock-zone-label';
+      label.textContent = dockSide === 'left' ? '←' : '→';
+      el.append(label);
+      overlay.append(el);
+      zones.push({ side: dockSide, el, rect });
+    }
+    const ghost = doc.createElement('div');
+    ghost.className = 'preview-word-outline-dock-ghost';
+    ghost.textContent = labels.title;
+    overlay.append(ghost);
+    doc.body.append(overlay);
+    doc.body.classList.add('preview-word-outline-docking');
+
+    let hovered: typeof zones[number] | null = null;
+    const move = (x: number, y: number): void => {
+      ghost.style.transform = `translate(${x + 12}px, ${y + 12}px)`;
+      const next = zones.find(({ rect }) => x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) ?? null;
+      if (next === hovered) return;
+      hovered?.el.classList.remove('is-active');
+      next?.el.classList.add('is-active');
+      hovered = next;
+    };
+    move(startX, startY);
+
+    const onMove = (event: PointerEvent): void => move(event.clientX, event.clientY);
+    const onUp = (event: PointerEvent): void => {
+      const target = hovered?.side ?? null;
+      cleanup();
+      if (target) setSide(target);
+      event.preventDefault();
+    };
+    const cleanup = (): void => {
+      win.removeEventListener('pointermove', onMove);
+      win.removeEventListener('pointerup', onUp);
+      win.removeEventListener('pointercancel', onUp);
+      overlay.remove();
+      doc.body.classList.remove('preview-word-outline-docking');
+      dockCleanup = null;
+    };
+    dockCleanup = cleanup;
+    win.addEventListener('pointermove', onMove);
+    win.addEventListener('pointerup', onUp);
+    win.addEventListener('pointercancel', onUp);
+  };
+
+  const onGripPointerDown = (event: PointerEvent): void => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    let started = false;
+    const onMove = (moveEvent: PointerEvent): void => {
+      if (!started && Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < 4) return;
+      if (!started) {
+        started = true;
+        win.removeEventListener('pointermove', onMove);
+        win.removeEventListener('pointerup', onCancel);
+        win.removeEventListener('pointercancel', onCancel);
+        beginDockDrag(moveEvent.clientX, moveEvent.clientY);
+      }
+    };
+    const onCancel = (): void => {
+      win.removeEventListener('pointermove', onMove);
+      win.removeEventListener('pointerup', onCancel);
+      win.removeEventListener('pointercancel', onCancel);
+    };
+    win.addEventListener('pointermove', onMove);
+    win.addEventListener('pointerup', onCancel);
+    win.addEventListener('pointercancel', onCancel);
+  };
+
+  const onHostAttr = (mutations: MutationRecord[]): void => {
+    for (const mutation of mutations) {
+      if (mutation.type !== 'attributes' || mutation.attributeName !== 'data-preview-sidebar') continue;
+      const host = mutation.target as HTMLElement;
+      const nextPinned = host.dataset.previewSidebar !== 'hidden';
+      if (nextPinned !== pinned) {
+        pinned = nextPinned;
+        writeWordOutlinePinned(pinned);
+        applyChrome();
+        if (pinned) scheduleRender();
+        else renderMiniMap();
+      }
+    }
+  };
+  const hostObserver = typeof MutationObserver === 'function' ? new MutationObserver(onHostAttr) : null;
+  for (const host of layoutHosts(container)) {
+    hostObserver?.observe(host, { attributes: true, attributeFilter: ['data-preview-sidebar'] });
+  }
+
+  const onUnpinClick = (): void => setPinned(false);
+  const onPinClick = (): void => setPinned(true);
+  const onRailKey = (event: KeyboardEvent): void => {
+    if (event.key === 'Enter' || event.key === ' ') onRailActivate(event);
+  };
+  unpinBtn.addEventListener('click', onUnpinClick);
+  pinBtn.addEventListener('click', onPinClick);
+  grip.addEventListener('pointerdown', onGripPointerDown);
+  rail.addEventListener('click', onRailActivate);
+  rail.addEventListener('keydown', onRailKey);
+  minimap.addEventListener('mouseenter', onMiniEnter);
+  doc.addEventListener('pointerdown', onDocPointerDown, true);
+
   list.addEventListener('click', onListClick);
   list.addEventListener('keydown', onListKey);
   list.addEventListener('scroll', scheduleRender, { passive: true });
@@ -348,15 +701,21 @@ export function installWordOutline(
     tops = null;
     scheduleRefresh();
   });
+  applyChrome();
   refresh();
 
   return {
     pane,
+    minimap,
     refresh,
+    setPinned,
+    setSide,
     dispose(): void {
       disposed = true;
       unobserve();
       onScroll.cancel();
+      dockCleanup?.();
+      hostObserver?.disconnect();
       if (debounceTimer) win.clearTimeout(debounceTimer);
       if (retryTimer) win.clearTimeout(retryTimer);
       if (renderFrame) win.cancelAnimationFrame(renderFrame);
@@ -365,7 +724,19 @@ export function installWordOutline(
       list.removeEventListener('click', onListClick);
       list.removeEventListener('keydown', onListKey);
       list.removeEventListener('scroll', scheduleRender);
+      unpinBtn.removeEventListener('click', onUnpinClick);
+      pinBtn.removeEventListener('click', onPinClick);
+      grip.removeEventListener('pointerdown', onGripPointerDown);
+      rail.removeEventListener('click', onRailActivate);
+      rail.removeEventListener('keydown', onRailKey);
+      minimap.removeEventListener('mouseenter', onMiniEnter);
+      doc.removeEventListener('pointerdown', onDocPointerDown, true);
+      for (const host of layoutHosts(container)) {
+        delete host.dataset.wordOutlineMode;
+        delete host.dataset.wordOutlineSide;
+      }
       pane.remove();
+      minimap.remove();
     },
   };
 }

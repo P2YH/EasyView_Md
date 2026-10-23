@@ -20,6 +20,7 @@ import {
   validateWorkspaceEntryName,
 } from './workspace-path';
 import { tWorkspaceError } from './workspace.i18n';
+import { initialContentsForNewFile } from './new-file-contents';
 
 export interface LocalWorkspaceRootRegistration {
   id: string;
@@ -121,7 +122,8 @@ export class LocalWorkspaceGateway implements WorkspaceGateway {
       if (request.kind === 'directory') {
         await fs.mkdir(targetPath);
       } else {
-        await fs.writeFile(targetPath, '', { flag: 'wx' });
+        const contents = await initialContentsForNewFile(request.name);
+        await fs.writeFile(targetPath, contents, { flag: 'wx' });
       }
 
       const relativePath = joinWorkspaceRelativePath(parentRelativePath, request.name);

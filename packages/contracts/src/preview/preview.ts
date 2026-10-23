@@ -21,6 +21,16 @@ export type PreviewRoute =
   | 'video'
   | 'audio';
 
+/** Top chrome family for preview UI: BasicChrome vs DocumentChrome. */
+export type PreviewChrome = 'basic' | 'document';
+
+/**
+ * Routes the host may accept for `writeBytes`. Suffix-level writability is
+ * finer-grained via `writableSuffixes` / `isPreviewWritableFile`.
+ */
+export const WRITABLE_PREVIEW_ROUTES = ['text', 'word', 'spreadsheet'] as const;
+export type WritablePreviewRoute = (typeof WRITABLE_PREVIEW_ROUTES)[number];
+
 export interface PreviewRouteDefinition {
   readonly route: PreviewRoute;
   /** Lowercase suffixes, including the leading dot. Longest suffix wins. */
@@ -28,34 +38,75 @@ export interface PreviewRouteDefinition {
   /** The maximum original file size accepted by the host for this route. */
   readonly maxSourceBytes: number;
   readonly mimeType: string;
+  /**
+   * Which shared preview shell to use. One route → one chrome family
+   * (no per-suffix chrome forks in the contract).
+   */
+  readonly chrome: PreviewChrome;
+  /**
+   * Suffixes that may be saved via writeBytes when the host supports it.
+   * `'*'` means every suffix on this route (used by text). Omit / empty = never.
+   */
+  readonly writableSuffixes?: readonly string[] | '*';
 }
 
 const MEBIBYTE = 1024 * 1024;
 /** Audio is read into memory (for the live spectrum), so it gets a tighter cap than streamed video. */
 const AUDIO_MAX_BYTES = 512 * MEBIBYTE;
 
+/** Exact basenames (case-insensitive) routed to text preview — no extension. */
+export const TEXT_PREVIEW_BASENAMES = [
+  'dockerfile',
+  'makefile',
+  'gnumakefile',
+  'jenkinsfile',
+  'cmakelists.txt',
+  'gemfile',
+  'podfile',
+  'procfile',
+  'vagrantfile',
+] as const;
+
+const TEXT_PREVIEW_BASENAME_SET = new Set<string>(TEXT_PREVIEW_BASENAMES);
+
 export const PREVIEW_ROUTES: readonly PreviewRouteDefinition[] = [
-  { route: 'text', suffixes: ['.txt', '.log', '.json', '.jsonc', '.yaml', '.yml', '.xml', '.ini', '.conf', '.properties', '.toml'], maxSourceBytes: 32 * MEBIBYTE, mimeType: 'text/plain; charset=utf-8' },
-  { route: 'image', suffixes: ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.ico', '.icns', '.tif', '.tiff', '.heic', '.heif'], maxSourceBytes: 128 * MEBIBYTE, mimeType: 'application/octet-stream' },
-  { route: 'svg', suffixes: ['.svg'], maxSourceBytes: 16 * MEBIBYTE, mimeType: 'image/svg+xml' },
-  { route: 'html', suffixes: ['.html', '.htm'], maxSourceBytes: 32 * MEBIBYTE, mimeType: 'text/html; charset=utf-8' },
-  { route: 'pdf', suffixes: ['.pdf'], maxSourceBytes: 256 * MEBIBYTE, mimeType: 'application/pdf' },
-  { route: 'spreadsheet', suffixes: ['.xlsx', '.xlsm', '.xlsb', '.xls', '.ods', '.csv', '.tsv'], maxSourceBytes: 128 * MEBIBYTE, mimeType: 'application/octet-stream' },
-  { route: 'word', suffixes: ['.docx', '.docm', '.dotx', '.dotm', '.doc'], maxSourceBytes: 128 * MEBIBYTE, mimeType: 'application/octet-stream' },
-  { route: 'powerpoint', suffixes: ['.pptx', '.pptm', '.potx', '.potm', '.ppsx', '.ppsm', '.ppt'], maxSourceBytes: 128 * MEBIBYTE, mimeType: 'application/octet-stream' },
-  { route: 'epub', suffixes: ['.epub'], maxSourceBytes: 128 * MEBIBYTE, mimeType: 'application/epub+zip' },
-  { route: 'design', suffixes: ['.xmind', '.psd', '.drawio', '.dio'], maxSourceBytes: 256 * MEBIBYTE, mimeType: 'application/octet-stream' },
-  { route: 'archive', suffixes: ['.tar.gz', '.tgz', '.zip', '.jar', '.war', '.ear', '.vsix', '.apk', '.cbz', '.tar', '.gz', '.7z', '.rar', '.cbr'], maxSourceBytes: 128 * MEBIBYTE, mimeType: 'application/octet-stream' },
-  { route: 'font', suffixes: ['.ttf', '.otf', '.woff', '.woff2'], maxSourceBytes: 64 * MEBIBYTE, mimeType: 'application/octet-stream' },
-  { route: 'http', suffixes: ['.http', '.rest'], maxSourceBytes: 4 * MEBIBYTE, mimeType: 'text/plain; charset=utf-8' },
-  { route: 'java-class', suffixes: ['.class'], maxSourceBytes: 16 * MEBIBYTE, mimeType: 'application/java-vm' },
+  { route: 'text', chrome: 'basic', writableSuffixes: '*', suffixes: [
+    '.txt', '.log', '.json', '.jsonc', '.yaml', '.yml', '.xml', '.ini', '.conf', '.properties', '.toml',
+    '.py', '.pyw', '.pyi', '.sql',
+    '.js', '.mjs', '.cjs', '.jsx', '.ts', '.mts', '.cts', '.tsx',
+    '.css', '.scss', '.sass', '.less',
+    '.c', '.h', '.cpp', '.cc', '.cxx', '.hpp', '.hh', '.hxx',
+    '.rs', '.go', '.swift', '.m', '.mm',
+    '.java', '.kt', '.kts', '.groovy', '.gradle', '.scala',
+    '.cs', '.fs', '.vb',
+    '.sh', '.bash', '.zsh', '.fish', '.ps1', '.bat', '.cmd',
+    '.rb', '.php', '.lua', '.pl', '.pm', '.r',
+    '.dart', '.jl', '.ex', '.exs', '.hs', '.clj', '.cljs',
+    '.vue', '.svelte', '.astro',
+    '.proto', '.graphql', '.gql', '.tf', '.hcl', '.zig', '.nim',
+    '.env', '.editorconfig', '.gitignore', '.dockerignore', '.npmrc',
+    '.prettierrc', '.eslintrc',
+  ], maxSourceBytes: 32 * MEBIBYTE, mimeType: 'text/plain; charset=utf-8' },
+  { route: 'image', chrome: 'document', suffixes: ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.ico', '.icns', '.tif', '.tiff', '.heic', '.heif'], maxSourceBytes: 128 * MEBIBYTE, mimeType: 'application/octet-stream' },
+  { route: 'svg', chrome: 'basic', suffixes: ['.svg'], maxSourceBytes: 16 * MEBIBYTE, mimeType: 'image/svg+xml' },
+  { route: 'html', chrome: 'basic', suffixes: ['.html', '.htm'], maxSourceBytes: 32 * MEBIBYTE, mimeType: 'text/html; charset=utf-8' },
+  { route: 'pdf', chrome: 'document', suffixes: ['.pdf'], maxSourceBytes: 256 * MEBIBYTE, mimeType: 'application/pdf' },
+  { route: 'spreadsheet', chrome: 'document', writableSuffixes: ['.xlsx', '.xlsm'], suffixes: ['.xlsx', '.xlsm', '.xlsb', '.xls', '.ods', '.csv', '.tsv'], maxSourceBytes: 128 * MEBIBYTE, mimeType: 'application/octet-stream' },
+  { route: 'word', chrome: 'document', writableSuffixes: ['.docx', '.dotx'], suffixes: ['.docx', '.docm', '.dotx', '.dotm', '.doc'], maxSourceBytes: 128 * MEBIBYTE, mimeType: 'application/octet-stream' },
+  { route: 'powerpoint', chrome: 'document', suffixes: ['.pptx', '.pptm', '.potx', '.potm', '.ppsx', '.ppsm', '.ppt'], maxSourceBytes: 128 * MEBIBYTE, mimeType: 'application/octet-stream' },
+  { route: 'epub', chrome: 'document', suffixes: ['.epub'], maxSourceBytes: 128 * MEBIBYTE, mimeType: 'application/epub+zip' },
+  { route: 'design', chrome: 'document', suffixes: ['.xmind', '.psd', '.drawio', '.dio'], maxSourceBytes: 256 * MEBIBYTE, mimeType: 'application/octet-stream' },
+  { route: 'archive', chrome: 'document', suffixes: ['.tar.gz', '.tgz', '.zip', '.jar', '.war', '.ear', '.vsix', '.apk', '.cbz', '.tar', '.gz', '.7z', '.rar', '.cbr'], maxSourceBytes: 128 * MEBIBYTE, mimeType: 'application/octet-stream' },
+  { route: 'font', chrome: 'document', suffixes: ['.ttf', '.otf', '.woff', '.woff2'], maxSourceBytes: 64 * MEBIBYTE, mimeType: 'application/octet-stream' },
+  { route: 'http', chrome: 'basic', suffixes: ['.http', '.rest'], maxSourceBytes: 4 * MEBIBYTE, mimeType: 'text/plain; charset=utf-8' },
+  { route: 'java-class', chrome: 'basic', suffixes: ['.class'], maxSourceBytes: 16 * MEBIBYTE, mimeType: 'application/java-vm' },
   // Streamed with byte ranges, never read into memory, so the cap only guards against absurd files.
-  { route: 'video', suffixes: ['.mp4', '.m4v'], maxSourceBytes: 16 * 1024 * MEBIBYTE, mimeType: 'video/mp4' },
-  { route: 'audio', suffixes: ['.mp3'], maxSourceBytes: AUDIO_MAX_BYTES, mimeType: 'audio/mpeg' },
-  { route: 'audio', suffixes: ['.m4a'], maxSourceBytes: AUDIO_MAX_BYTES, mimeType: 'audio/mp4' },
-  { route: 'audio', suffixes: ['.wav'], maxSourceBytes: AUDIO_MAX_BYTES, mimeType: 'audio/wav' },
-  { route: 'audio', suffixes: ['.ogg', '.oga'], maxSourceBytes: AUDIO_MAX_BYTES, mimeType: 'audio/ogg' },
-  { route: 'audio', suffixes: ['.flac'], maxSourceBytes: AUDIO_MAX_BYTES, mimeType: 'audio/flac' },
+  { route: 'video', chrome: 'basic', suffixes: ['.mp4', '.m4v'], maxSourceBytes: 16 * 1024 * MEBIBYTE, mimeType: 'video/mp4' },
+  { route: 'audio', chrome: 'basic', suffixes: ['.mp3'], maxSourceBytes: AUDIO_MAX_BYTES, mimeType: 'audio/mpeg' },
+  { route: 'audio', chrome: 'basic', suffixes: ['.m4a'], maxSourceBytes: AUDIO_MAX_BYTES, mimeType: 'audio/mp4' },
+  { route: 'audio', chrome: 'basic', suffixes: ['.wav'], maxSourceBytes: AUDIO_MAX_BYTES, mimeType: 'audio/wav' },
+  { route: 'audio', chrome: 'basic', suffixes: ['.ogg', '.oga'], maxSourceBytes: AUDIO_MAX_BYTES, mimeType: 'audio/ogg' },
+  { route: 'audio', chrome: 'basic', suffixes: ['.flac'], maxSourceBytes: AUDIO_MAX_BYTES, mimeType: 'audio/flac' },
 ] as const;
 
 const ROUTES_BY_LONGEST_SUFFIX = [...PREVIEW_ROUTES]
@@ -66,6 +117,12 @@ export function resolvePreviewRoute(fileName: string): PreviewRouteDefinition | 
   if (typeof fileName !== 'string') return null;
   const normalized = fileName.trim().toLocaleLowerCase();
   if (!normalized || normalized.includes('\0')) return null;
+  const baseName = normalized.includes('/') || normalized.includes('\\')
+    ? normalized.split(/[/\\]/).pop() ?? normalized
+    : normalized;
+  if (TEXT_PREVIEW_BASENAME_SET.has(baseName)) {
+    return PREVIEW_ROUTES.find((definition) => definition.route === 'text') ?? null;
+  }
   return ROUTES_BY_LONGEST_SUFFIX.find(({ suffix }) => normalized.endsWith(suffix))?.definition ?? null;
 }
 
@@ -131,4 +188,28 @@ export interface JavaDecompileResult {
   engine: 'fernflower';
   output: string;
   truncated: boolean;
+}
+
+export function isWritablePreviewRoute(route: PreviewRoute): route is WritablePreviewRoute {
+  return (WRITABLE_PREVIEW_ROUTES as readonly string[]).includes(route);
+}
+
+/** Chrome family for a file name, or null when it is not a preview route (e.g. Markdown). */
+export function resolvePreviewChrome(fileName: string): PreviewChrome | null {
+  return resolvePreviewRoute(fileName)?.chrome ?? null;
+}
+
+/**
+ * Whether writeBytes may be offered for this file (route + suffix whitelist).
+ * Host must still expose writeBytes; truncated text stays read-only in the UI.
+ */
+export function isPreviewWritableFile(fileName: string): boolean {
+  const definition = resolvePreviewRoute(fileName);
+  if (!definition?.writableSuffixes) return false;
+  if (definition.writableSuffixes === '*') return true;
+  const normalized = fileName.trim().toLocaleLowerCase();
+  const baseName = normalized.includes('/') || normalized.includes('\\')
+    ? normalized.split(/[/\\]/).pop() ?? normalized
+    : normalized;
+  return definition.writableSuffixes.some((suffix) => baseName.endsWith(suffix));
 }

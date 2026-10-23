@@ -225,7 +225,7 @@ html, body, .preview-root, .preview-shell, .preview-content {
         applyXSpreadsheetTheme(spreadsheet, themeModeRef.current);
         detachWheel = attachSpreadsheetWheelNormalization(mountRef.current);
 
-        // Append EasyView chrome after formatting buttons so the whole strip can center as one group.
+        // Portal mount after formatting buttons (divider/visuals live on embedded DocumentChrome, like Word).
         const toolbar = mountRef.current.querySelector<HTMLElement>('.x-spreadsheet-toolbar');
         if (toolbar) {
           exposeToolbarIconSprite(toolbar);
@@ -233,6 +233,7 @@ html, body, .preview-root, .preview-shell, .preview-content {
           if (!slot) {
             slot = document.createElement('div');
             slot.setAttribute('data-easyview-spreadsheet-chrome', '');
+            slot.className = 'preview-spreadsheet-chrome-slot';
           }
           const btns = toolbar.querySelector('.x-spreadsheet-toolbar-btns');
           if (btns?.nextSibling) toolbar.insertBefore(slot, btns.nextSibling);
@@ -281,16 +282,21 @@ html, body, .preview-root, .preview-shell, .preview-content {
     applyXSpreadsheetTheme(sheetRef.current, themeMode);
   }, [themeMode]);
 
-  // Toolbar collapse toggles display:none — remeasure viewHeight so the sheet fills the gap.
+  // Toolbar collapses via shared upward animation — remeasure after the transition settles.
   React.useEffect(() => {
     const spreadsheet = sheetRef.current;
     if (!spreadsheet) return;
-    const frame = window.requestAnimationFrame(() => {
+    const remeasure = (): void => {
       if (sheetRef.current !== spreadsheet) return;
       spreadsheet.reRender?.();
       window.dispatchEvent(new Event('resize'));
-    });
-    return () => window.cancelAnimationFrame(frame);
+    };
+    const frame = window.requestAnimationFrame(remeasure);
+    const timer = window.setTimeout(remeasure, 200);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+    };
   }, [pinnedOpen, descriptor.sessionId]);
 
   const save = React.useCallback(async () => {
@@ -334,7 +340,7 @@ html, body, .preview-root, .preview-shell, .preview-content {
     finally { switching.current = false; if (generation === generationRef.current) setLoading(false); }
   };
 
-  const toolbarChrome = chromeSlot && pinnedOpen
+  const toolbarChrome = chromeSlot
     ? createPortal(
         h(DocumentChromeActions, {
           embedded: true,

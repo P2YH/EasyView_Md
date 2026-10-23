@@ -3,7 +3,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { writeFileAtomically } from '@easyview/node-runtime';
 import type { PreviewDescriptor, PreviewRouteDefinition, PreviewTextResult } from '../../../contracts';
-import { resolvePreviewRoute } from '../../../contracts';
+import { isWritablePreviewRoute, resolvePreviewRoute } from '../../../contracts';
 import { tPreviewService } from './preview.i18n';
 
 const TEXT_READ_LIMIT = 4 * 1024 * 1024;
@@ -154,10 +154,11 @@ export class PreviewSessionStore {
 
 async writeBytes(sessionId: string, bytes: Buffer): Promise<PreviewDescriptor> {
     const session = await this.requireFresh(sessionId);
-    if (session.route.route !== 'spreadsheet' && session.route.route !== 'word') {
+    const routeName = session.route.route;
+    if (!isWritablePreviewRoute(routeName)) {
       throw new PreviewSessionError('invalid', tPreviewService('session.writeUnsupported'));
     }
-    if (!Buffer.isBuffer(bytes) || bytes.length === 0) {
+    if (!Buffer.isBuffer(bytes) || (bytes.length === 0 && routeName !== 'text')) {
       throw new PreviewSessionError('invalid', tPreviewService('session.invalidWriteContent'));
     }
     if (bytes.length > session.route.maxSourceBytes) {

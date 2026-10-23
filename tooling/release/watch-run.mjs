@@ -5,7 +5,7 @@
  *
  *   node tooling/release/watch-run.mjs <run-id> [--repo owner/name] [--interval-seconds 10]
  *
- * In a terminal the view redraws full-screen every second, folding jobs that already succeeded;
+ * In a terminal the view refreshes every second, folding detail to fit the window;
  * when output goes to a file (a background job) a full snapshot is printed when a step changes state
  * and a one-line heartbeat with the running steps' elapsed time on every other poll.
  */
@@ -65,7 +65,9 @@ function jobFraction(job) {
   return job.steps.length ? job.steps.filter((step) => step.status === 'completed').length / job.steps.length : 0;
 }
 
-function render(data, note, compact = false) {
+// fold: -1 lists everything; 0 folds jobs that succeeded; 1 also folds jobs not started yet;
+// 2 also merges the finished steps of running jobs into one line.
+function render(data, note, fold = -1) {
   const jobs = jobsWithSteps(data);
   const overall = jobs.length ? jobs.reduce((sum, job) => sum + jobFraction(job), 0) / jobs.length : 0;
   const state = stateOf(data);
@@ -76,9 +78,13 @@ function render(data, note, compact = false) {
   for (const job of jobs) {
     const done = job.steps.filter((step) => step.status === 'completed').length;
     lines.push('', `${ICON[stateOf(job)] ?? ' '} ${job.name}  ${bar(jobFraction(job))} ${done}/${job.steps.length}  ${duration(job.startedAt, job.completedAt)}`);
-    if (compact && job.conclusion === 'success') continue;
-    const nameWidth = Math.max(0, ...job.steps.map((step) => step.name.length));
-    for (const step of job.steps) {
+    if (fold >= 0 && job.conclusion === 'success') continue;
+    if (fold >= 1 && !started(job.startedAt)) continue;
+    const merge = fold >= 2 && job.status !== 'completed';
+    const shown = merge ? job.steps.filter((step) => step.status !== 'completed' || step.conclusion === 'failure') : job.steps;
+    if (merge && done) lines.push(`    ✓ ${done} steps finished`);
+    const nameWidth = Math.max(0, ...shown.map((step) => step.name.length));
+    for (const step of shown) {
       const stepState = stateOf(step);
       const time = stepState === 'skipped' ? '' : duration(step.startedAt, step.completedAt);
       lines.push(`    ${ICON[stepState] ?? ' '} ${step.name.padEnd(nameWidth)}  ${time}`.trimEnd());
@@ -93,8 +99,8 @@ function failedSteps(data) {
     .map((job) => `✗ ${job.name}: ${(job.steps ?? []).filter((step) => step.conclusion === 'failure').map((step) => step.name).join(', ') || job.conclusion}`);
 }
 
-// The terminal view lives on the alternate screen and is redrawn from the top, clipped to the
-// window: cursor-relative redraws break once output is taller or wider than the terminal.
+// The terminal view lives on the alternate screen, fitted to the window by folding, and only
+// changed rows are rewritten: full redraws every second flood terminals that record their output.
 const leaveScreen = () => process.stdout.write('\x1b[?25h\x1b[?1049l');
 if (tty) {
   process.stdout.write('\x1b[?1049h\x1b[?25l');
@@ -104,14 +110,28 @@ if (tty) {
 let data;
 let note = '';
 let lastSignature = '';
+let screen = { rows: 0, columns: 0, lines: [] };
+function fitToWindow(rows, columns) {
+  let lines;
+  for (let fold = 0; fold <= 2; fold += 1) {
+    lines = render(data, note, fold).map((line) => line.slice(0, columns));
+    if (lines.length <= rows) return lines;
+  }
+  return [...lines.slice(0, rows - 1), `… ${lines.length - rows + 1} more lines, enlarge the window to see them`.slice(0, columns)];
+}
 function draw() {
   if (!data) return;
   if (tty) {
-    const rows = process.stdout.rows || 60;
-    const columns = process.stdout.columns || 140;
-    let lines = render(data, note, true).map((line) => line.slice(0, columns));
-    if (lines.length > rows) lines = [...lines.slice(0, rows - 1), `… ${lines.length - rows + 1} more lines, enlarge the window to see them`.slice(0, columns)];
-    process.stdout.write(`\x1b[H${lines.map((line) => `${line}\x1b[K`).join('\n')}\x1b[J`);
+    // Terminals without a reported size (e.g. under `script`) fall back to $LINES / $COLUMNS.
+    const rows = process.stdout.rows || Number(process.env.LINES) || 40;
+    const columns = process.stdout.columns || Number(process.env.COLUMNS) || 140;
+    const lines = fitToWindow(rows, columns);
+    const resized = rows !== screen.rows || columns !== screen.columns;
+    let out = resized ? '\x1b[2J' : '';
+    lines.forEach((line, index) => { if (resized || line !== screen.lines[index]) out += `\x1b[${index + 1};1H${line}\x1b[K`; });
+    if (lines.length < screen.lines.length) out += `\x1b[${lines.length + 1};1H\x1b[J`;
+    if (out) process.stdout.write(out);
+    screen = { rows, columns, lines };
     return;
   }
   const lines = render(data, note);

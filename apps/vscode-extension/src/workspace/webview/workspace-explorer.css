@@ -674,3 +674,52 @@ body {
 .workspace-icon-label,
 .workspace-icon-tile .workspace-rename-input { font-size: calc(11px + var(--workspace-font-offset, 0px)); }
 .workspace-icon-tile .workspace-rename-input { height: 2em; }
+
+
+.workspace-menu-has-submenu {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 26px;
+  margin: 0;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  line-height: 22px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: default;
+  appearance: none;
+}
+
+.workspace-menu-has-submenu:hover,
+.workspace-menu-has-submenu:focus-visible,
+.workspace-menu-has-submenu.is-hovered {
+  outline: none;
+  color: var(--vscode-menu-selectionForeground, #ffffff);
+  background: var(
+    --vscode-menu-selectionBackground,
+    var(--vscode-list-activeSelectionBackground, #094771)
+  );
+}
+
+.workspace-menu-item-chevron {
+  flex: none;
+  margin-left: auto;
+  color: inherit;
+  opacity: 0.75;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.workspace-context-submenu,
+.workspace-new-file-type-menu {
+  z-index: 10001;
+}

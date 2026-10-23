@@ -275,16 +275,35 @@ function ensureFileHeaderCompactStyles(): void {
       padding: 2.4px 12px;
       min-height: 0;
     }
-    body.easyview-vscode-editor:not(.easyview-toolbar-collapsed) .file-header-bar {
+    body.easyview-vscode-editor .file-header-bar {
       position: relative !important;
-      transform: none !important;
-      opacity: 1 !important;
       box-shadow: none !important;
-      transition: none !important;
+      transform-origin: top center;
+      transition:
+        max-height var(--easyview-toolbar-collapse-ms, 180ms) var(--easyview-toolbar-collapse-ease, cubic-bezier(0.4, 0, 0.2, 1)),
+        min-height var(--easyview-toolbar-collapse-ms, 180ms) var(--easyview-toolbar-collapse-ease, cubic-bezier(0.4, 0, 0.2, 1)),
+        height var(--easyview-toolbar-collapse-ms, 180ms) var(--easyview-toolbar-collapse-ease, cubic-bezier(0.4, 0, 0.2, 1)),
+        opacity var(--easyview-toolbar-collapse-ms, 180ms) var(--easyview-toolbar-collapse-ease, cubic-bezier(0.4, 0, 0.2, 1)),
+        transform var(--easyview-toolbar-collapse-ms, 180ms) var(--easyview-toolbar-collapse-ease, cubic-bezier(0.4, 0, 0.2, 1)),
+        padding var(--easyview-toolbar-collapse-ms, 180ms) var(--easyview-toolbar-collapse-ease, cubic-bezier(0.4, 0, 0.2, 1));
     }
-    body.easyview-vscode-editor:not(.easyview-toolbar-collapsed) .file-header-bar::before { display: none; }
+    body.easyview-vscode-editor:not(.easyview-toolbar-collapsed) .file-header-bar {
+      transform: none;
+      opacity: 1;
+      overflow: visible;
+    }
     body.easyview-vscode-editor:not(.easyview-toolbar-collapsed) #editor-body { height: auto !important; }
-    body.easyview-vscode-editor.easyview-toolbar-collapsed .file-header-bar { display: none !important; }
+    body.easyview-vscode-editor.easyview-toolbar-collapsed .file-header-bar {
+      height: 0 !important;
+      min-height: 0 !important;
+      max-height: 0 !important;
+      overflow: hidden;
+      opacity: 0 !important;
+      transform: translateY(-6px);
+      padding-top: 0 !important;
+      padding-bottom: 0 !important;
+      pointer-events: none !important;
+    }
     .file-header-show-toolbar {
       position: fixed;
       top: 8px;

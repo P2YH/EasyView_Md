@@ -33,6 +33,21 @@ export function isLocalHttpPreviewUrl(contentUrl: string): boolean {
   }
 }
 
+/**
+ * Prefer navigating the iframe to the preview URL itself (not a blob: copy).
+ * Desktop `easyview-preview://` responses already ship a CSP that allows inline
+ * scripts. Blob documents inherit the renderer CSP (`script-src 'self'` only),
+ * which blocks the page's own <script> and makes click-to-play appear dead.
+ */
+export function isDirectHtmlPreviewUrl(contentUrl: string): boolean {
+  if (isLocalHttpPreviewUrl(contentUrl)) return true;
+  try {
+    return new URL(contentUrl).protocol === 'easyview-preview:';
+  } catch {
+    return false;
+  }
+}
+
 export function isHtmlPreviewAssetHref(href: string, contentUrl: string): boolean {
   try {
     const allowed = new URL(contentUrl);
@@ -85,19 +100,20 @@ function scriptStringLiteral(value: string): string {
 }
 
 /**
- * VS Code webview iframe[src=asWebviewUri] is blank. Render the page in a blob
- * document (no inherited CSP), then proxy sibling iframe navigations through
- * the host fetch so nested HTML/JS/CSS stay on the preview origin.
+ * VS Code webview iframe[src=asWebviewUri] is blank, so that host still renders
+ * a blob: copy and proxies nested iframe navigations through the host fetch.
+ * Desktop loads easyview-preview:// directly: blob: documents inherit the
+ * renderer CSP (script-src without 'unsafe-inline'), which blocks inline scripts.
  */
 export function HtmlViewer({ descriptor, readText }: HtmlViewerProps): React.ReactElement {
   const [tab, setTab] = React.useState<'preview' | 'source'>('preview');
   const [source, setSource] = React.useState<string | null>(null);
   const [error, setError] = React.useState<unknown>(null);
   const [frameSrc, setFrameSrc] = React.useState<string | null>(null);
-  const useLocalHttp = isLocalHttpPreviewUrl(descriptor.contentUrl);
+  const useDirectFrame = isDirectHtmlPreviewUrl(descriptor.contentUrl);
 
   React.useEffect(() => {
-    if (tab !== 'source' && useLocalHttp) return;
+    if (tab !== 'source' && useDirectFrame) return;
     let disposed = false;
     const load = async (): Promise<string> => {
       if (readText) {
@@ -123,10 +139,10 @@ export function HtmlViewer({ descriptor, readText }: HtmlViewerProps): React.Rea
       if (!disposed) setError(reason);
     });
     return () => { disposed = true; };
-  }, [tab, useLocalHttp, descriptor.sessionId, descriptor.contentUrl, readText]);
+  }, [tab, useDirectFrame, descriptor.sessionId, descriptor.contentUrl, readText]);
 
   React.useEffect(() => {
-    if (useLocalHttp) {
+    if (useDirectFrame) {
       setFrameSrc(descriptor.contentUrl);
       return;
     }
@@ -141,7 +157,7 @@ export function HtmlViewer({ descriptor, readText }: HtmlViewerProps): React.Rea
       URL.revokeObjectURL(url);
       setFrameSrc((current) => (current === url ? null : current));
     };
-  }, [useLocalHttp, source, descriptor.contentUrl]);
+  }, [useDirectFrame, source, descriptor.contentUrl]);
 
   React.useEffect(() => {
     const onMessage = (event: MessageEvent): void => {
@@ -193,7 +209,11 @@ export function HtmlViewer({ descriptor, readText }: HtmlViewerProps): React.Rea
         className: 'preview-html-frame',
         title: descriptor.fileName,
         src: frameSrc,
-        sandbox: 'allow-scripts allow-same-origin allow-popups allow-forms allow-downloads',
+        // allow-autoplay: Chromium blocks HTMLMediaElement.play() inside sandboxed
+        // iframes even after a user click unless this token is present. Needed for
+        // interactive HTML films / demos that use <audio>/<video>.
+        sandbox: 'allow-scripts allow-same-origin allow-popups allow-forms allow-downloads allow-autoplay',
+        allow: 'autoplay; fullscreen',
         referrerPolicy: 'no-referrer',
       })
       : h('pre', { className: 'preview-html-source' }, source),

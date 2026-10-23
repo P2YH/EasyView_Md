@@ -3,8 +3,14 @@ import { h, Loading, ViewerError, extension, UniversalFilePreview, type ViewerPr
 import { usePreviewAssets } from '../assets';
 import { revokeSameOriginWorkerUrl, toSameOriginWorkerUrl } from '../workers/sameOriginWorker';
 import { tPreview } from '../preview.i18n';
+import {
+  DocumentRouteShell,
+  useDocumentRouteTheme,
+  useToolbarPinned,
+} from './DocumentRouteChrome';
 
 export function PresentationViewer({ descriptor }: ViewerProps): React.ReactElement {
+  // Binary .ppt keeps its own canvas renderer but shares DocumentChrome with pptx.
   if (extension(descriptor.fileName) === '.ppt') return h(BinaryPptViewer, { descriptor });
   return h(UniversalFilePreview, { descriptor, loadingLabel: tPreview('presentation.loadingViewer') });
 }
@@ -14,6 +20,9 @@ function BinaryPptViewer({ descriptor }: ViewerProps): React.ReactElement {
   const root = React.useRef<HTMLDivElement>(null);
   const [error, setError] = React.useState<unknown>(null);
   const [ready, setReady] = React.useState(false);
+  const { themeMode, cycleTheme, viewerVars } = useDocumentRouteTheme(descriptor.relativePath);
+  const { pinnedOpen, togglePinned } = useToolbarPinned();
+
   React.useEffect(() => {
     let closed = false;
     let close: (() => Promise<void>) | undefined;
@@ -56,8 +65,18 @@ function BinaryPptViewer({ descriptor }: ViewerProps): React.ReactElement {
       revokeSameOriginWorkerUrl(workerBlobUrl);
     };
   }, [descriptor.contentUrl, assets.pptAssetBaseUrl]);
+
   if (error) return h(ViewerError, { error });
-  return h('section', { className: 'preview-ppt-viewer' },
+
+  return h(DocumentRouteShell, {
+    className: 'preview-ppt-viewer',
+    themeMode,
+    style: viewerVars,
+    'data-ext': 'ppt',
+    onCycleTheme: cycleTheme,
+    pinnedOpen,
+    onTogglePinned: togglePinned,
+  },
     h('p', { className: 'preview-notice' }, tPreview('presentation.watermarkNotice')),
     h('div', { className: 'preview-ppt-canvas-root', ref: root }),
     !ready ? h(Loading, {}) : null,

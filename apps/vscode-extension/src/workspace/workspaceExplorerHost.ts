@@ -1,6 +1,6 @@
 import { VscodeTimeline } from '../timeline/vscodeTimeline';
 import type { TimelineChannel } from '@easyview/node-runtime';
-import { isMarkdownFilePath, type TimelineRequestMessage } from '@easyview/contracts';
+import { isMarkdownFilePath, WORKSPACE_CREATABLE_FILE_TYPES, type TimelineRequestMessage } from '@easyview/contracts';
 import * as vscode from 'vscode';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
@@ -85,13 +85,31 @@ export function registerWorkspaceExplorer(context: vscode.ExtensionContext): vsc
         void vscode.window.showInformationMessage(tWorkspace('noRoot.createFile'));
         return;
       }
-      provider.postContextCommand('beginCreateFile');
+      void (async () => {
+        const picked = await vscode.window.showQuickPick(
+          WORKSPACE_CREATABLE_FILE_TYPES.map((type) => ({
+            label: ({
+              markdown: tWorkspace('create.type.markdown'),
+              word: tWorkspace('create.type.word'),
+              excel: tWorkspace('create.type.excel'),
+              text: tWorkspace('create.type.text'),
+            } as const)[type.id],
+            extension: type.extension,
+          })),
+          { title: tWorkspace('create.pickType'), placeHolder: tWorkspace('create.pickType') },
+        );
+        if (!picked) return;
+        // The OS IME anchors to the workbench's focused element; give it the view, not the title button or editor.
+        await vscode.commands.executeCommand(`${VIEW_ID}.focus`);
+        provider.postContextCommand('beginCreateFile', undefined, picked.extension);
+      })();
     }),
-    vscode.commands.registerCommand('easyviewMd.workspace.newFolder', () => {
+    vscode.commands.registerCommand('easyviewMd.workspace.newFolder', async () => {
       if (!provider.getRootUri()) {
         void vscode.window.showInformationMessage(tWorkspace('noRoot.createFolder'));
         return;
       }
+      await vscode.commands.executeCommand(`${VIEW_ID}.focus`);
       provider.postContextCommand('beginCreateFolder');
     }),
     vscode.commands.registerCommand('easyviewMd.workspace.revealCurrentFile', () => {
@@ -279,8 +297,14 @@ class WorkspaceExplorerViewProvider implements vscode.WebviewViewProvider, vscod
   postContextCommand(
     command: Extract<WorkspaceExplorerEvent, { type: 'contextCommand' }>['command'],
     relativePath?: string,
+    extension?: string,
   ): void {
-    this.postEvent({ type: 'contextCommand', command, ...(relativePath ? { relativePath } : {}) });
+    this.postEvent({
+      type: 'contextCommand',
+      command,
+      ...(relativePath ? { relativePath } : {}),
+      ...(extension ? { extension } : {}),
+    });
   }
 
   resolveSelectedFileUri(): vscode.Uri | undefined {

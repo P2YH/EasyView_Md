@@ -232,6 +232,13 @@ const api: EasyViewDesktopApi = {
       if (kind !== 'file' && kind !== 'directory' && kind !== 'symlink') throw new TypeError(tPreload('invalidKind'));
       return ipcRenderer.invoke('workspace.showContextMenu', { relativePath, kind });
     },
+    popupNewFileMenu: (parentRelativePath: string, x: number, y: number) => {
+      assertRelativePath(parentRelativePath);
+      if (typeof x !== 'number' || !Number.isFinite(x) || typeof y !== 'number' || !Number.isFinite(y)) {
+        throw new TypeError(tPreload('invalidArgument', { name: 'popupNewFileMenu' }));
+      }
+      return ipcRenderer.invoke('workspace.popupNewFileMenu', { parentRelativePath, x, y });
+    },
     openEntry: (relativePath: string) => {
       assertRelativePath(relativePath);
       return ipcRenderer.invoke('workspace.openEntry', relativePath) as Promise<OperationResult<boolean>>;
@@ -242,7 +249,7 @@ const api: EasyViewDesktopApi = {
       return subscription(() => ipcRenderer.removeListener('workspace.changed', handler));
     },
     onContextCommand: (listener) => {
-      const handler = (_event: Electron.IpcRendererEvent, command: WorkspaceContextCommand, relativePath: string) => listener(command, relativePath);
+      const handler = (_event: Electron.IpcRendererEvent, command: WorkspaceContextCommand, relativePath: string, detail?: string) => listener(command, relativePath, detail);
       ipcRenderer.on('workspace.contextCommand', handler);
       return subscription(() => ipcRenderer.removeListener('workspace.contextCommand', handler));
     },

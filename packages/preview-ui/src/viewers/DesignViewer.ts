@@ -3,9 +3,8 @@ import { extension, h, UniversalFilePreview, type ViewerProps } from './shared';
 import { tPreview } from '../preview.i18n';
 
 /**
- * Design-route previews that share UniversalFilePreview / @file-viewer
- * (XMind mind maps, PSD, etc.). Host-specific formats like drawio stay in
- * desktop extraViewers.
+ * Shared UniversalFilePreview routes: design (XMind/PSD), epub, and font.
+ * Host-specific formats like drawio stay in desktop extraViewers.
  */
 export function DesignViewer({ descriptor }: ViewerProps): React.ReactElement {
   const suffix = extension(descriptor.fileName);

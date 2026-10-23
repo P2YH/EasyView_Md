@@ -245,7 +245,9 @@ export type WorkspaceContextCommand =
   | 'copyPath'
   | 'copyRelativePath'
   | 'rename'
-  | 'delete';
+  | 'delete'
+  | 'beginCreateFile'
+  | 'beginCreateFolder';
 
 export type DesktopTabContextCommand =
   | 'close'

@@ -104,16 +104,18 @@ function ArchiveChromeShell(props: {
     onTogglePinned: togglePinned,
     onCycleTheme: cycleTheme,
   },
-    pinnedOpen
-      ? h('div', { className: 'preview-archive-toolbar', 'data-toolbar-chrome': 'easyview' },
-          h(DocumentChromeActions, {
-            embedded: true,
-            themeMode,
-            onCycleTheme: cycleTheme,
-            onTogglePinned: togglePinned,
-          }),
-        )
-      : null,
+    h('div', {
+      className: 'preview-archive-toolbar',
+      'data-toolbar-chrome': 'easyview',
+      'aria-hidden': !pinnedOpen,
+    },
+      h(DocumentChromeActions, {
+        embedded: true,
+        themeMode,
+        onCycleTheme: cycleTheme,
+        onTogglePinned: togglePinned,
+      }),
+    ),
     h('div', { className: 'preview-archive-body' }, props.body),
   );
 }

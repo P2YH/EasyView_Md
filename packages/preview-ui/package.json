@@ -21,11 +21,18 @@
     "test": "vitest run src"
   },
   "dependencies": {
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/language": "^6.13.1",
+    "@codemirror/language-data": "^6.5.2",
+    "@codemirror/search": "^6.7.2",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15",
     "@easyview/contracts": "*",
     "@eigenpal/docx-editor-react": "^1.9.0",
     "@file-viewer/doc": "^3.1.1",
     "@file-viewer/ppt": "^0.3.3",
     "@file-viewer/react-full": "^3.1.1",
+    "@lezer/highlight": "^1.2.5",
     "dompurify": "^3.3.2",
     "exceljs": "^4.4.0",
     "jszip": "^3.10.2",

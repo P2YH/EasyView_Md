@@ -1,3 +1,152 @@
+
+/* ── Shared toolbar collapse: slide up to hide, slide down to show ─────────
+ * One motion for Basic / Document / Word / Excel / archive / Markdown header.
+ * Keep strips mounted; never display:none here (that skips the animation).
+ */
+:root {
+  --easyview-toolbar-collapse-ms: 180ms;
+  --easyview-toolbar-collapse-ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root { --easyview-toolbar-collapse-ms: 0ms; }
+}
+
+:is(
+  .preview-basic-toolbar,
+  .preview-archive-toolbar,
+  .preview-basic-viewer .preview-tabs,
+  .preview-basic-viewer .preview-http-request,
+  .file-viewer-web-toolbar,
+  .x-spreadsheet-toolbar,
+  [data-testid='formatting-bar'],
+  [data-testid='editor-toolbar'],
+  .file-header-bar,
+  .file-header-toolbar,
+  .preview-shell-toolbar-actions,
+  .preview-document-route-actions:not(.preview-document-chrome--embedded)
+) {
+  overflow: hidden;
+  transform-origin: top center;
+  transition:
+    max-height var(--easyview-toolbar-collapse-ms) var(--easyview-toolbar-collapse-ease),
+    min-height var(--easyview-toolbar-collapse-ms) var(--easyview-toolbar-collapse-ease),
+    height var(--easyview-toolbar-collapse-ms) var(--easyview-toolbar-collapse-ease),
+    opacity var(--easyview-toolbar-collapse-ms) var(--easyview-toolbar-collapse-ease),
+    transform var(--easyview-toolbar-collapse-ms) var(--easyview-toolbar-collapse-ease),
+    flex-basis var(--easyview-toolbar-collapse-ms) var(--easyview-toolbar-collapse-ease),
+    padding-top var(--easyview-toolbar-collapse-ms) var(--easyview-toolbar-collapse-ease),
+    padding-bottom var(--easyview-toolbar-collapse-ms) var(--easyview-toolbar-collapse-ease),
+    border-width var(--easyview-toolbar-collapse-ms) var(--easyview-toolbar-collapse-ease);
+}
+
+:is(.is-toolbar-collapsed, body.easyview-toolbar-collapsed, body.desktop-toolbar-hidden) :is(
+  .preview-basic-toolbar,
+  .preview-archive-toolbar,
+  .preview-basic-viewer .preview-tabs,
+  .preview-basic-viewer .preview-http-request,
+  .file-viewer-web-toolbar,
+  .x-spreadsheet-toolbar,
+  [data-testid='formatting-bar'],
+  [data-testid='editor-toolbar'],
+  .file-header-bar,
+  .file-header-toolbar
+),
+body.easyview-desktop :is(.is-toolbar-collapsed, .desktop-toolbar-hidden) :is(
+  .preview-basic-toolbar,
+  .preview-archive-toolbar,
+  .preview-basic-viewer .preview-tabs,
+  .preview-basic-viewer .preview-http-request,
+  .file-viewer-web-toolbar,
+  .x-spreadsheet-toolbar,
+  [data-testid='formatting-bar'],
+  [data-testid='editor-toolbar'],
+  .file-header-bar,
+  .file-header-toolbar
+),
+body.easyview-desktop.is-toolbar-collapsed :is(
+  .preview-basic-toolbar,
+  .preview-archive-toolbar,
+  .preview-basic-viewer .preview-tabs,
+  .preview-basic-viewer .preview-http-request,
+  .file-viewer-web-toolbar,
+  .x-spreadsheet-toolbar,
+  [data-testid='formatting-bar'],
+  [data-testid='editor-toolbar'],
+  .file-header-bar,
+  .file-header-toolbar
+),
+body.easyview-desktop.desktop-toolbar-hidden :is(
+  .preview-basic-toolbar,
+  .preview-archive-toolbar,
+  .preview-basic-viewer .preview-tabs,
+  .preview-basic-viewer .preview-http-request,
+  .file-viewer-web-toolbar,
+  .x-spreadsheet-toolbar,
+  [data-testid='formatting-bar'],
+  [data-testid='editor-toolbar'],
+  .file-header-bar,
+  .file-header-toolbar
+),
+body.easyview-toolbar-collapsed > .file-header-bar,
+body.easyview-toolbar-collapsed .file-header-bar,
+body.desktop-toolbar-hidden .file-header-bar,
+body.desktop-toolbar-hidden .file-header-toolbar,
+body.easyview-desktop.desktop-toolbar-hidden .file-header-bar,
+body.easyview-desktop.desktop-toolbar-hidden .file-header-toolbar,
+.preview-spreadsheet-editor.is-toolbar-collapsed .x-spreadsheet-toolbar,
+.preview-word-editor.is-toolbar-collapsed [data-testid='formatting-bar'],
+.preview-word-editor.is-toolbar-collapsed [data-testid='editor-toolbar'],
+.preview-basic-viewer.is-toolbar-collapsed .preview-basic-toolbar,
+.preview-basic-viewer.is-toolbar-collapsed .preview-tabs,
+.preview-basic-viewer.is-toolbar-collapsed .preview-http-request,
+body.easyview-desktop .preview-spreadsheet-editor.is-toolbar-collapsed .x-spreadsheet-toolbar,
+body.easyview-desktop .preview-word-editor.is-toolbar-collapsed [data-testid='formatting-bar'],
+body.easyview-desktop .preview-word-editor.is-toolbar-collapsed [data-testid='editor-toolbar'],
+body.easyview-desktop .preview-basic-viewer.is-toolbar-collapsed .preview-basic-toolbar,
+body.easyview-desktop .preview-basic-viewer.is-toolbar-collapsed .preview-tabs,
+body.easyview-desktop .preview-basic-viewer.is-toolbar-collapsed .preview-http-request,
+body.easyview-desktop .is-toolbar-collapsed :is(
+  .preview-basic-toolbar,
+  .preview-archive-toolbar,
+  .preview-basic-viewer .preview-tabs,
+  .preview-basic-viewer .preview-http-request,
+  .file-viewer-web-toolbar,
+  .x-spreadsheet-toolbar,
+  [data-testid='formatting-bar'],
+  [data-testid='editor-toolbar'],
+  .file-header-bar,
+  .file-header-toolbar
+) {
+  flex: 0 0 0px !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  max-height: 0 !important;
+  opacity: 0 !important;
+  transform: translateY(-6px);
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border-top-width: 0 !important;
+  border-bottom-width: 0 !important;
+  pointer-events: none !important;
+  /* Intentionally not display:none — animation requires layout. */
+}
+
+/* Floating DocumentChrome (HEIC / binary PPT): same upward collapse. */
+.is-toolbar-collapsed > :is(.preview-shell-toolbar-actions, .preview-document-route-actions:not(.preview-document-chrome--embedded)),
+body.easyview-desktop .is-toolbar-collapsed > :is(.preview-shell-toolbar-actions, .preview-document-route-actions:not(.preview-document-chrome--embedded)) {
+  flex: 0 0 0px !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  max-height: 0 !important;
+  opacity: 0 !important;
+  transform: translateY(-6px);
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border-width: 0 !important;
+  pointer-events: none !important;
+  overflow: hidden !important;
+}
+
 #file-preview-root,
 .preview-root {
   --easyview-preview-text-color: var(--vscode-editor-foreground);
@@ -78,6 +227,7 @@ body:not([data-mdpre-accent='default'])[data-mdpre-accent] .preview-root {
   left: 0 !important;
 }
 .preview-viewer-message { display: grid; min-height: 160px; place-items: center; box-sizing: border-box; padding: 24px; opacity: .82; text-align: center; }
+.preview-viewer-unsupported { max-width: 36rem; margin-inline: auto; opacity: 1; line-height: 1.5; }
 .preview-viewer-error { color: var(--vscode-errorForeground, #f48771); }
 .preview-notice { margin: 0; padding: 8px 12px; border-bottom: 1px solid var(--vscode-panel-border); color: var(--vscode-editorWarning-foreground, inherit); background: var(--vscode-editorWarning-background, transparent); font-size: 12px; }
 .preview-url-viewer, .preview-universal-viewer, .preview-ppt-viewer {
@@ -459,21 +609,40 @@ html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-
 .preview-universal-viewer .preview-pptx-outline-empty { padding: 8px; color: var(--pdf-nav-fg); font-size: 12px; opacity: .6; }
 .preview-universal-viewer .preview-pptx-outline[data-state='loading'] .preview-pptx-outline-empty,
 .preview-universal-viewer .pdf-nav-pane[data-outline-default='pending'] .pdf-outline-empty { visibility: hidden; }
-/* Word outline rail: EasyView-rendered beside the .docx editor and the read-only .doc/.docm view. */
+/* Word outline rail: EasyView-rendered beside the .docx editor and the read-only .doc/.docm view.
+   Chrome mirrors Markdown outline (pulse minimap → popup → pin sidebar, left/right) without reusing TOC. */
 .preview-universal-viewer .file-viewer-web-shell.has-word-outline { position: relative; }
-.preview-universal-viewer .file-viewer-web-shell.has-word-outline > .file-viewer-web-content {
+.preview-universal-viewer .file-viewer-web-shell.has-word-outline[data-word-outline-mode='sidebar'][data-word-outline-side='left'] > .file-viewer-web-content,
+.preview-universal-viewer .file-viewer-web-shell.has-word-outline:not([data-word-outline-mode]):not([data-preview-sidebar='hidden']) > .file-viewer-web-content {
   width: calc(100% - var(--preview-sidebar-width, 168px)) !important;
   max-width: calc(100% - var(--preview-sidebar-width, 168px)) !important;
   margin-left: var(--preview-sidebar-width, 168px) !important;
+  margin-right: 0 !important;
 }
-.preview-universal-viewer[data-preview-sidebar='hidden'] .file-viewer-web-shell.has-word-outline > .file-viewer-web-content {
+.preview-universal-viewer .file-viewer-web-shell.has-word-outline[data-word-outline-mode='sidebar'][data-word-outline-side='right'] > .file-viewer-web-content {
+  width: calc(100% - var(--preview-sidebar-width, 168px)) !important;
+  max-width: calc(100% - var(--preview-sidebar-width, 168px)) !important;
+  margin-left: 0 !important;
+  margin-right: var(--preview-sidebar-width, 168px) !important;
+}
+.preview-universal-viewer[data-preview-sidebar='hidden'] .file-viewer-web-shell.has-word-outline > .file-viewer-web-content,
+.preview-universal-viewer .file-viewer-web-shell.has-word-outline[data-word-outline-mode='minimap'] > .file-viewer-web-content {
   width: 100% !important;
   max-width: 100% !important;
   margin-left: 0 !important;
+  margin-right: 0 !important;
 }
-.preview-word-mount[data-word-outline='on'][data-preview-sidebar='visible'] .docx-editor__scroll-container {
+.preview-word-mount[data-word-outline='on'][data-word-outline-mode='sidebar'][data-word-outline-side='left'] .docx-editor__scroll-container,
+.preview-word-mount[data-word-outline='on'][data-preview-sidebar='visible']:not([data-word-outline-side='right']) .docx-editor__scroll-container {
   position: relative !important;
   left: var(--preview-sidebar-width, 168px);
+  right: auto;
+  width: calc(100% - var(--preview-sidebar-width, 168px)) !important;
+  max-width: calc(100% - var(--preview-sidebar-width, 168px)) !important;
+}
+.preview-word-mount[data-word-outline='on'][data-word-outline-mode='sidebar'][data-word-outline-side='right'] .docx-editor__scroll-container {
+  position: relative !important;
+  left: 0;
   width: calc(100% - var(--preview-sidebar-width, 168px)) !important;
   max-width: calc(100% - var(--preview-sidebar-width, 168px)) !important;
 }
@@ -482,32 +651,61 @@ html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-
   top: 0;
   bottom: 0;
   left: 0;
+  right: auto;
   z-index: 3;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   width: var(--preview-sidebar-width, 168px);
   border-right: 1px solid var(--pdf-nav-border);
+  border-left: 0;
   color: var(--pdf-nav-fg);
   background: var(--preview-sidebar-bg);
   font-size: 12px;
 }
+.preview-universal-viewer .preview-word-outline.preview-word-outline-right,
+.preview-universal-viewer [data-word-outline-side='right'] > .preview-word-outline {
+  left: auto;
+  right: 0;
+  border-right: 0;
+  border-left: 1px solid var(--pdf-nav-border);
+}
 .preview-word-mount > .preview-word-outline { top: var(--word-outline-top, 0px); }
 .preview-universal-viewer[data-preview-sidebar='hidden'] .preview-word-outline,
-.preview-word-mount[data-preview-sidebar='hidden'] > .preview-word-outline { display: none !important; }
+.preview-word-mount[data-preview-sidebar='hidden'] > .preview-word-outline,
+.preview-universal-viewer [data-word-outline-mode='minimap'] > .preview-word-outline { display: none !important; }
 .preview-universal-viewer .preview-word-outline-head {
   display: flex;
   flex: none;
   gap: 6px;
   align-items: center;
   height: 28px;
-  padding: 0 10px;
+  padding: 0 6px 0 8px;
   border-bottom: 1px solid var(--pdf-nav-border);
   font-weight: 500;
 }
+.preview-universal-viewer .preview-word-outline-dock-grip {
+  display: inline-flex;
+  flex: 0 0 14px;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 22px;
+  border-radius: 4px;
+  color: var(--vscode-descriptionForeground, #888);
+  opacity: .55;
+  cursor: grab;
+  touch-action: none;
+}
+.preview-universal-viewer .preview-word-outline-dock-grip:hover { opacity: 1; background: var(--pdf-nav-hover); }
+.preview-universal-viewer .preview-word-outline-dock-grip:active { cursor: grabbing; }
+.preview-universal-viewer .preview-word-outline-dock-grip svg { width: 12px; height: 12px; fill: currentColor; }
 .preview-universal-viewer .preview-word-outline-title {
-  padding: 5px 0 4px;
-  border-bottom: 2px solid var(--pdf-nav-accent);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .preview-universal-viewer .preview-word-outline-badge {
   padding: 0 5px;
@@ -520,6 +718,34 @@ html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-
   cursor: help;
 }
 .preview-universal-viewer .preview-word-outline-badge[hidden] { display: none; }
+.preview-universal-viewer .preview-word-outline-unpin {
+  display: inline-flex;
+  flex: 0 0 24px;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: var(--vscode-descriptionForeground, #888);
+  background: transparent;
+  cursor: pointer;
+}
+.preview-universal-viewer .preview-word-outline-unpin:hover {
+  color: var(--pdf-nav-fg);
+  background: var(--pdf-nav-hover);
+}
+.preview-universal-viewer .preview-word-outline-unpin svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 .preview-universal-viewer .preview-word-outline-list {
   position: relative;
   flex: 1;
@@ -552,6 +778,10 @@ html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-
   background: color-mix(in srgb, var(--pdf-nav-accent) 18%, transparent);
   box-shadow: inset 2px 0 0 var(--pdf-nav-accent);
 }
+.preview-universal-viewer .preview-word-outline-right .preview-word-outline-item.is-active,
+.preview-universal-viewer [data-word-outline-side='right'] > .preview-word-outline .preview-word-outline-item.is-active {
+  box-shadow: inset -2px 0 0 var(--pdf-nav-accent);
+}
 .preview-universal-viewer .preview-word-outline-item[data-level='1'] { font-weight: 600; }
 .preview-universal-viewer .preview-word-outline-item.is-inferred .preview-word-outline-text { opacity: .9; }
 .preview-universal-viewer .preview-word-outline-twisty {
@@ -577,6 +807,196 @@ html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-
 .preview-universal-viewer .preview-word-outline-empty { display: none; padding: 10px; font-size: 12px; opacity: .6; }
 .preview-universal-viewer .preview-word-outline[data-state='empty'] .preview-word-outline-empty { display: block; }
 .preview-universal-viewer .preview-word-outline[data-state='empty'] .preview-word-outline-list { display: none; }
+
+/* Word pulse/minimap (Markdown-like tokens; preview-ui owned, not TableOfContents). */
+.preview-word-minimap {
+  position: absolute;
+  top: 50%;
+  right: 18px;
+  left: auto;
+  z-index: 20;
+  transform: translateY(-50%);
+}
+.preview-word-mount > .preview-word-minimap { top: calc(50% + var(--word-outline-top, 0px) / 2); }
+.preview-word-minimap[hidden] { display: none !important; }
+.preview-word-minimap.preview-word-minimap-left { right: auto; left: 18px; }
+.preview-word-minimap-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 10px 4px 10px 12px;
+  cursor: pointer;
+  transition: opacity 120ms ease;
+}
+.preview-word-minimap-left .preview-word-minimap-rail { align-items: flex-start; padding: 10px 12px 10px 4px; }
+.preview-word-minimap-dash {
+  display: block;
+  width: 16px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--vscode-descriptionForeground, #888);
+  opacity: .4;
+  transition: background 120ms ease, opacity 120ms ease;
+}
+.preview-word-minimap-dash[data-depth="1"] { width: 12px; }
+.preview-word-minimap-dash[data-depth="2"] { width: 9px; }
+.preview-word-minimap-dash[data-depth="3"] { width: 6px; }
+.preview-word-minimap-dash.active { background: var(--pdf-nav-accent, var(--mdpre-accent, #409eff)); opacity: 1; }
+.preview-word-minimap-panel {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: auto;
+  display: flex;
+  flex-direction: column;
+  width: 260px;
+  max-height: min(70vh, 560px);
+  border: 1px solid var(--vscode-editorWidget-border, var(--pdf-nav-border));
+  border-radius: 10px;
+  padding: 6px;
+  color: var(--pdf-nav-fg);
+  background: var(--vscode-editorWidget-background, var(--preview-sidebar-bg, var(--vscode-editor-background)));
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .28);
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(6px, -50%);
+  transition: opacity 120ms ease, transform 120ms ease, visibility 0s linear 160ms;
+}
+.preview-word-minimap-left .preview-word-minimap-panel {
+  right: auto;
+  left: 0;
+  transform: translate(-6px, -50%);
+}
+.preview-word-minimap:hover .preview-word-minimap-panel,
+.preview-word-minimap:focus-within .preview-word-minimap-panel,
+.preview-word-minimap.is-open .preview-word-minimap-panel {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(0, -50%);
+  transition-delay: 80ms, 80ms, 0s;
+}
+.preview-word-minimap:hover .preview-word-minimap-rail,
+.preview-word-minimap:focus-within .preview-word-minimap-rail,
+.preview-word-minimap.is-open .preview-word-minimap-rail { opacity: 0; }
+.preview-word-minimap-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px 6px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: .75;
+}
+.preview-word-minimap-pin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: var(--vscode-descriptionForeground, #888);
+  background: transparent;
+  cursor: pointer;
+}
+.preview-word-minimap-pin:hover {
+  color: var(--pdf-nav-fg);
+  background: var(--pdf-nav-hover);
+}
+.preview-word-minimap-pin svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.preview-word-minimap-list {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.preview-word-minimap-item {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  border: 0;
+  border-radius: 6px;
+  padding: 4px 8px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  opacity: .82;
+}
+.preview-word-minimap-item[data-depth="1"] { padding-left: 20px; }
+.preview-word-minimap-item[data-depth="2"] { padding-left: 32px; }
+.preview-word-minimap-item[data-depth="3"] { padding-left: 44px; }
+.preview-word-minimap-item[data-depth="4"] { padding-left: 56px; }
+.preview-word-minimap-item:hover { background: var(--pdf-nav-hover); opacity: 1; }
+.preview-word-minimap-item.active {
+  color: var(--pdf-nav-accent, var(--mdpre-accent, #409eff));
+  font-weight: 600;
+  opacity: 1;
+}
+
+/* Word outline dock overlay (preview-shell local; not desktop panelDock). */
+.preview-word-outline-dock-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  pointer-events: none;
+}
+.preview-word-outline-dock-zone {
+  position: fixed;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed color-mix(in srgb, var(--pdf-nav-accent, #409eff) 55%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--pdf-nav-accent, #409eff) 12%, transparent);
+  opacity: .55;
+  pointer-events: none;
+}
+.preview-word-outline-dock-zone.is-active { opacity: 1; }
+.preview-word-outline-dock-zone-label {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--pdf-nav-accent, #409eff);
+}
+.preview-word-outline-dock-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 10001;
+  padding: 6px 10px;
+  border-radius: 8px;
+  color: var(--pdf-nav-fg);
+  background: var(--preview-sidebar-bg, #252526);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .28);
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+  will-change: transform;
+}
+body.preview-word-outline-docking { cursor: grabbing !important; user-select: none; }
+
+.preview-universal-viewer [data-word-outline-side='right'] > .preview-word-outline > .preview-sidebar-resize-handle,
+.preview-universal-viewer .preview-word-outline.preview-word-outline-right > .preview-sidebar-resize-handle {
+  right: auto;
+  left: -3px;
+}
 .preview-universal-viewer .preview-pptx-thumb {
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr);
@@ -761,12 +1181,12 @@ html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-
   display: none !important;
 }
 
-/* Excel: one btns row; dividers are the group separators. */
+/* Excel: one btns row (nowrap — overflow goes to library "More"); dividers = group separators. */
 .preview-spreadsheet-editor .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btns {
   display: inline-flex !important;
   align-items: center !important;
   gap: 2px !important;
-  flex-wrap: wrap;
+  flex-wrap: nowrap !important;
   height: var(--preview-toolbar-strip-height) !important;
   min-height: var(--preview-toolbar-strip-height) !important;
   line-height: var(--preview-toolbar-control-height) !important;
@@ -874,9 +1294,11 @@ html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-
 .preview-universal-viewer.is-toolbar-collapsed > .preview-toolbar-expand-dock,
 .preview-spreadsheet-editor.is-toolbar-collapsed > .preview-toolbar-expand-dock,
 .preview-word-editor.is-toolbar-collapsed > .preview-toolbar-expand-dock,
+.preview-basic-viewer.is-toolbar-collapsed > .preview-toolbar-expand-dock,
 .preview-universal-viewer.is-toolbar-collapsed > .preview-toolbar-toggle,
 .preview-spreadsheet-editor.is-toolbar-collapsed > .preview-toolbar-toggle,
-.preview-word-editor.is-toolbar-collapsed > .preview-toolbar-toggle {
+.preview-word-editor.is-toolbar-collapsed > .preview-toolbar-toggle,
+.preview-basic-viewer.is-toolbar-collapsed > .preview-toolbar-toggle {
   position: absolute;
   z-index: 10050;
   top: 8px;
@@ -897,13 +1319,15 @@ html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-
 }
 .preview-universal-viewer.is-toolbar-collapsed > .preview-toolbar-expand-dock:hover,
 .preview-spreadsheet-editor.is-toolbar-collapsed > .preview-toolbar-expand-dock:hover,
-.preview-word-editor.is-toolbar-collapsed > .preview-toolbar-expand-dock:hover {
+.preview-word-editor.is-toolbar-collapsed > .preview-toolbar-expand-dock:hover,
+.preview-basic-viewer.is-toolbar-collapsed > .preview-toolbar-expand-dock:hover {
   background: var(--file-viewer-button-hover-bg, var(--vscode-toolbar-hoverBackground, #e8e8e8));
 }
 /* Native title clips at the webview right edge — tip opens left of the control instead. */
 .preview-universal-viewer.is-toolbar-collapsed > .preview-toolbar-expand-dock[data-tooltip]::after,
 .preview-spreadsheet-editor.is-toolbar-collapsed > .preview-toolbar-expand-dock[data-tooltip]::after,
-.preview-word-editor.is-toolbar-collapsed > .preview-toolbar-expand-dock[data-tooltip]::after {
+.preview-word-editor.is-toolbar-collapsed > .preview-toolbar-expand-dock[data-tooltip]::after,
+.preview-basic-viewer.is-toolbar-collapsed > .preview-toolbar-expand-dock[data-tooltip]::after {
   content: attr(data-tooltip);
   position: absolute;
   top: 50%;
@@ -929,9 +1353,11 @@ html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-
 .preview-universal-viewer.is-toolbar-collapsed > .preview-toolbar-expand-dock[data-tooltip]:hover::after,
 .preview-spreadsheet-editor.is-toolbar-collapsed > .preview-toolbar-expand-dock[data-tooltip]:hover::after,
 .preview-word-editor.is-toolbar-collapsed > .preview-toolbar-expand-dock[data-tooltip]:hover::after,
+.preview-basic-viewer.is-toolbar-collapsed > .preview-toolbar-expand-dock[data-tooltip]:hover::after,
 .preview-universal-viewer.is-toolbar-collapsed > .preview-toolbar-expand-dock[data-tooltip]:focus-visible::after,
 .preview-spreadsheet-editor.is-toolbar-collapsed > .preview-toolbar-expand-dock[data-tooltip]:focus-visible::after,
-.preview-word-editor.is-toolbar-collapsed > .preview-toolbar-expand-dock[data-tooltip]:focus-visible::after {
+.preview-word-editor.is-toolbar-collapsed > .preview-toolbar-expand-dock[data-tooltip]:focus-visible::after,
+.preview-basic-viewer.is-toolbar-collapsed > .preview-toolbar-expand-dock[data-tooltip]:focus-visible::after {
   opacity: 1;
   visibility: visible;
 }
@@ -954,6 +1380,195 @@ html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-
 .preview-image-viewer { display: grid; min-width: min-content; min-height: 100%; place-items: center; padding: 28px; color: var(--easyview-preview-text-color); background: var(--vscode-editor-background); background-image: none; }
 .preview-image-viewer img { max-width: 100%; max-height: calc(100vh - 130px); object-fit: contain; }
 .preview-text-viewer, .preview-html-source, .preview-code-viewer { min-height: 100%; box-sizing: border-box; margin: 0; padding: 16px; overflow: auto; color: var(--easyview-preview-text-color); background: var(--vscode-editor-background); font-family: var(--vscode-editor-font-family, ui-monospace, monospace); font-size: 13px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+
+
+/* BasicChrome layout (text/svg/html/media): host-agnostic; expand dock pins to top. */
+.preview-basic-viewer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  --preview-toolbar-strip-height: 30px;
+  --preview-toolbar-control-height: 22px;
+}
+.preview-basic-viewer > .preview-basic-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+.preview-basic-viewer.is-toolbar-collapsed > .preview-toolbar-expand-dock,
+.preview-basic-viewer.is-toolbar-collapsed > .preview-toolbar-toggle {
+  /* Do not stretch to full row when absolute positioning fails to apply. */
+  flex: 0 0 auto;
+  align-self: auto;
+  width: var(--preview-toolbar-control-height, 22px);
+  max-width: var(--preview-toolbar-control-height, 22px);
+}
+
+/* Editable text / code preview (CodeMirror + JSON/SQL visuals) */
+.preview-text-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.preview-text-shell .preview-basic-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: 0 0 auto;
+  min-height: var(--preview-toolbar-strip-height, 30px);
+}
+.preview-text-shell .preview-basic-toolbar [data-toolbar-group],
+.preview-basic-toolbar > [data-toolbar-group],
+.preview-basic-toolbar .preview-text-view-toggle,
+.preview-basic-toolbar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  height: var(--preview-toolbar-control-height, 22px);
+  min-height: var(--preview-toolbar-control-height, 22px);
+  max-height: var(--preview-toolbar-control-height, 22px);
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+.preview-basic-toolbar button,
+.preview-basic-toolbar .preview-chrome-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+.preview-basic-toolbar .preview-text-view-btn {
+  line-height: 1;
+}
+.preview-basic-toolbar svg {
+  display: block;
+  margin: 0;
+  flex-shrink: 0;
+}
+.preview-text-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.preview-text-editor-host {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+.preview-text-editor-host .cm-editor {
+  height: 100%;
+}
+.preview-text-view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+  padding: 0 2px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+.preview-text-view-btn {
+  padding: 0 8px !important;
+  font-size: 12px;
+  line-height: 1;
+  border: 0 !important;
+  border-radius: 4px;
+  background: transparent;
+}
+.preview-text-view-btn.is-active {
+  background: var(--vscode-button-background) !important;
+  color: var(--vscode-button-foreground) !important;
+}
+.preview-text-search svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+.preview-text-visual {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 16px 24px;
+  font-family: var(--vscode-editor-font-family, ui-monospace, monospace);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.preview-text-visual-error,
+.preview-text-visual-empty {
+  color: var(--vscode-descriptionForeground);
+}
+.preview-json-node,
+.preview-xml-node {
+  margin: 2px 0;
+}
+.preview-json-children {
+  margin-left: 1.1em;
+  padding-left: 0.6em;
+  border-left: 1px solid color-mix(in srgb, var(--vscode-panel-border) 80%, transparent);
+}
+.preview-json-toggle {
+  border: 0;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  padding: 0 4px 0 0;
+  font: inherit;
+}
+.preview-json-key { color: #9cdcfe; }
+.preview-json-label { color: var(--vscode-descriptionForeground); }
+.preview-json-string .preview-json-value { color: #ce9178; }
+.preview-json-number .preview-json-value { color: #b5cea8; }
+.preview-json-boolean .preview-json-value,
+.preview-json-null .preview-json-value { color: #569cd6; }
+.preview-xml-tag { color: #569cd6; }
+.preview-xml-attr { color: #9cdcfe; }
+.preview-xml-attr-value { color: #ce9178; }
+.preview-xml-text { color: var(--vscode-editor-foreground); margin: 2px 0; }
+.preview-sql-card {
+  margin: 0 0 12px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--vscode-editor-background) 92%, var(--vscode-panel-border));
+}
+.preview-sql-card-head {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+.preview-sql-kind {
+  font-weight: 600;
+  color: #c586c0;
+  min-width: 4.5em;
+}
+.preview-sql-summary {
+  color: var(--vscode-descriptionForeground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.preview-sql-pretty {
+  margin: 0;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 .preview-document-html { max-width: 960px; margin: 24px auto; padding: 28px; color: var(--easyview-preview-text-color); background: var(--vscode-editor-background); box-shadow: 0 1px 4px #0003; }
 .preview-document-html *, .preview-document-html { color: var(--easyview-preview-text-color) !important; }
 .preview-document-html img { max-width: 100%; height: auto; }
@@ -1266,6 +1881,25 @@ html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-
 .preview-audio-spectrum { display: block; width: 100%; height: 160px; }
 .preview-audio-card .preview-media-play { width: 44px; height: 44px; color: #fff; background: var(--preview-media-accent); }
 .preview-audio-card .preview-media-play:hover { background: color-mix(in srgb, var(--preview-media-accent) 85%, #000); }
+.preview-heic-shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+.preview-heic-shell > .preview-heic-viewer,
+.preview-heic-shell > .preview-viewer-message {
+  flex: 1;
+  min-height: 0;
+}
+.preview-ppt-viewer.preview-universal-viewer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
 .preview-heic-viewer { position: relative; padding: 0; background: transparent; }
 .preview-heic-viewer > .preview-viewer-message { position: absolute; z-index: 1; inset: 0; }
 .preview-heic-frame { width: 100%; height: 100%; min-height: 400px; border: 0; background: transparent; }
@@ -1374,7 +2008,7 @@ html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-
   height: 16px !important;
 }
 .preview-spreadsheet-mount .x-spreadsheet,
-.preview-word-mount > :not(.preview-word-outline) {
+.preview-word-mount > :not(.preview-word-outline):not(.preview-word-minimap) {
   width: 100% !important;
   height: 100% !important;
   min-width: 0;
@@ -1383,9 +2017,7 @@ html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-
 .preview-document-route-actions {
   z-index: 1200;
 }
-.preview-spreadsheet-editor.is-toolbar-collapsed .x-spreadsheet-toolbar {
-  display: none !important;
-}
+/* spreadsheet collapse: shared upward animation above */
 /* collapsed expand dock styles are shared above */
 
 /* Drive Excel chrome with EasyView palette; do not rely on x-spreadsheet/office theme toggles */
@@ -1450,6 +2082,7 @@ html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-
   width: 14px !important;
   height: 14px !important;
 }
+/* Match Word formatting-bar: centred strip, tight gap, one divider before EasyView chrome. */
 .preview-spreadsheet-editor .x-spreadsheet-toolbar {
   width: 100% !important;
   box-sizing: border-box;
@@ -1461,26 +2094,41 @@ html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  gap: 6px;
+  gap: 0;
 }
 .preview-spreadsheet-editor .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btns {
+  flex: 0 1 auto;
   flex-shrink: 1;
   min-width: 0;
 }
+/* Portal mount only — divider lives on embedded DocumentChrome (same as Word). */
 .preview-spreadsheet-editor .x-spreadsheet-toolbar > [data-easyview-spreadsheet-chrome] {
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
   margin: 0;
-  padding: 0 0 0 6px;
-  border-left: 1px solid var(--file-viewer-toolbar-border, var(--vscode-panel-border));
+  padding: 0;
+  border: 0;
   box-sizing: border-box;
   min-height: var(--preview-toolbar-control-height, 24px);
 }
 .preview-spreadsheet-editor .x-spreadsheet-toolbar .preview-document-chrome--embedded {
-  margin: 0;
-  padding: 0;
-  border: 0;
+  display: inline-flex;
+  align-items: center;
+  height: var(--preview-toolbar-control-height, 24px);
+  max-height: var(--preview-toolbar-control-height, 24px);
+  margin-left: 6px;
+  padding-left: 8px;
+  border-left: 1px solid var(--file-viewer-toolbar-border, var(--vscode-panel-border));
+  box-sizing: border-box;
+}
+.preview-spreadsheet-editor .x-spreadsheet-toolbar .preview-document-chrome--embedded .preview-chrome-btn,
+.preview-spreadsheet-editor .x-spreadsheet-toolbar .preview-document-chrome--embedded .preview-toolbar-collapse-dock {
+  width: var(--preview-toolbar-control-height, 24px);
+  height: var(--preview-toolbar-control-height, 24px);
+  min-height: var(--preview-toolbar-control-height, 24px);
+  max-height: var(--preview-toolbar-control-height, 24px);
+  box-sizing: border-box;
 }
 .preview-spreadsheet-editor .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btn {
   box-sizing: border-box !important;
@@ -1669,8 +2317,9 @@ html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-
 .preview-universal-viewer.is-toolbar-pinned .preview-shell-toolbar-actions {
   height: var(--preview-toolbar-strip-height);
 }
-/* Portaled chrome replaces the absolute overlay strip for UniversalFilePreview. */
-.preview-universal-viewer.is-toolbar-pinned > .preview-shell-toolbar-actions {
+/* UniversalFilePreview portals theme into the engine toolbar; hide the absolute twin only then.
+ * HEIC / binary PPT DocumentRouteShell use the absolute strip as their only chrome — keep it. */
+.preview-universal-viewer.is-toolbar-pinned:has(.file-viewer-host) > .preview-shell-toolbar-actions {
   display: none;
 }
 .preview-universal-viewer.is-toolbar-pinned .file-viewer-host::part(toolbar) {
@@ -1875,7 +2524,7 @@ html.preview-sidebar-resizing .preview-universal-viewer .preview-sidebar-resize-
 
 .preview-spreadsheet-tabs {
   display: flex;
-  flex: 0 0 26px;
+  flex: 0 0 var(--preview-toolbar-item-height, 24px);
   overflow-x: auto;
   border-top: 1px solid var(--file-viewer-toolbar-border);
   background: var(--file-viewer-bg);

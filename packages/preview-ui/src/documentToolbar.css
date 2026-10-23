@@ -231,8 +231,9 @@ body.easyview-desktop .file-header-zoom {
 }
 body.easyview-desktop .file-header-actions-right { gap: 2px; }
 body.easyview-desktop .file-header-toolbar .file-header-actions-left { gap: 2px; }
-/* Excel sprite sizing/tint lives in preview.css so the VS Code webview shares it. */
-body.easyview-desktop .preview-spreadsheet-editor .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btn:is(:hover, .active) {
+/* Excel sprite sizing/tint lives in preview.css (shared with VS Code webview).
+ * Hover/active border follows the shared control contract above (same as Word). */
+body.easyview-desktop .preview-spreadsheet-editor .x-spreadsheet-toolbar .x-spreadsheet-toolbar-btn.active:not(:hover) {
   border-color: transparent !important;
 }
 body.easyview-desktop .x-spreadsheet-toolbar-divider { border-color: var(--document-toolbar-border) !important; }
@@ -249,12 +250,18 @@ body.easyview-desktop .file-viewer-web-toolbar .file-viewer-web-zoom-meter {
 body.easyview-desktop .file-viewer-web-search .preview-search-toggle { display: inline-flex; align-items: center; justify-content: center; width: var(--document-toolbar-control); }
 body.easyview-desktop .file-viewer-web-search.preview-search-compact input[type='search'] { width: clamp(120px, 18vw, 240px); min-width: 0 !important; }
 
+/* Word + Excel EasyView chrome: one divider on the embedded chrome (slot is a portal mount). */
 body.easyview-desktop .preview-file-viewer-chrome-slot,
-body.easyview-desktop .x-spreadsheet-toolbar > [data-easyview-spreadsheet-chrome],
-body.easyview-desktop [data-testid='formatting-bar'] > .preview-document-chrome--embedded {
+body.easyview-desktop [data-testid='formatting-bar'] > .preview-document-chrome--embedded,
+body.easyview-desktop .x-spreadsheet-toolbar .preview-document-chrome--embedded {
   margin-left: 4px !important;
   padding-left: 8px !important;
   border-left: 1px solid var(--document-toolbar-border) !important;
+}
+body.easyview-desktop .x-spreadsheet-toolbar > [data-easyview-spreadsheet-chrome] {
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
 }
 
 body.easyview-desktop .preview-basic-viewer {
@@ -268,6 +275,100 @@ body.easyview-desktop .preview-basic-viewer {
   overflow: hidden;
 }
 body.easyview-desktop .preview-basic-content { flex: 1; min-width: 0; min-height: 0; overflow: auto; }
+
+/* Collapse must beat the strip !important heights above (same file, later + higher specificity). */
+body.easyview-desktop .preview-basic-viewer.is-toolbar-collapsed > .preview-basic-toolbar,
+body.easyview-desktop .preview-basic-viewer.is-toolbar-collapsed > .preview-tabs,
+body.easyview-desktop .preview-basic-viewer.is-toolbar-collapsed > .preview-http-request,
+body.easyview-desktop .preview-basic-viewer.is-toolbar-collapsed .preview-tabs,
+body.easyview-desktop .preview-basic-viewer.is-toolbar-collapsed .preview-http-request {
+  flex: 0 0 0px !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  max-height: 0 !important;
+  opacity: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border-top-width: 0 !important;
+  border-bottom-width: 0 !important;
+  pointer-events: none !important;
+  overflow: hidden !important;
+}
+
+/* Text/code: actions left, theme/collapse right (not clustered center).
+ * Reserve trailing space so the desktop pin toggle (absolute top-right) does not
+ * cover the theme button — same idea as file-header-toolbar's 40px side padding. */
+body.easyview-desktop .preview-text-shell > .preview-basic-toolbar {
+  justify-content: space-between !important;
+  padding-left: 8px !important;
+  padding-right: 40px !important;
+}
+
+/* BasicChrome midline: every control vertically centred in the 32px strip.
+ * Icon buttons previously lacked inline-flex centering; Code/Tree padding made the row look top-heavy. */
+body.easyview-desktop .preview-basic-toolbar,
+body.easyview-desktop .preview-basic-toolbar > [data-toolbar-group],
+body.easyview-desktop .preview-basic-toolbar .preview-text-view-toggle,
+body.easyview-desktop .preview-basic-toolbar-actions {
+  align-items: center !important;
+}
+body.easyview-desktop .preview-basic-toolbar > [data-toolbar-group],
+body.easyview-desktop .preview-basic-toolbar .preview-text-view-toggle,
+body.easyview-desktop .preview-basic-toolbar-actions {
+  display: inline-flex !important;
+  box-sizing: border-box !important;
+  height: var(--document-toolbar-control) !important;
+  min-height: var(--document-toolbar-control) !important;
+  max-height: var(--document-toolbar-control) !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+body.easyview-desktop .preview-basic-toolbar button,
+body.easyview-desktop .preview-basic-toolbar .preview-chrome-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 0 !important;
+}
+body.easyview-desktop .preview-basic-toolbar .preview-text-view-btn {
+  line-height: 1 !important;
+  padding: 0 8px !important;
+  width: auto !important;
+  min-width: auto !important;
+}
+body.easyview-desktop .preview-basic-toolbar svg {
+  display: block !important;
+  margin: 0 !important;
+  flex-shrink: 0;
+}
+
+/* Expand dock: pin to preview top (same contract as DocumentChrome). */
+body.easyview-desktop .preview-basic-viewer.is-toolbar-collapsed > .preview-toolbar-expand-dock,
+body.easyview-desktop .preview-basic-viewer.is-toolbar-collapsed > .preview-toolbar-toggle {
+  position: absolute !important;
+  z-index: 10050 !important;
+  top: 8px !important;
+  right: 12px !important;
+  left: auto !important;
+  bottom: auto !important;
+  flex: 0 0 auto !important;
+  align-self: auto !important;
+  width: var(--document-toolbar-control) !important;
+  min-width: var(--document-toolbar-control) !important;
+  max-width: var(--document-toolbar-control) !important;
+  height: var(--document-toolbar-control) !important;
+  min-height: var(--document-toolbar-control) !important;
+  max-height: var(--document-toolbar-control) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 1px solid var(--document-toolbar-border) !important;
+  border-radius: 4px !important;
+  background: var(--document-toolbar-background) !important;
+  color: var(--document-toolbar-foreground) !important;
+  box-shadow: none !important;
+}
 body.easyview-desktop .preview-basic-toolbar-actions {
   display: inline-flex;
   align-items: center;
@@ -281,7 +382,7 @@ body.easyview-desktop .preview-basic-toolbar-actions button {
   height: var(--document-toolbar-control);
   color: var(--document-toolbar-foreground);
 }
-body.easyview-desktop .preview-basic-viewer.is-toolbar-collapsed :is(.preview-tabs, .preview-http-request) { display: none !important; }
+/* basic tabs/http strip collapse: shared upward animation in preview.css */
 body.easyview-desktop .preview-basic-viewer .preview-http-viewer { margin: 0; padding: 0; max-width: none; width: 100%; }
 body.easyview-desktop .preview-basic-viewer .preview-http-response { padding: 8px 12px; }
 body.easyview-desktop .preview-basic-viewer .preview-http-request input { flex: 0 1 400px; width: 400px; min-width: 0; }
@@ -294,18 +395,8 @@ body.easyview-desktop .desktop-document-toolbar-toggle {
   background: var(--document-toolbar-background) !important;
 }
 body.easyview-desktop .desktop-document-toolbar-toggle svg { stroke-width: 1.5; }
-body.easyview-desktop .desktop-document-toolbar-toggle[hidden],
-body.easyview-desktop.desktop-toolbar-hidden .file-header-toolbar { display: none !important; }
-
-/* Visibility wins over native engines' inline styles and the common flex strip. */
-body.easyview-desktop .is-toolbar-collapsed :is(
-  .file-viewer-web-toolbar,
-  .x-spreadsheet-toolbar,
-  [data-testid='editor-toolbar'],
-  [data-testid='formatting-bar'],
-  .preview-archive-toolbar,
-  .preview-basic-toolbar
-),
+body.easyview-desktop .desktop-document-toolbar-toggle[hidden] { display: none !important; }
+/* Toolbar strips collapse via shared upward animation in preview.css (not display:none). */
 body.easyview-desktop .file-viewer-web-toolbar[hidden] { display: none !important; }
 
 /* Mind-map navigation uses the same per-file theme as the document chrome. */

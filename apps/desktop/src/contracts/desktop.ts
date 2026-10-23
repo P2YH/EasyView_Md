@@ -233,9 +233,11 @@ export interface WorkspaceApi {
   importExternal(request: WorkspaceImportExternalRequest): Promise<import('@easyview/contracts').OperationResult<WorkspaceEntry>>;
   getResourcePaths(relativePath: string): Promise<import('@easyview/contracts').OperationResult<WorkspaceResourcePaths>>;
   showContextMenu(relativePath: string, kind: WorkspaceEntry['kind']): Promise<import('@easyview/contracts').OperationResult<boolean>>;
+  /** Native type picker anchored at screen coordinates (button bottom-left). */
+  popupNewFileMenu(parentRelativePath: string, x: number, y: number): Promise<import('@easyview/contracts').OperationResult<boolean>>;
   openEntry(relativePath: string): Promise<import('@easyview/contracts').OperationResult<boolean>>;
   onChanged(listener: (relativePaths: string[] | null) => void): { unsubscribe(): void };
-  onContextCommand(listener: (command: WorkspaceContextCommand, relativePath: string) => void): { unsubscribe(): void };
+  onContextCommand(listener: (command: WorkspaceContextCommand, relativePath: string, detail?: string) => void): { unsubscribe(): void };
 }
 
 export interface DesktopTabsApi {

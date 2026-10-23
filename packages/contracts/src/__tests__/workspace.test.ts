@@ -12,6 +12,8 @@ import {
   resolveWorkspaceTreeIcon,
   buildWorkspaceFileIconTheme,
   workspaceEntryNameSelectionRange,
+  unusedWorkspaceCreateFileName,
+  unusedWorkspaceCreateFolderName,
   workspaceTreeSortModeLabel,
   setLocale,
   resetLocale,
@@ -232,5 +234,14 @@ describe('workspace contracts', () => {
     const entries = [{ name: '.git' }, { name: '~$12.6日选品.xlsx' }, { name: '~$报告.docx' }, { name: '12.6日选品.xlsx' }, { name: 'a~$b.md' }];
     expect(filterWorkspaceEntriesByDotVisibility(entries, false).map((entry) => entry.name)).toEqual(['12.6日选品.xlsx', 'a~$b.md']);
     expect(filterWorkspaceEntriesByDotVisibility(entries, true)).toHaveLength(entries.length);
+  });
+});
+
+describe('unusedWorkspaceCreate*Name', () => {
+  it('allocates stem + extension without colliding', () => {
+    expect(unusedWorkspaceCreateFileName('未命名', '.md', [])).toBe('未命名.md');
+    expect(unusedWorkspaceCreateFileName('未命名', '.md', ['未命名.md'])).toBe('未命名 2.md');
+    expect(unusedWorkspaceCreateFileName('未命名', '.docx', ['未命名.docx', '未命名 2.docx'])).toBe('未命名 3.docx');
+    expect(unusedWorkspaceCreateFolderName('未命名文件夹', ['未命名文件夹'])).toBe('未命名文件夹 2');
   });
 });

@@ -6,6 +6,7 @@ import {
   htmlRewriteRelativeUrls,
   isHtmlPreviewAssetHref,
   isLocalHttpPreviewUrl,
+  isDirectHtmlPreviewUrl,
 } from './HtmlViewer';
 
 describe('html preview document', () => {
@@ -52,6 +53,12 @@ describe('html preview document', () => {
   it('detects local http preview URLs', () => {
     expect(isLocalHttpPreviewUrl('http://127.0.0.1:4123/token/page.html')).toBe(true);
     expect(isLocalHttpPreviewUrl('https://file+.vscode-resource.vscode-cdn.net/tmp/page.html')).toBe(false);
+  });
+
+  it('loads easyview-preview and local http frames directly', () => {
+    expect(isDirectHtmlPreviewUrl('easyview-preview://content/11111111-1111-4111-8111-111111111111/page.html')).toBe(true);
+    expect(isDirectHtmlPreviewUrl('http://127.0.0.1:4123/token/page.html')).toBe(true);
+    expect(isDirectHtmlPreviewUrl('https://file+.vscode-resource.vscode-cdn.net/tmp/page.html')).toBe(false);
   });
 
   it('only allows sibling fetches on the same preview origin', () => {

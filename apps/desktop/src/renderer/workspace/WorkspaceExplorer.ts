@@ -34,6 +34,8 @@ import {
   type WorkspaceTreeDropTarget,
   workspaceEntryNameSelectionRange,
   clampWorkspaceFontSizeOffset,
+  unusedWorkspaceCreateFileName,
+  unusedWorkspaceCreateFolderName,
 } from '@easyview/contracts';
 import { tExplorer } from './workspaceExplorer.i18n';
 
@@ -76,7 +78,7 @@ const FOLDER_TREE_ICON_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="
 export class WorkspaceExplorer {
   private state: DesktopWorkspaceState | null = null;
   private readonly entriesByDirectory = new Map<string, WorkspaceEntry[]>();
-  private pendingCreate: { parentRelativePath: string; kind: 'file' | 'directory' } | null = null;
+  private pendingCreate: { parentRelativePath: string; kind: 'file' | 'directory'; extension?: string } | null = null;
   private renameRelativePath: string | null = null;
   private selectedRelativePath: string | null = null;
   private selectedRelativePaths = new Set<string>();
@@ -126,11 +128,22 @@ export class WorkspaceExplorer {
     this.selectionFollowsActive = true;
     this.subscriptions.push(this.options.api.workspace.onChanged((paths) => { void this.refreshChanged(paths); }));
     this.subscriptions.push(this.options.api.workspace.onRootChanged((next) => { void this.applyOpenedRoot(next); }));
-    this.subscriptions.push(this.options.api.workspace.onContextCommand((command, relativePath) => {
+    this.subscriptions.push(this.options.api.workspace.onContextCommand((command, relativePath, detail) => {
       this.selectionFollowsActive = false;
-      this.select(relativePath);
+      if (command === 'beginCreateFile') {
+        this.beginCreate(relativePath, 'file', detail);
+        return;
+      }
+      if (command === 'beginCreateFolder') {
+        this.beginCreate(relativePath, 'directory');
+        return;
+      }
+      if (command === 'paste') {
+        void this.loadDirectory(parentRelativePath(relativePath));
+        return;
+      }
+      if (relativePath) this.select(relativePath);
       if (command === 'rename') this.beginRename(relativePath);
-      if (command === 'paste') void this.refreshChanged([parentRelativePath(relativePath)]);
     }));
     this.options.container.tabIndex = 0;
     this.options.container.addEventListener('keydown', this.handleKeyDown);
@@ -471,8 +484,18 @@ export class WorkspaceExplorer {
       if (this.settingsDialog) this.settingsDialog.close();
       else this.openSettings();
     });
+    const newFileButton = document.createElement('button');
+    newFileButton.type = 'button';
+    newFileButton.className = 'workspace-action';
+    newFileButton.innerHTML = WORKSPACE_NEW_FILE_ICON_SVG;
+    newFileButton.title = tExplorer('newFile');
+    newFileButton.setAttribute('aria-haspopup', 'menu');
+    newFileButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.popupNewFileTypes(this.currentDirectory, newFileButton);
+    });
+    header.appendChild(newFileButton);
     for (const [iconSvg, titleText, action] of [
-      [WORKSPACE_NEW_FILE_ICON_SVG, tExplorer('newFile'), () => this.beginCreate(this.currentDirectory, 'file')],
       [WORKSPACE_NEW_FOLDER_ICON_SVG, tExplorer('newFolder'), () => this.beginCreate(this.currentDirectory, 'directory')],
       [WORKSPACE_REFRESH_ICON_SVG, tExplorer('refresh'), () => { this.entriesByDirectory.clear(); void this.refreshExpanded(); }],
     ] as const) {
@@ -516,6 +539,13 @@ export class WorkspaceExplorer {
       this.selectedRelativePaths.clear();
       this.selectionAnchorRelativePath = null;
       this.render();
+    });
+    tree.addEventListener('contextmenu', (event) => {
+      if (event.target instanceof Element
+        && event.target.closest('.workspace-entry, .workspace-icon-tile, .workspace-create-row, .workspace-icon-navigation')) return;
+      event.preventDefault();
+      this.selectionFollowsActive = false;
+      void this.options.api.workspace.showContextMenu(this.currentDirectory, 'directory');
     });
     container.appendChild(tree);
     tree.scrollTop = previousScrollTop;
@@ -902,7 +932,8 @@ export class WorkspaceExplorer {
       if (entry.kind === 'directory') {
         const create = document.createElement('button');
         create.type = 'button'; create.className = 'workspace-entry-create'; create.textContent = '＋'; create.title = tExplorer('newFile');
-        create.addEventListener('click', (event) => { event.stopPropagation(); this.beginCreate(entry.relativePath, 'file'); });
+        create.setAttribute('aria-haspopup', 'menu');
+        create.addEventListener('click', (event) => { event.stopPropagation(); this.popupNewFileTypes(entry.relativePath, create); });
         row.appendChild(create);
       } else if (this.showCreatedAt || this.showUpdatedAt) {
         const spacer = document.createElement('span');
@@ -1009,11 +1040,18 @@ export class WorkspaceExplorer {
     this.renameRelativePath = null;
     const result = await this.options.api.workspace.rename({ relativePath, newName: newName.trim() });
     if (!result.ok) { window.alert(result.message); this.render(); return; }
+    const renamed = result.value;
     this.selectedRelativePaths.delete(relativePath);
-    this.selectedRelativePaths.add(result.value.relativePath);
-    this.selectedRelativePath = result.value.relativePath;
-    this.selectionAnchorRelativePath = result.value.relativePath;
-    await this.loadDirectory(parentRelativePath(result.value.relativePath));
+    this.selectedRelativePaths.add(renamed.relativePath);
+    this.selectedRelativePath = renamed.relativePath;
+    this.selectionAnchorRelativePath = renamed.relativePath;
+    await this.loadDirectory(parentRelativePath(renamed.relativePath));
+    // Match a normal tree click: selection highlight alone is not enough — open the file.
+    if (renamed.kind === 'directory') return;
+    const opened = await this.options.onOpenFile(renamed.relativePath);
+    if (!opened) return;
+    this.selectionFollowsActive = true;
+    this.setActiveRelativePath(renamed.relativePath);
   }
 
   private async deleteEntry(relativePath: string): Promise<void> {
@@ -1038,25 +1076,59 @@ export class WorkspaceExplorer {
     return this.state?.rootPath && filePath ? workspaceRelativePath(this.state.rootPath, filePath) : null;
   }
 
-  private beginCreate(parentRelativePath: string, kind: 'file' | 'directory'): void {
+  private popupNewFileTypes(parentRelativePath: string, anchor: HTMLElement): void {
+    const rect = anchor.getBoundingClientRect();
+    void this.options.api.workspace.popupNewFileMenu(parentRelativePath, rect.left, rect.bottom);
+  }
+
+  private beginCreate(parentRelativePath: string, kind: 'file' | 'directory', extension?: string): void {
     if (!this.state) return;
     const expanded = new Set(this.state.expandedRelativePaths);
     if (parentRelativePath) expanded.add(parentRelativePath);
     this.renameRelativePath = null;
-    this.pendingCreate = { parentRelativePath, kind };
+    const normalizedExt = kind === 'file'
+      ? (extension && extension.startsWith('.') ? extension : extension ? `.${extension}` : '.md')
+      : undefined;
+    this.pendingCreate = { parentRelativePath, kind, extension: normalizedExt };
     this.updateState({ expandedRelativePaths: [...expanded] });
     if (parentRelativePath) void this.loadDirectory(parentRelativePath);
+    else this.render();
+  }
+
+  private defaultCreateName(kind: 'file' | 'directory', extension?: string): string {
+    const existing = (this.entriesByDirectory.get(this.pendingCreate?.parentRelativePath ?? '') ?? []).map((entry) => entry.name);
+    if (kind === 'directory') {
+      return unusedWorkspaceCreateFolderName(tExplorer('create.defaultFolderName'), existing);
+    }
+    const ext = extension && extension.startsWith('.') ? extension : `.${extension || 'md'}`;
+    return unusedWorkspaceCreateFileName(tExplorer('create.defaultFileStem'), ext, existing);
   }
 
   private renderCreateInput(depth: number): HTMLElement {
     const wrapper = document.createElement('form');
     wrapper.className = 'workspace-create-row'; wrapper.style.paddingInlineStart = `${28 + depth * 16}px`;
     const input = document.createElement('input');
-    input.autofocus = true; input.value = this.pendingCreate?.kind === 'file' ? 'untitled.md' : 'untitled';
+    input.autofocus = true;
+    const pending = this.pendingCreate;
+    input.value = pending
+      ? this.defaultCreateName(pending.kind, pending.extension)
+      : unusedWorkspaceCreateFileName(tExplorer('create.defaultFileStem'), '.md', []);
     wrapper.appendChild(input);
-    wrapper.addEventListener('submit', (event) => { event.preventDefault(); const pending = this.pendingCreate; if (pending) void this.createEntry(pending, input.value); });
+    let submitting = false;
+    const commit = async (): Promise<void> => {
+      if (submitting || !pending || this.pendingCreate !== pending) return;
+      submitting = true;
+      await this.createEntry(pending, input.value);
+      submitting = false;
+    };
+    wrapper.addEventListener('submit', (event) => { event.preventDefault(); void commit(); });
+    input.addEventListener('blur', () => { void commit(); });
     input.addEventListener('keydown', (event) => { if (event.key === 'Escape') { this.pendingCreate = null; this.render(); } });
-    requestAnimationFrame(() => input.select());
+    requestAnimationFrame(() => {
+      if (!input.isConnected) return;
+      input.focus();
+      input.setSelectionRange(...workspaceEntryNameSelectionRange(input.value));
+    });
     return wrapper;
   }
 
@@ -1064,8 +1136,21 @@ export class WorkspaceExplorer {
     const result = await this.options.api.workspace.create({ parentRelativePath: pending.parentRelativePath, name, kind: pending.kind });
     if (!result.ok) { window.alert(result.message); return; }
     this.pendingCreate = null;
-    this.selectedRelativePath = result.value.relativePath;
+    const created = result.value;
     await this.loadDirectory(pending.parentRelativePath);
+    // Confirming the create name must select AND open (same as clicking an existing file).
+    // Previously only selectedRelativePath was set — tree looked selected without opening preview.
+    if (created.kind === 'directory') {
+      this.select(created.relativePath);
+      return;
+    }
+    const opened = await this.options.onOpenFile(created.relativePath);
+    if (!opened) {
+      this.select(created.relativePath);
+      return;
+    }
+    this.selectionFollowsActive = true;
+    this.setActiveRelativePath(created.relativePath);
   }
 
   private beginResize(event: PointerEvent): void {

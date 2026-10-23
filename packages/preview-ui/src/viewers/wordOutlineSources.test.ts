@@ -8,6 +8,7 @@ import {
   readMsdocOutline,
   splitMsdocLines,
   samplesFromPmDoc,
+  docxStyleOutlineLevels,
 } from './wordOutlineSources';
 
 afterEach(() => {
@@ -95,6 +96,31 @@ it('samples ProseMirror paragraphs with outline levels, marks and positions', ()
     ['Styled by id', 1, false, null, false],
     ['第二章 总则', null, true, 14, false],
     ['cell', null, true, null, true],
+  ]);
+});
+
+it('resolves WPS numeric style ids through the document styles', () => {
+  type Node = Parameters<typeof samplesFromPmDoc>[0];
+  const para = (attrs: Record<string, unknown>, value: string) => ({
+    type: { name: 'paragraph' }, attrs, textContent: value, forEach: () => undefined, descendants: () => undefined,
+  }) as Node;
+  const blocks = [para({ styleId: '2' }, '范围'), para({ styleId: '1' }, '正文'), para({ styleId: '30' }, '派生标题'), para({ styleId: '1', outlineLevel: 2 }, '直接设置级别')];
+  const doc = {
+    type: { name: 'doc' }, attrs: {}, textContent: '', forEach: () => undefined,
+    descendants: (fn: (node: Node, pos: number, parent: Node | null) => boolean | void) => {
+      blocks.forEach((node, i) => fn(node, i * 10, { type: { name: 'doc' } } as Node));
+    },
+  } as Node;
+  const levels = docxStyleOutlineLevels([
+    { styleId: '1', type: 'paragraph', name: 'Normal' },
+    { styleId: '2', type: 'paragraph', name: 'heading 1', basedOn: '1', pPr: { outlineLevel: 0 } },
+    { styleId: '3', type: 'paragraph', name: 'heading 2', basedOn: '1' },
+    { styleId: '30', type: 'paragraph', name: '自定义', basedOn: '3' },
+    { styleId: '40', type: 'character', name: 'heading 1 Char' },
+  ]);
+  expect([...levels]).toEqual([['2', 0], ['3', 1], ['30', 1]]);
+  expect(samplesFromPmDoc(doc, levels).samples.map(s => [s.text, s.styleLevel])).toEqual([
+    ['范围', 0], ['正文', null], ['派生标题', 1], ['直接设置级别', 2],
   ]);
 });
 

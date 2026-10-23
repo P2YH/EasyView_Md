@@ -23,6 +23,8 @@ export interface WordParagraphSample {
   bold: boolean;
   /** Dominant font size in points; null when unknown. */
   fontSize: number | null;
+  /** Paragraph carries automatic (non-bullet) list numbering such as "1" or "4.1". */
+  numbered?: boolean;
   /** Paragraph sits in a table, header, text box or list; never treated as an inferred heading. */
   excluded?: boolean;
 }
@@ -167,13 +169,50 @@ function rankKinds(candidates: readonly Candidate[]): Map<string, number> {
   return new Map(ordered.map((kind, rank) => [kind, rank]));
 }
 
+/**
+ * Rejects mis-styled body that WPS/Word would keep out of Navigation.
+ * Tables/headers are already `excluded`; remaining checks are cheap string/size rules.
+ */
+function looksLikeDataFragment(text: string): boolean {
+  if (/\bCPU\b/i.test(text)) return true;
+  if (/\b(?:intel|amd|xeon|ryzen|core)\b/i.test(text) && /\b(?:E\d|i[3579]|R\d|\d{4}[A-Z]?)\b/i.test(text)) return true;
+  if (/^[\d.]+\s*(?:GHz|GB|MB|TB|核|线程)?$/i.test(text)) return true;
+  // Split table cells: "据库、中" / "间件、数" — short shards with list commas, not "一、标题".
+  if (text.length <= 8 && /[、，,]/.test(text) && !headingNumberKind(text)) return true;
+  // Lone glyph without numbering; two-character titles such as "前言" / "范围" are common.
+  if (text.length <= 1 && !headingNumberKind(text)) return true;
+  return false;
+}
+
+function isWeakStyledHeading(sample: WordParagraphSample, text: string, bodySize: number | null): boolean {
+  if (looksLikeDataFragment(text)) return true;
+  if (bodySize != null && sample.fontSize != null) {
+    const nearBody = sample.fontSize <= bodySize * 1.08 && sample.fontSize - bodySize < 1.5;
+    // Mis-applied heading style on plain body: same size, not bold, no numbering cue.
+    if (nearBody && !sample.bold && !headingNumberKind(text)) return true;
+  }
+  return false;
+}
+
+function bodyFontSizeForOutline(samples: readonly WordParagraphSample[]): number | null {
+  const bodySizes = samples
+    .filter(sample => !sample.excluded && sample.styleLevel == null && sample.fontSize && sample.text.trim().length >= 20)
+    .map(sample => sample.fontSize as number);
+  // Without body paragraphs a heading would be measured against itself and look like body text.
+  return median(bodySizes);
+}
+
 /** Styled headings when the document has any; otherwise the inferred fallback. */
 export function extractWordHeadings(samples: readonly WordParagraphSample[]): WordOutlineHeading[] {
+  const bodySize = bodyFontSizeForOutline(samples);
   const styled: WordOutlineHeading[] = [];
   samples.forEach((sample, index) => {
+    // Tables / text boxes / headers: never navigation entries (styled path used to miss this).
+    if (sample.excluded) return;
     if (sample.styleLevel == null || sample.styleLevel < 0 || sample.styleLevel >= MAX_LEVEL) return;
     const text = normalizeHeadingText(sample.text);
-    if (!text) return;
+    if (!text || TOC_ENTRY.test(text)) return;
+    if (!sample.numbered && isWeakStyledHeading(sample, text, bodySize)) return;
     styled.push({ level: sample.styleLevel + 1, text, inferred: false, index });
   });
   if (styled.length) return styled;
@@ -302,20 +341,21 @@ function wDescendants(el: Element | Document, name: string): Element[] {
   return Array.from(el.getElementsByTagName('*')).filter(child => wName(child) === name);
 }
 
-/** Style id → 0-based outline level, following basedOn chains. */
-export function readStyleOutlineLevels(stylesXml: string, parser: DOMParser = new DOMParser()): Map<string, number> {
-  const doc = parser.parseFromString(stylesXml, 'application/xml');
+/** One paragraph style as declared in the document, before basedOn inheritance. */
+export interface ParagraphStyleOutline {
+  styleId: string;
+  name: string | null;
+  /** 0-based w:outlineLvl declared on the style itself. */
+  outlineLevel: number | null;
+  basedOn: string | null;
+}
+
+/** Style id → 0-based outline level, following basedOn chains; heading names stand in for a missing w:outlineLvl. */
+export function resolveStyleOutlineLevels(styles: Iterable<ParagraphStyleOutline>): Map<string, number> {
   const own = new Map<string, { level: number | null; basedOn: string | null }>();
-  for (const style of wDescendants(doc, 'style')) {
-    if (wAttr(style, 'type') !== 'paragraph') continue;
-    const id = wAttr(style, 'styleId');
-    if (!id) continue;
-    const pPr = wChild(style, 'pPr');
-    const lvlEl = pPr ? wChild(pPr, 'outlineLvl') : null;
-    const raw = lvlEl ? Number(wAttr(lvlEl, 'val')) : NaN;
-    const name = wAttr(wChild(style, 'name'), 'val');
-    const level = Number.isFinite(raw) ? raw : headingLevelFromStyleName(name) ?? headingLevelFromStyleName(id);
-    own.set(id, { level, basedOn: wAttr(wChild(style, 'basedOn'), 'val') });
+  for (const style of styles) {
+    const level = style.outlineLevel ?? headingLevelFromStyleName(style.name) ?? headingLevelFromStyleName(style.styleId);
+    own.set(style.styleId, { level, basedOn: style.basedOn });
   }
   const resolved = new Map<string, number>();
   for (const id of own.keys()) {
@@ -333,6 +373,27 @@ export function readStyleOutlineLevels(stylesXml: string, parser: DOMParser = ne
     }
   }
   return resolved;
+}
+
+/** Style id → 0-based outline level from styles.xml. */
+export function readStyleOutlineLevels(stylesXml: string, parser: DOMParser = new DOMParser()): Map<string, number> {
+  const doc = parser.parseFromString(stylesXml, 'application/xml');
+  const styles: ParagraphStyleOutline[] = [];
+  for (const style of wDescendants(doc, 'style')) {
+    if (wAttr(style, 'type') !== 'paragraph') continue;
+    const styleId = wAttr(style, 'styleId');
+    if (!styleId) continue;
+    const pPr = wChild(style, 'pPr');
+    const lvlEl = pPr ? wChild(pPr, 'outlineLvl') : null;
+    const raw = lvlEl ? Number(wAttr(lvlEl, 'val')) : NaN;
+    styles.push({
+      styleId,
+      name: wAttr(wChild(style, 'name'), 'val'),
+      outlineLevel: Number.isFinite(raw) ? raw : null,
+      basedOn: wAttr(wChild(style, 'basedOn'), 'val'),
+    });
+  }
+  return resolveStyleOutlineLevels(styles);
 }
 
 /** Body paragraphs of document.xml as outline samples (tables excluded). */

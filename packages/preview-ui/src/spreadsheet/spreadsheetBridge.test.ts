@@ -19,6 +19,18 @@ describe('editable spreadsheet formats', () => {
 });
 
 describe('xSpreadsheetBridge', () => {
+  it('loads a brand-new empty worksheet whose ExcelJS columns is null', async () => {
+    const ExcelJS = (await import('exceljs')).default;
+    const workbook = new ExcelJS.Workbook();
+    workbook.addWorksheet('Sheet1');
+    const source = await workbook.xlsx.writeBuffer();
+    const bytes = source instanceof Uint8Array ? source : new Uint8Array(source);
+    const sheets = await workbookBytesToXsSheets(toArrayBuffer(bytes));
+    expect(sheets[0]?.name).toBe('Sheet1');
+    expect(sheets[0]?.cols?.len).toBeGreaterThan(0);
+    expect(sheets[0]?.rows?.len).toBeGreaterThan(0);
+  });
+
   it('rejects a tiny archive with an enormous merge before expanding the workbook', async () => {
     const JSZip = (await import('jszip')).default;
     const zip = new JSZip();

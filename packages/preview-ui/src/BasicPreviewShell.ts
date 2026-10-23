@@ -1,16 +1,39 @@
 import * as React from 'react';
 import { createPortal } from 'react-dom';
-import type { PreviewDescriptor } from '@easyview/contracts';
+import { resolvePreviewRoute, type PreviewDescriptor } from '@easyview/contracts';
 import { PreviewAppearanceContext } from './appearanceContext';
-import { DocumentThemeButton, useDocumentRouteTheme } from './viewers/DocumentRouteChrome';
+import {
+  DocumentCollapseButton,
+  DocumentThemeButton,
+  DocumentToolbarExpandButton,
+  useDocumentRouteTheme,
+} from './viewers/DocumentRouteChrome';
 import { useToolbarPinned } from './useToolbarPinned';
 import { tPreview } from './preview.i18n';
+import { usePreviewAssets } from './assets';
 
-/** Shared top strip for viewers without their own document toolbar. */
-export function BasicPreviewShell({ descriptor, children }: React.PropsWithChildren<{
+export interface BasicPreviewShellProps {
   descriptor: PreviewDescriptor;
-}>): React.ReactElement {
-  const { pinnedOpen } = useToolbarPinned();
+  /** Optional leading controls (search / save / view mode) before theme. */
+  documentActions?: React.ReactNode;
+  /** Extra class on the root (e.g. preview-text-shell). */
+  className?: string;
+  children?: React.ReactNode;
+}
+
+/**
+ * BasicChrome — shared top strip for lightweight preview routes (svg/html/http/
+ * java-class/video/audio). Text also uses this shell with documentActions slots
+ * so search/save sit on the same bar (no freestanding text-only toolbar).
+ */
+export function BasicPreviewShell({
+  descriptor,
+  documentActions,
+  className,
+  children,
+}: BasicPreviewShellProps): React.ReactElement {
+  const assets = usePreviewAssets();
+  const { pinnedOpen, togglePinned } = useToolbarPinned();
   const { themeMode, cycleTheme, viewerVars, appearance } = useDocumentRouteTheme(descriptor.relativePath);
   const nativeToolbar = descriptor.route === 'html' || descriptor.route === 'http';
   const rootRef = React.useRef<HTMLElement | null>(null);
@@ -37,15 +60,59 @@ export function BasicPreviewShell({ descriptor, children }: React.PropsWithChild
     attach();
     return () => { observer.disconnect(); slot.remove(); };
   }, [nativeToolbar, pinnedOpen]);
+
   const themeButton = React.createElement(DocumentThemeButton, { themeMode, onCycleTheme: cycleTheme });
+  const collapseButton = !assets.compactToolbars
+    ? React.createElement(DocumentCollapseButton, { onTogglePinned: togglePinned })
+    : null;
+  const viewGroup = React.createElement(
+    'div',
+    { role: 'group', 'aria-label': tPreview('chrome.view'), 'data-toolbar-group': 'view' },
+    themeButton,
+    collapseButton,
+  );
+  const documentGroup = documentActions
+    ? React.createElement(
+        'div',
+        {
+          role: 'group',
+          'aria-label': tPreview('chrome.documentActions'),
+          'data-toolbar-group': 'document',
+        },
+        documentActions,
+      )
+    : null;
+
+  const rootClass = [
+    'preview-basic-viewer',
+    className,
+    pinnedOpen ? 'is-toolbar-pinned' : 'is-toolbar-collapsed',
+  ].filter(Boolean).join(' ');
+
   return React.createElement(PreviewAppearanceContext.Provider, { value: themeMode },
     React.createElement('section', {
       ref: rootRef,
-      className: `preview-basic-viewer ${pinnedOpen ? 'is-toolbar-pinned' : 'is-toolbar-collapsed'}`,
+      className: rootClass,
       style: { ...viewerVars, '--easyview-preview-text-color': appearance.textColor } as React.CSSProperties,
+      'data-preview-theme': themeMode,
+      'data-preview-chrome': 'basic',
     },
-      pinnedOpen && !nativeToolbar
-        ? React.createElement('div', { className: 'preview-basic-toolbar', role: 'toolbar', 'aria-label': tPreview('toolbar.group') }, themeButton)
+      !nativeToolbar
+        ? React.createElement(
+            'div',
+            {
+              className: 'preview-basic-toolbar',
+              role: 'toolbar',
+              'aria-label': tPreview('toolbar.group'),
+              'aria-hidden': !pinnedOpen,
+            },
+            documentGroup,
+            viewGroup,
+          )
+        : null,
+      /* Expand dock is position:absolute to the viewer top; keep it early in DOM. */
+      !pinnedOpen
+        ? React.createElement(DocumentToolbarExpandButton, { onTogglePinned: togglePinned })
         : null,
       React.createElement('div', { className: 'preview-basic-content' }, children),
       pinnedOpen && nativeToolbar && nativeChrome
@@ -55,8 +122,13 @@ export function BasicPreviewShell({ descriptor, children }: React.PropsWithChild
   );
 }
 
+/**
+ * Routes that PreviewShell should wrap with BasicChrome.
+ * Text owns BasicChrome itself (search/save slots) — do not double-wrap.
+ * HEIC / .ppt are document chrome and must not appear here.
+ */
 export function needsBasicPreviewToolbar(descriptor: PreviewDescriptor): boolean {
-  return ['text', 'svg', 'html', 'http', 'java-class', 'video', 'audio'].includes(descriptor.route)
-    || (descriptor.route === 'image' && /\.(heic|heif)$/i.test(descriptor.fileName))
-    || (descriptor.route === 'powerpoint' && /\.ppt$/i.test(descriptor.fileName));
+  const definition = resolvePreviewRoute(descriptor.fileName);
+  if (!definition || definition.chrome !== 'basic') return false;
+  return definition.route !== 'text';
 }

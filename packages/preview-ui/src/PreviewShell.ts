@@ -97,7 +97,11 @@ function loadViewer(
     case 'text':
       return import('./viewers/TextViewer').then(({ TextViewer }) => (descriptor, host) => {
         if (!host.readText) throw new Error(tPreview('shell.readTextUnavailable'));
-        return React.createElement(TextViewer, { descriptor, readText: host.readText.bind(host) });
+        return React.createElement(TextViewer, {
+          descriptor,
+          readText: host.readText.bind(host),
+          ...(host.writeBytes ? { writeBytes: host.writeBytes.bind(host) } : {}),
+        });
       });
     case 'image':
       return import('./viewers/ImageViewer').then(({ ImageViewer }) => (descriptor) =>
@@ -125,6 +129,8 @@ function loadViewer(
     case 'powerpoint':
       return import('./viewers/PresentationViewer').then(({ PresentationViewer }) => (descriptor) =>
         React.createElement(PresentationViewer, { descriptor }));
+    case 'epub':
+    case 'font':
     case 'design':
       return import('./viewers/DesignViewer').then(({ DesignViewer }) => (descriptor) =>
         React.createElement(DesignViewer, { descriptor }));

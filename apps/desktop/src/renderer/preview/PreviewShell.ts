@@ -33,9 +33,8 @@ function localizedAssetUrl(relativeUrl: string): string {
 }
 
 const extraViewers: PreviewExtraViewers = {
-  epub: () => import('./viewers/DesignViewer').then(({ DesignViewer }) => (descriptor) => h(DesignViewer, { descriptor })),
+  // drawio stays host-specific; epub/font now ship in shared PreviewShell (Phase1).
   design: () => import('./viewers/DesignViewer').then(({ DesignViewer }) => (descriptor) => h(DesignViewer, { descriptor })),
-  font: () => import('./viewers/DesignViewer').then(({ DesignViewer }) => (descriptor) => h(DesignViewer, { descriptor })),
   http: () => import('./viewers/HttpViewer').then(({ HttpViewer }) => (descriptor, host) => {
     if (!host.readText || !host.sendHttp) throw new Error(tPreview('error.httpUnsupported'));
     return h(HttpViewer, {

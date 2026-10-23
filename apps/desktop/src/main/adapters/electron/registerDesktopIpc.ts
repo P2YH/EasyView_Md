@@ -75,6 +75,7 @@ import {
   renameWorkspaceEntry,
   showTabContextMenu,
   showWorkspaceContextMenu,
+  showNewFileTypeMenu,
 } from '../../application/workspace/workspaceWorkflow';
 import { rendererWindow } from '../../application/host/desktopRuntime';
 import { recentFolderStore } from '../../application/workspace/recentFolders';
@@ -702,6 +703,21 @@ export function registerDesktopIpc(): void {
       return failure('INVALID_ARGUMENT', tIpc('workspace.invalidContextMenu'));
     }
     showWorkspaceContextMenu(event.sender, request.relativePath, request.kind as WorkspaceEntry['kind']);
+    return success(true);
+  });
+
+  registerHandle('workspace.popupNewFileMenu', (event, request: unknown) => {
+    const denied = assertTrustedRenderer(event);
+    if (denied) return denied;
+    if (
+      !isRecord(request)
+      || typeof request.parentRelativePath !== 'string'
+      || typeof request.x !== 'number' || !Number.isFinite(request.x)
+      || typeof request.y !== 'number' || !Number.isFinite(request.y)
+    ) {
+      return failure('INVALID_ARGUMENT', tIpc('workspace.invalidContextMenu'));
+    }
+    showNewFileTypeMenu(event.sender, request.parentRelativePath, request.x, request.y);
     return success(true);
   });
 

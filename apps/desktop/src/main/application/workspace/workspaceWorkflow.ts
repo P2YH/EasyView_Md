@@ -1,7 +1,7 @@
 import { migrateRenamedHistory } from '@easyview/node-runtime';
 import { DESKTOP_TAB_CLOSE_SHORTCUT } from '../../../contracts';
 import { captureDesktopHistoryPath, desktopHistory } from '../document/desktopHistory';
-import { isMarkdownFilePath } from '@easyview/contracts';
+import { isMarkdownFilePath, WORKSPACE_CREATABLE_FILE_TYPES, type WorkspaceCreatableFileTypeId } from '@easyview/contracts';
 import { Menu, clipboard, dialog, shell } from 'electron';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -416,13 +416,59 @@ export function showOpenWithPicker(relativePath: string, owner: Electron.Browser
   Menu.buildFromTemplate(items).popup({ window: owner ?? undefined });
 }
 
+
+function createTypeLabel(id: WorkspaceCreatableFileTypeId): string {
+  switch (id) {
+    case 'markdown': return tWorkspace('create.type.markdown');
+    case 'word': return tWorkspace('create.type.word');
+    case 'excel': return tWorkspace('create.type.excel');
+    case 'text': return tWorkspace('create.type.text');
+  }
+}
+
+/**
+ * Opens an inline name input from a native menu. The page must own focus again first, or macOS
+ * anchors the IME candidates to the previous caret (e.g. the Word editor's off-screen input).
+ */
+function beginInlineEdit(sender: Electron.WebContents, ...args: [WorkspaceContextCommand | 'beginCreateFile' | 'beginCreateFolder', string, string?]): void {
+  sender.focus();
+  sender.send('workspace.contextCommand', ...args);
+}
+
+function newFileTypeMenuItems(
+  sender: Electron.WebContents,
+  parentRelativePath: string,
+): Electron.MenuItemConstructorOptions[] {
+  return WORKSPACE_CREATABLE_FILE_TYPES.map((type) => ({
+    label: createTypeLabel(type.id),
+    click: () => beginInlineEdit(sender, 'beginCreateFile', parentRelativePath, type.extension),
+  }));
+}
+
+/** Toolbar / row "+" — native type picker at screen coordinates. */
+export function showNewFileTypeMenu(
+  sender: Electron.WebContents,
+  parentRelativePath: string,
+  x: number,
+  y: number,
+): void {
+  const owner = rendererWindow(sender);
+  Menu.buildFromTemplate(newFileTypeMenuItems(sender, parentRelativePath)).popup({
+    window: owner ?? undefined,
+    x: Math.round(x),
+    y: Math.round(y),
+  });
+}
+
 export function showWorkspaceContextMenu(sender: Electron.WebContents, relativePath: string, kind: WorkspaceEntry['kind']): void {
   const isFile = kind === 'file' || kind === 'symlink';
+  const isDirectory = kind === 'directory';
+  const isRoot = relativePath === '';
   const canPaste = getWorkspaceFileClipboard() !== null;
   const owner = rendererWindow(sender);
   const run = (command: WorkspaceContextCommand): void => {
     if (command === 'rename') {
-      sender.send('workspace.contextCommand', command, relativePath);
+      beginInlineEdit(sender, command, relativePath);
       return;
     }
     if (command === 'delete') {
@@ -451,19 +497,31 @@ export function showWorkspaceContextMenu(sender: Electron.WebContents, relativeP
     const paths = workspaceCore.resourcePaths(relativePath);
     clipboard.writeText(command === 'copyPath' ? paths.absolutePath : paths.relativePath);
   };
+  const createItems: Electron.MenuItemConstructorOptions[] = isDirectory ? [
+    {
+      label: tWorkspace('menu.newFile'),
+      submenu: newFileTypeMenuItems(sender, relativePath),
+    },
+    {
+      label: tWorkspace('menu.newFolder'),
+      click: () => beginInlineEdit(sender, 'beginCreateFolder', relativePath),
+    },
+    { type: 'separator' },
+  ] : [];
   const template: Electron.MenuItemConstructorOptions[] = [
+    ...createItems,
     { label: tWorkspace('menu.openPreview'), enabled: isFile, click: () => run('openPreview') },
     { label: tWorkspace('menu.openWith'), enabled: isFile, click: () => run('openWith') },
     { label: tWorkspace('menu.openDefault'), enabled: isFile, click: () => run('openDefault') },
     { label: tWorkspace(process.platform === 'darwin' ? 'menu.revealInFinder' : 'menu.revealInFileExplorer'), click: () => run('reveal') },
     { type: 'separator' },
-    { label: tWorkspace('menu.copy'), accelerator: 'CmdOrCtrl+C', click: () => run('copy') },
+    { label: tWorkspace('menu.copy'), accelerator: 'CmdOrCtrl+C', enabled: !isRoot, click: () => run('copy') },
     { label: tWorkspace('menu.paste'), accelerator: 'CmdOrCtrl+V', enabled: canPaste, click: () => run('paste') },
-    { label: tWorkspace('menu.copyPath'), click: () => run('copyPath') },
-    { label: tWorkspace('menu.copyRelativePath'), click: () => run('copyRelativePath') },
+    { label: tWorkspace('menu.copyPath'), enabled: !isRoot, click: () => run('copyPath') },
+    { label: tWorkspace('menu.copyRelativePath'), enabled: !isRoot, click: () => run('copyRelativePath') },
     { type: 'separator' },
-    { label: tWorkspace('menu.rename'), click: () => run('rename') },
-    { label: tWorkspace('menu.delete'), accelerator: process.platform === 'darwin' ? 'Cmd+Backspace' : 'Delete', click: () => run('delete') },
+    { label: tWorkspace('menu.rename'), enabled: !isRoot, click: () => run('rename') },
+    { label: tWorkspace('menu.delete'), accelerator: process.platform === 'darwin' ? 'Cmd+Backspace' : 'Delete', enabled: !isRoot, click: () => run('delete') },
   ];
   Menu.buildFromTemplate(template).popup({ window: owner ?? undefined });
 }

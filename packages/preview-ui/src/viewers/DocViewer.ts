@@ -27,7 +27,8 @@ import {
 import { isEditableWordFile } from '../word/editableFormats';
 import { tPreview } from '../preview.i18n';
 import { installPreviewSidebarResize } from '../previewSidebarResize';
-import { PREVIEW_SIDEBAR_ICON, readPreviewSidebarHidden, writePreviewSidebarHidden } from '../previewSidebarToggle';
+import { PREVIEW_SIDEBAR_ICON } from '../previewSidebarToggle';
+import { readWordOutlinePinned, writeWordOutlinePinned } from './wordOutlinePrefs';
 import { installWordOutline, wordOutlineLabels } from './wordOutlinePane';
 import { createDocxEditorOutlineSource, type DocxOutlineEditor } from './wordOutlineSources';
 
@@ -42,7 +43,7 @@ export interface DocViewerProps extends ViewerProps {
  *
  * Top formatting bar comes from DocxEditor (`showToolbar` + `toolbarExtra`).
  * EasyView save/export/print/theme/collapse are injected into that same bar via toolbarExtra,
- * and collapse toggles `showToolbar` so the host toolbar actually hides.
+ * Collapse keeps the host toolbar mounted and hides it with the shared upward animation.
  */
 export function DocViewer({ descriptor, host }: DocViewerProps): React.ReactElement {
   if (isEditableWordFile(descriptor.fileName) && host?.writeBytes) {
@@ -69,17 +70,30 @@ function WordEditor({ descriptor, host }: { descriptor: ViewerProps['descriptor'
   const colorMode = easyViewThemeToDocxColorMode(themeMode);
   const mountRef = React.useRef<HTMLDivElement | null>(null);
   const outlineListenersRef = React.useRef(new Set<() => void>());
-  const [sidebarHidden, setSidebarHidden] = React.useState(readPreviewSidebarHidden);
+  const [sidebarHidden, setSidebarHidden] = React.useState(() => !readWordOutlinePinned());
   const toggleSidebar = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
     setSidebarHidden((hidden) => {
-      writePreviewSidebarHidden(!hidden);
-      return !hidden;
+      const nextHidden = !hidden;
+      writeWordOutlinePinned(!nextHidden);
+      return nextHidden;
     });
   }, []);
   const notifyOutline = React.useCallback(() => {
     outlineListenersRef.current.forEach(listener => listener());
   }, []);
+
+  // Minimap pin / sidebar unpin updates prefs inside installWordOutline; keep React toggle in sync.
+  React.useEffect(() => {
+    const mount = mountRef.current;
+    if (!mount) return;
+    const onPinned = (event: Event) => {
+      const pinned = (event as CustomEvent<{ pinned?: boolean }>).detail?.pinned;
+      if (typeof pinned === 'boolean') setSidebarHidden(!pinned);
+    };
+    mount.addEventListener('easyview-word-outline-pinned', onPinned);
+    return () => mount.removeEventListener('easyview-word-outline-pinned', onPinned);
+  }, [buffer, loading]);
 
   React.useEffect(() => {
     const isCommentsControl = (target: EventTarget | null): boolean => {
@@ -151,6 +165,7 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
         }
         if (!response.ok) throw new Error(tPreview('word.readFailed', { status: response.status }));
         const bytes = await response.arrayBuffer();
+        if (bytes.byteLength === 0) throw new Error(tPreview('word.emptyDocument'));
         if (disposed) return;
         setDocxEditor(() => Editor as unknown as React.ComponentType<Record<string, unknown>>);
         setBuffer(bytes);
@@ -324,7 +339,7 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
   const editorReady = !loading && !!DocxEditor && !!buffer;
   React.useEffect(() => {
     const mount = mountRef.current;
-    if (!pinnedOpen || !editorReady || !mount) return;
+    if (!editorReady || !mount) return;
     const slot = document.createElement('span');
     slot.className = 'preview-word-leading-actions';
     let bar: HTMLElement | null = null;
@@ -350,7 +365,7 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
       slot.remove();
       setLeadingSlot(null);
     };
-  }, [pinnedOpen, editorReady]);
+  }, [editorReady]);
 
   const sidebarToggle = leadingSlot
     ? createPortal(h('button', {
@@ -365,21 +380,19 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
     : null;
 
   const toolbarExtra = React.useMemo(() => (
-    pinnedOpen
-      ? h(DocumentChromeActions, {
-          embedded: true,
-          themeMode,
-          onCycleTheme: cycleTheme,
-          onTogglePinned: togglePinned,
-          dirty,
-          saving,
-          saveDisabled: !buffer,
-          saveMessage,
-          onSave: () => { void save(); },
-          documentActions,
-        })
-      : null
-  ), [buffer, cycleTheme, dirty, documentActions, pinnedOpen, save, saveMessage, saving, themeMode, togglePinned]);
+    h(DocumentChromeActions, {
+      embedded: true,
+      themeMode,
+      onCycleTheme: cycleTheme,
+      onTogglePinned: togglePinned,
+      dirty,
+      saving,
+      saveDisabled: !buffer,
+      saveMessage,
+      onSave: () => { void save(); },
+      documentActions,
+    })
+  ), [buffer, cycleTheme, dirty, documentActions, save, saveMessage, saving, themeMode, togglePinned]);
 
   if (error) return h(ViewerError, { error });
 
@@ -409,7 +422,7 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
             // Display-only mapping from EasyView theme. Never 'system'; no editor-local theme persistence.
             // colorMode updates in place — do not key on it (remount would wipe edits and auto-open comments).
             colorMode,
-            showToolbar: pinnedOpen,
+            showToolbar: true,
             showFileOpen: false,
             showHelpMenu: false,
             showZoomControl: true,

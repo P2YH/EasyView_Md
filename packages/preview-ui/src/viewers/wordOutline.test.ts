@@ -1,4 +1,6 @@
 /** @vitest-environment happy-dom */
+import { existsSync, readFileSync } from 'node:fs';
+import JSZip from 'jszip';
 import { describe, expect, it } from 'vitest';
 import {
   buildWordOutlineTree,
@@ -62,6 +64,52 @@ describe('extractWordHeadings', () => {
       { level: 1, text: '第一章 项目背景', inferred: false, index: 0 },
       { level: 2, text: '1.1 范围', inferred: false, index: 2 },
     ]);
+  });
+
+  it('skips excluded table cells even when they carry heading styles', () => {
+    const result = extractWordHeadings([
+      { text: '1范围', styleLevel: 0, bold: true, fontSize: 16 },
+      body(),
+      { text: 'CPU：intel E5-2603v3', styleLevel: 0, bold: false, fontSize: 10.5, excluded: true },
+      { text: '据库、中', styleLevel: 0, bold: false, fontSize: 10.5, excluded: true },
+      { text: '间件、数', styleLevel: 0, bold: false, fontSize: 10.5, excluded: true },
+      { text: '据存储', styleLevel: 0, bold: false, fontSize: 10.5, excluded: true },
+      { text: '2引用文件', styleLevel: 0, bold: true, fontSize: 16 },
+      body(),
+      { text: '3软件概述', styleLevel: 0, bold: true, fontSize: 16 },
+    ]);
+    expect(result.map(h => h.text)).toEqual(['1范围', '2引用文件', '3软件概述']);
+  });
+
+  it('drops weak body-like styled candidates outside tables', () => {
+    const result = extractWordHeadings([
+      { text: '1范围', styleLevel: 0, bold: true, fontSize: 16 },
+      body('这是一段足够长的正文内容，用于确定正文字号，它不会被识别为标题。', 10.5),
+      body(),
+      // Mis-applied Heading 1 on body-sized non-bold text with no numbering.
+      { text: '普通说明文字段落标题误标', styleLevel: 0, bold: false, fontSize: 10.5 },
+      // Hardware / data fragments that sometimes leak into body with heading styles.
+      { text: 'CPU：intel E5-2603v3', styleLevel: 0, bold: false, fontSize: 12 },
+      { text: '据库、中', styleLevel: 0, bold: false, fontSize: 12 },
+      { text: '2引用文件', styleLevel: 0, bold: true, fontSize: 16 },
+    ]);
+    expect(result.map(h => h.text)).toEqual(['1范围', '2引用文件']);
+  });
+
+  it('keeps a short heading in a document that has no body text yet', () => {
+    const result = extractWordHeadings([{ text: '阿达', styleLevel: 0, bold: false, fontSize: 16 }]);
+    expect(result.map(h => h.text)).toEqual(['阿达']);
+  });
+
+  it('keeps auto-numbered styled headings whose bold and numbering come from the style', () => {
+    const result = extractWordHeadings([
+      { text: '前 言', styleLevel: 0, bold: true, fontSize: 16 },
+      body('这是一段足够长的正文内容，用于确定正文字号，它不会被识别为标题。', 10.5),
+      { text: '范围', styleLevel: 0, bold: false, fontSize: 10.5, numbered: true },
+      { text: '术语、定义和缩略语', styleLevel: 0, bold: false, fontSize: 10.5, numbered: true },
+      { text: '建设目标', styleLevel: 1, bold: false, fontSize: 10.5, numbered: true },
+    ]);
+    expect(result.map(h => h.text)).toEqual(['前 言', '范围', '术语、定义和缩略语', '建设目标']);
   });
 
   it('infers numbered and large bold titles when no heading style is used', () => {
@@ -177,7 +225,7 @@ describe('OOXML reader', () => {
     ${p('Heading3', 'Third')}
     ${p(null, 'Direct', '<w:outlineLvl w:val="2"/>')}
     ${p(null, 'Body text')}
-    <w:tbl><w:tr><w:tc>${p(null, '表格')}</w:tc></w:tr></w:tbl>
+    <w:tbl><w:tr><w:tc>${p(null, '表格')}</w:tc><w:tc>${p('1', 'CPU：intel E5')}</w:tc></w:tr></w:tbl>
   </w:body></w:document>`;
 
   it('resolves style outline levels through basedOn and style names', () => {
@@ -198,9 +246,32 @@ describe('OOXML reader', () => {
       ['Direct', 2, true, 16, false],
       ['Body text', null, true, 16, false],
       ['表格', null, true, 16, true],
+      ['CPU：intel E5', 0, true, 16, true],
     ]);
     expect(extractWordHeadings(samples).map(h => [h.level, h.text])).toEqual([
       [1, '第一章 背景'], [2, '继承二级'], [3, 'Third'], [3, 'Direct'],
     ]);
+  });
+});
+
+describe('资管 SRS fixture (local DocPilot path)', () => {
+  const fixture = '/Users/zhangxy/GenAI/DocPilot/docs/项目/资管/1.软件造价送审资料模板/1.软件需求规格说明书.docx';
+
+  it('outline drops table fake H1s and keeps chapter titles', async () => {
+    if (!existsSync(fixture)) return;
+    const zip = await JSZip.loadAsync(readFileSync(fixture));
+    const documentXml = await zip.file('word/document.xml')!.async('string');
+    const stylesXml = await zip.file('word/styles.xml')!.async('string');
+    const samples = readDocxParagraphSamples(documentXml, readStyleOutlineLevels(stylesXml));
+    const headings = extractWordHeadings(samples);
+    const texts = headings.map(h => h.text);
+    expect(texts.some(t => /CPU/i.test(t))).toBe(false);
+    expect(texts.some(t => /据库、中|间件、数/.test(t))).toBe(false);
+    // Main chapters present (WPS AI outline ~10 top entries).
+    expect(texts.some(t => /范围/.test(t))).toBe(true);
+    expect(texts.some(t => /引用文件/.test(t))).toBe(true);
+    expect(texts.some(t => /软件概述/.test(t))).toBe(true);
+    expect(headings.length).toBeGreaterThanOrEqual(8);
+    expect(headings.length).toBeLessThanOrEqual(40);
   });
 });

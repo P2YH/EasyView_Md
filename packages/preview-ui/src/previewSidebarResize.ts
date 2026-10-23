@@ -50,7 +50,12 @@ function attachResizeHandle(pane: HTMLElement, root: HTMLElement, getWidth: () =
 
   const onPointerMove = (event: PointerEvent): void => {
     if (!dragging) return;
-    const next = clampWidth(startWidth + event.clientX - startX);
+    const hostSide = pane.closest('[data-word-outline-side]')?.getAttribute('data-word-outline-side');
+    const onRight = pane.classList.contains('preview-word-outline-right')
+      || pane.dataset.wordOutlineSide === 'right'
+      || hostSide === 'right';
+    const delta = event.clientX - startX;
+    const next = clampWidth(startWidth + (onRight ? -delta : delta));
     setWidth(next);
     event.preventDefault();
   };

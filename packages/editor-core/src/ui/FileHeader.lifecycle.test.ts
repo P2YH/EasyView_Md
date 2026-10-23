@@ -260,6 +260,22 @@ describe('FileHeader lifecycle', () => {
     header.destroy();
   });
 
+  it('opens the accent theme dropdown below the toolbar without relying on hover', () => {
+    const header = createHeader({}, { toolbarOnly: true });
+    document.body.appendChild(header.el);
+    const select = header.el.querySelector('.file-header-accent-select') as HTMLButtonElement;
+    const menu = header.el.querySelector('.file-header-accent-menu') as HTMLElement;
+    expect(menu.classList.contains('open')).toBe(false);
+
+    select.click();
+    expect(menu.classList.contains('open')).toBe(true);
+    expect(menu.querySelectorAll('.file-header-accent-option').length).toBeGreaterThan(1);
+
+    select.click();
+    expect(menu.classList.contains('open')).toBe(false);
+    header.destroy();
+  });
+
   it('colours only the accent selector label with the selected accent, overriding toolbar colours', () => {
     const header = createHeader({}, { toolbarOnly: true });
     document.body.appendChild(header.el);

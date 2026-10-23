@@ -90,7 +90,7 @@ export type WorkspaceExplorerEvent =
   | { type: 'rootChanged' }
   | { type: 'sortConfig'; sort: WorkspaceExplorerSortConfig }
   | { type: 'clipboardChanged'; hasClipboard: boolean }
-  | { type: 'contextCommand'; command: 'rename' | 'paste' | 'beginCreateFile' | 'beginCreateFolder' | 'toggleSortMenu' | 'toggleSearch' | 'refresh' | 'collapseAll'; relativePath?: string }
+  | { type: 'contextCommand'; command: 'rename' | 'paste' | 'beginCreateFile' | 'beginCreateFolder' | 'toggleSortMenu' | 'toggleSearch' | 'refresh' | 'collapseAll'; relativePath?: string; extension?: string }
   | {
       type: 'opResult';
       requestId: string;

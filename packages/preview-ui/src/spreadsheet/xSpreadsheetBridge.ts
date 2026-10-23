@@ -77,7 +77,7 @@ export function worksheetToXsSheet(worksheet: ExcelJS.Worksheet, workbook: Excel
   const merges: string[] = [];
   for (const range of mergeRanges) if (parseA1Range(range)) merges.push(range);
 
-  worksheet.columns.forEach((column, index) => {
+  (worksheet.columns ?? []).forEach((column, index) => {
     if (column && typeof column.width === 'number' && column.width > 0) {
       const px = Math.round(column.width * 8);
       cols[index] = { width: Math.min(MAX_COL_WIDTH_PX, Math.max(MIN_COL_WIDTH_PX, px)) };

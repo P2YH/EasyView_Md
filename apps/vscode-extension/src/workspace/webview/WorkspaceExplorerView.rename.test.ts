@@ -23,13 +23,15 @@ it.each(['extension', 'desktop'] as const)('%s submits rename once when Enter is
     renderRenameInput(entry: WorkspaceExplorerEntry): HTMLInputElement;
     renameEntry(relativePath: string, name: string): Promise<void>;
   };
+  const onOpenFile = vi.fn(async () => true);
   const owner = {
     renameEntry: prototype.renameEntry,
     renamePath: entry.relativePath, renameRelativePath: entry.relativePath,
     setEditing: vi.fn(), findEntry: () => entry,
-    requestOp: request, options: { api: { workspace: { rename: request } } },
+    requestOp: request, options: { api: { workspace: { rename: request } }, onOpenFile },
     selected: new Set([entry.relativePath]), selectedRelativePaths: new Set([entry.relativePath]),
     loadDirectory: vi.fn(async () => undefined), post: vi.fn(), render: vi.fn(), showError: vi.fn(),
+    selectionFollowsActive: false, setActiveRelativePath: vi.fn(),
   };
   const input = prototype.renderRenameInput.call(owner as never, entry);
   document.body.append(input);
@@ -41,4 +43,9 @@ it.each(['extension', 'desktop'] as const)('%s submits rename once when Enter is
   finish(host === 'extension' ? { ok: true, entry: renamed } : { ok: true, value: renamed });
   await vi.waitFor(() => expect(owner.loadDirectory).toHaveBeenCalledTimes(1));
   expect(owner.showError).not.toHaveBeenCalled();
+  if (host === 'extension') {
+    expect(owner.post).toHaveBeenCalledWith({ type: 'open', relativePath: renamed.relativePath });
+  } else {
+    await vi.waitFor(() => expect(onOpenFile).toHaveBeenCalledWith(renamed.relativePath));
+  }
 });

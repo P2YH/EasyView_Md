@@ -269,11 +269,12 @@ export function DocumentRouteShell(props: React.PropsWithChildren<{
   return h('div', {
     className: `${props.className} preview-universal-viewer ${pinnedOpen ? 'is-toolbar-pinned' : 'is-toolbar-collapsed'}`,
     'data-preview-theme': props.themeMode,
+    'data-preview-chrome': 'document',
     'data-ext': props['data-ext'],
     style: props.style,
   },
     props.children,
-    pinnedOpen && !props.embedChrome
+    !props.embedChrome
       ? h(DocumentChromeActions, {
           themeMode: props.themeMode,
           onCycleTheme: props.onCycleTheme,

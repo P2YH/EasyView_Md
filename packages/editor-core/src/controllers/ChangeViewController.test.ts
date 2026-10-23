@@ -247,6 +247,14 @@ it('restores the visible source line when leaving change view', () => {
   expect(revealSourceAnchor.mock.calls[0][0].line).toBeGreaterThanOrEqual(1);
 });
 
+it('Markdown FileHeader is click-to-toggle only (no hover peek)', () => {
+  const css = fs.readFileSync(path.resolve(__dirname, '../webview.css'), 'utf8');
+  expect(css).not.toContain('mdpre-zalman-collapsible-header');
+  expect(css).not.toMatch(/\.file-header-bar:hover/);
+  expect(css).not.toMatch(/\.file-header-bar:focus-within/);
+  expect(css).not.toContain('translateY(calc(-100% + 6px))');
+});
+
 it('lets the Change View host scroll horizontally when wrapping is off', () => {
   const css = fs.readFileSync(path.resolve(__dirname, '../webview.css'), 'utf8');
   expect(css).toContain('#editor-scroll-area.easyview-change-scroll-host');

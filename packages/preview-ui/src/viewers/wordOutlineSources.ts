@@ -5,6 +5,7 @@ import {
   normalizeHeadingText,
   readDocxParagraphSamples,
   readStyleOutlineLevels,
+  resolveStyleOutlineLevels,
   type WordOutlineHeading,
   type WordParagraphSample,
 } from './wordOutline';
@@ -39,23 +40,43 @@ interface LayoutLike {
   pages: ReadonlyArray<{ size: { w: number; h: number }; fragments: ReadonlyArray<{ y: number; pmStart?: number }> }>;
 }
 
+interface DocxStyleLike {
+  styleId: string;
+  type: string;
+  name?: string;
+  basedOn?: string;
+  pPr?: { outlineLevel?: number };
+}
+
 export interface DocxOutlineEditor {
   getEditorRef(): {
     getView(): { state: { doc: PmNodeLike } } | null;
     getLayout(): LayoutLike | null;
   } | null;
+  getDocument(): { package: { styles?: { styles?: readonly DocxStyleLike[] } } } | null;
   scrollToPosition(pmPos: number): void;
 }
 
+/** Style id → outline level for the document's paragraph styles (WPS ids such as "2" carry it only on the style). */
+export function docxStyleOutlineLevels(styles: readonly DocxStyleLike[] | undefined): Map<string, number> {
+  return resolveStyleOutlineLevels((styles ?? []).filter(style => style.type === 'paragraph').map(style => ({
+    styleId: style.styleId,
+    name: style.name ?? null,
+    outlineLevel: style.pPr?.outlineLevel ?? null,
+    basedOn: style.basedOn ?? null,
+  })));
+}
+
 /** Outline samples from a ProseMirror document produced by docx-editor; `positions[i]` is sample i's pos. */
-export function samplesFromPmDoc(doc: PmNodeLike): { samples: WordParagraphSample[]; positions: number[] } {
+export function samplesFromPmDoc(doc: PmNodeLike, styleLevels: ReadonlyMap<string, number> = new Map()): { samples: WordParagraphSample[]; positions: number[] } {
   const samples: WordParagraphSample[] = [];
   const positions: number[] = [];
   doc.descendants((node, pos, parent) => {
     if (node.type.name !== 'paragraph') return true;
     const rawLevel = node.attrs.outlineLevel;
+    const styleId = typeof node.attrs.styleId === 'string' ? node.attrs.styleId : null;
     let styleLevel = typeof rawLevel === 'number' ? rawLevel : null;
-    if (styleLevel == null) styleLevel = headingLevelFromStyleName(typeof node.attrs.styleId === 'string' ? node.attrs.styleId : null);
+    if (styleLevel == null && styleId) styleLevel = styleLevels.get(styleId) ?? headingLevelFromStyleName(styleId);
     let bold = true;
     let sawText = false;
     let fontSize: number | null = null;
@@ -74,6 +95,7 @@ export function samplesFromPmDoc(doc: PmNodeLike): { samples: WordParagraphSampl
       styleLevel,
       bold: sawText && bold,
       fontSize,
+      numbered: node.attrs.numPr != null && node.attrs.listIsBullet !== true,
       excluded: !!parent && parent.type.name !== 'doc',
     });
     positions.push(pos);
@@ -130,9 +152,10 @@ export function createDocxEditorOutlineSource(
 
   return {
     collect() {
-      const view = getEditor()?.getEditorRef()?.getView();
+      const editor = getEditor();
+      const view = editor?.getEditorRef()?.getView();
       if (!view) return null;
-      const result = samplesFromPmDoc(view.state.doc);
+      const result = samplesFromPmDoc(view.state.doc, docxStyleOutlineLevels(editor?.getDocument()?.package.styles?.styles));
       positions = result.positions;
       return extractWordHeadings(result.samples);
     },

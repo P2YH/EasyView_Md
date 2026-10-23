@@ -62,12 +62,20 @@ export function installPreviewSidebarToggle(toolbar: HTMLElement, root: HTMLElem
   toolbarObserver.observe(toolbar, { childList: true });
   const rootObserver = new MutationObserver(scheduleSync);
   rootObserver.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  const sidebarAttrObserver = new MutationObserver(() => {
+    const nextHidden = root.dataset.previewSidebar === 'hidden';
+    if (nextHidden === hidden) return;
+    hidden = nextHidden;
+    button.setAttribute('aria-pressed', String(!hidden));
+  });
+  sidebarAttrObserver.observe(root, { attributes: true, attributeFilter: ['data-preview-sidebar'] });
   apply();
   sync();
 
   return () => {
     toolbarObserver.disconnect();
     rootObserver.disconnect();
+    sidebarAttrObserver.disconnect();
     if (frame) win.cancelAnimationFrame(frame);
     button.removeEventListener('click', onClick);
     button.remove();

@@ -74,7 +74,8 @@ test('keeps Markdown dirty content while preview tabs occupy the central surface
     await expect(page.locator('#file-preview-root')).toBeVisible();
     await expect(page.locator('#desktop-editor-mount')).toBeHidden();
     await expect(page.locator('.preview-header')).toHaveCount(0);
-    await expect(page.locator('.preview-text-viewer')).toContainText('Preview content.');
+    await expect(page.locator('.preview-text-editor-host')).toHaveAttribute('data-editor-ready', '1', { timeout: 15_000 });
+    await expect(page.locator('.preview-text-shell .cm-content')).toContainText('Preview content.');
 
     await page.locator('.workspace-entry-name', { hasText: 'preview.txt' }).click({ button: 'right' });
     await expect(page.locator('.workspace-entry.selected .workspace-entry-name')).toContainText('preview.txt');

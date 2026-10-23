@@ -2,7 +2,7 @@
   "name": "easyview-md",
   "displayName": "EasyView_Md",
   "description": "%extension.description%",
-  "version": "2.2.5",
+  "version": "2.2.34",
   "publisher": "zhangxy",
   "license": "MIT",
   "private": true,
@@ -133,6 +133,264 @@
           },
           {
             "filenamePattern": "*.toml"
+          },
+          {
+            "filenamePattern": "*.py"
+          },
+          {
+            "filenamePattern": "*.pyw"
+          },
+          {
+            "filenamePattern": "*.pyi"
+          },
+          {
+            "filenamePattern": "*.sql"
+          },
+          {
+            "filenamePattern": "*.js"
+          },
+          {
+            "filenamePattern": "*.mjs"
+          },
+          {
+            "filenamePattern": "*.cjs"
+          },
+          {
+            "filenamePattern": "*.jsx"
+          },
+          {
+            "filenamePattern": "*.ts"
+          },
+          {
+            "filenamePattern": "*.mts"
+          },
+          {
+            "filenamePattern": "*.cts"
+          },
+          {
+            "filenamePattern": "*.tsx"
+          },
+          {
+            "filenamePattern": "*.css"
+          },
+          {
+            "filenamePattern": "*.scss"
+          },
+          {
+            "filenamePattern": "*.sass"
+          },
+          {
+            "filenamePattern": "*.less"
+          },
+          {
+            "filenamePattern": "*.c"
+          },
+          {
+            "filenamePattern": "*.h"
+          },
+          {
+            "filenamePattern": "*.cpp"
+          },
+          {
+            "filenamePattern": "*.cc"
+          },
+          {
+            "filenamePattern": "*.cxx"
+          },
+          {
+            "filenamePattern": "*.hpp"
+          },
+          {
+            "filenamePattern": "*.hh"
+          },
+          {
+            "filenamePattern": "*.hxx"
+          },
+          {
+            "filenamePattern": "*.rs"
+          },
+          {
+            "filenamePattern": "*.go"
+          },
+          {
+            "filenamePattern": "*.swift"
+          },
+          {
+            "filenamePattern": "*.m"
+          },
+          {
+            "filenamePattern": "*.mm"
+          },
+          {
+            "filenamePattern": "*.java"
+          },
+          {
+            "filenamePattern": "*.kt"
+          },
+          {
+            "filenamePattern": "*.kts"
+          },
+          {
+            "filenamePattern": "*.groovy"
+          },
+          {
+            "filenamePattern": "*.gradle"
+          },
+          {
+            "filenamePattern": "*.scala"
+          },
+          {
+            "filenamePattern": "*.cs"
+          },
+          {
+            "filenamePattern": "*.fs"
+          },
+          {
+            "filenamePattern": "*.vb"
+          },
+          {
+            "filenamePattern": "*.sh"
+          },
+          {
+            "filenamePattern": "*.bash"
+          },
+          {
+            "filenamePattern": "*.zsh"
+          },
+          {
+            "filenamePattern": "*.fish"
+          },
+          {
+            "filenamePattern": "*.ps1"
+          },
+          {
+            "filenamePattern": "*.bat"
+          },
+          {
+            "filenamePattern": "*.cmd"
+          },
+          {
+            "filenamePattern": "*.rb"
+          },
+          {
+            "filenamePattern": "*.php"
+          },
+          {
+            "filenamePattern": "*.lua"
+          },
+          {
+            "filenamePattern": "*.pl"
+          },
+          {
+            "filenamePattern": "*.pm"
+          },
+          {
+            "filenamePattern": "*.r"
+          },
+          {
+            "filenamePattern": "*.dart"
+          },
+          {
+            "filenamePattern": "*.jl"
+          },
+          {
+            "filenamePattern": "*.ex"
+          },
+          {
+            "filenamePattern": "*.exs"
+          },
+          {
+            "filenamePattern": "*.hs"
+          },
+          {
+            "filenamePattern": "*.clj"
+          },
+          {
+            "filenamePattern": "*.cljs"
+          },
+          {
+            "filenamePattern": "*.vue"
+          },
+          {
+            "filenamePattern": "*.svelte"
+          },
+          {
+            "filenamePattern": "*.astro"
+          },
+          {
+            "filenamePattern": "*.proto"
+          },
+          {
+            "filenamePattern": "*.graphql"
+          },
+          {
+            "filenamePattern": "*.gql"
+          },
+          {
+            "filenamePattern": "*.tf"
+          },
+          {
+            "filenamePattern": "*.hcl"
+          },
+          {
+            "filenamePattern": "*.zig"
+          },
+          {
+            "filenamePattern": "*.nim"
+          },
+          {
+            "filenamePattern": "*.env"
+          },
+          {
+            "filenamePattern": ".env"
+          },
+          {
+            "filenamePattern": ".editorconfig"
+          },
+          {
+            "filenamePattern": ".gitignore"
+          },
+          {
+            "filenamePattern": ".dockerignore"
+          },
+          {
+            "filenamePattern": ".npmrc"
+          },
+          {
+            "filenamePattern": ".prettierrc"
+          },
+          {
+            "filenamePattern": ".eslintrc"
+          },
+          {
+            "filenamePattern": "Dockerfile"
+          },
+          {
+            "filenamePattern": "Makefile"
+          },
+          {
+            "filenamePattern": "makefile"
+          },
+          {
+            "filenamePattern": "GNUmakefile"
+          },
+          {
+            "filenamePattern": "Jenkinsfile"
+          },
+          {
+            "filenamePattern": "CMakeLists.txt"
+          },
+          {
+            "filenamePattern": "Gemfile"
+          },
+          {
+            "filenamePattern": "Podfile"
+          },
+          {
+            "filenamePattern": "Procfile"
+          },
+          {
+            "filenamePattern": "Vagrantfile"
           },
           {
             "filenamePattern": "*.png"
@@ -271,6 +529,21 @@
           },
           {
             "filenamePattern": "*.cbr"
+          },
+          {
+            "filenamePattern": "*.epub"
+          },
+          {
+            "filenamePattern": "*.ttf"
+          },
+          {
+            "filenamePattern": "*.otf"
+          },
+          {
+            "filenamePattern": "*.woff"
+          },
+          {
+            "filenamePattern": "*.woff2"
           },
           {
             "filenamePattern": "*.mp4"

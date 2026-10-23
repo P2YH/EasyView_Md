@@ -95,6 +95,18 @@ describe('PreviewSessionStore', () => {
     expect(Buffer.compare(onDisk, next)).toBe(0);
   });
 
+  it('allows text-route write-back for source files', async () => {
+    const root = await workspace();
+    await fs.writeFile(path.join(root, 'app.py'), 'print(1)\n');
+    const sessions = new PreviewSessionStore();
+    const descriptor = await sessions.open(root, 'app.py');
+    expect(descriptor.route).toBe('text');
+    const next = Buffer.from('print(2)\n', 'utf8');
+    const written = await sessions.writeBytes(descriptor.sessionId, next);
+    expect(written.size).toBe(next.length);
+    expect(await fs.readFile(path.join(root, 'app.py'), 'utf8')).toBe('print(2)\n');
+  });
+
   it('allows word-route write-back for docx bytes', async () => {
     const root = await workspace();
     // Minimal zip-shaped placeholder is enough to exercise session write gating.

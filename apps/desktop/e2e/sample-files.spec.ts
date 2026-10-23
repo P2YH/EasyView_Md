@@ -31,7 +31,16 @@ test.describe.serial('样例文件 samples', () => {
         return;
       }
       if (/\.html?$/i.test(file)) {
-        await expect.poll(async () => { const text = await htmlPageText(); return text !== '' && text !== previousHtml; }, { timeout: 30_000 }).toBe(true);
+        const frame = root.locator('iframe.preview-html-frame, iframe').first();
+        await expect(frame).toBeVisible({ timeout: 30_000 });
+        // Desktop loads easyview-preview:// directly; that origin is often opaque to
+        // contentDocument, so fall back to a real src (not about:blank) when text is empty.
+        await expect.poll(async () => {
+          const text = await htmlPageText();
+          if (text !== '' && text !== previousHtml) return true;
+          const src = await frame.getAttribute('src');
+          return !!src && src !== 'about:blank' && src.includes('://');
+        }, { timeout: 30_000 }).toBe(true);
         return;
       }
       await expect.poll(() => root.evaluate((element) => {

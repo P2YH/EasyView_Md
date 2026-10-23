@@ -3,6 +3,7 @@ import { defineMessages } from '@easyview/contracts/i18n';
 export const tPreview = defineMessages({
   'zh-CN': {
     'unsupportedType': '当前文件类型不在 EasyView 一期预览范围内。',
+    'desktopOnlyType': '「{route}」预览仅支持 EasyView 桌面版（插件侧未提供该宿主能力）。',
     'readFileFailed': '无法读取预览文件。',
     'fileTooLarge': '文件超过 {size} MiB 的 {route} 预览上限。',
     'readTextFailed': '文本读取失败',
@@ -14,6 +15,7 @@ export const tPreview = defineMessages({
   },
   en: {
     'unsupportedType': 'This file type is not supported by EasyView preview yet.',
+    'desktopOnlyType': '“{route}” preview is available only in EasyView Desktop (this extension host does not provide it).',
     'readFileFailed': 'Could not read the preview file.',
     'fileTooLarge': 'The file exceeds the {size} MiB {route} preview limit.',
     'readTextFailed': 'Failed to read text',

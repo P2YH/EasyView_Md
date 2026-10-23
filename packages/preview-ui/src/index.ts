@@ -9,9 +9,12 @@ export type {
 } from './types';
 export { PreviewAssetsProvider, usePreviewAssets } from './assets';
 export {
+  DESKTOP_ONLY_PREVIEW_ROUTES,
   PHASE1_FILENAME_PATTERNS,
   PHASE1_PREVIEW_ROUTES,
+  isDesktopOnlyPreviewRoute,
   isPhase1PreviewRoute,
+  type DesktopOnlyPreviewRoute,
   type Phase1PreviewRoute,
 } from './phase1';
 export { PreviewShell, type PreviewShellProps } from './PreviewShell';

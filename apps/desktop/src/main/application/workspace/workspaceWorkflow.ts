@@ -477,6 +477,10 @@ export function showWorkspaceContextMenu(sender: Electron.WebContents, relativeP
       });
       return;
     }
+    if (command === 'customizeIcon') {
+      sender.send('workspace.contextCommand', 'customizeIcon', relativePath);
+      return;
+    }
     if (command === 'openPreview') { void openWorkspacePreview(relativePath); return; }
     if (command === 'openWith') { showOpenWithPicker(relativePath, owner); return; }
     if (command === 'openDefault') { void shell.openPath(workspaceEntryAbsolutePath(relativePath)); return; }
@@ -508,6 +512,10 @@ export function showWorkspaceContextMenu(sender: Electron.WebContents, relativeP
     },
     { type: 'separator' },
   ] : [];
+  const customizeIconItems: Electron.MenuItemConstructorOptions[] = isDirectory && !isRoot ? [
+    { label: tWorkspace('menu.customizeIcon'), click: () => run('customizeIcon') },
+    { type: 'separator' },
+  ] : [];
   const template: Electron.MenuItemConstructorOptions[] = [
     ...createItems,
     { label: tWorkspace('menu.openPreview'), enabled: isFile, click: () => run('openPreview') },
@@ -515,6 +523,7 @@ export function showWorkspaceContextMenu(sender: Electron.WebContents, relativeP
     { label: tWorkspace('menu.openDefault'), enabled: isFile, click: () => run('openDefault') },
     { label: tWorkspace(process.platform === 'darwin' ? 'menu.revealInFinder' : 'menu.revealInFileExplorer'), click: () => run('reveal') },
     { type: 'separator' },
+    ...customizeIconItems,
     { label: tWorkspace('menu.copy'), accelerator: 'CmdOrCtrl+C', enabled: !isRoot, click: () => run('copy') },
     { label: tWorkspace('menu.paste'), accelerator: 'CmdOrCtrl+V', enabled: canPaste, click: () => run('paste') },
     { label: tWorkspace('menu.copyPath'), enabled: !isRoot, click: () => run('copyPath') },

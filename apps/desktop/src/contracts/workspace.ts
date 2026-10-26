@@ -247,7 +247,8 @@ export type WorkspaceContextCommand =
   | 'rename'
   | 'delete'
   | 'beginCreateFile'
-  | 'beginCreateFolder';
+  | 'beginCreateFolder'
+  | 'customizeIcon';
 
 export type DesktopTabContextCommand =
   | 'close'

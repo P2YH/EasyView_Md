@@ -12,7 +12,6 @@ import {
   getCustomFolderIcon,
   setCustomFolderIcon,
   getFolderIconDefinition,
-  getAllFolderIconThemes,
   type FolderIconTheme,
   type FolderIconVariant,
   filterWorkspaceEntriesByDotVisibility,
@@ -124,6 +123,7 @@ export class WorkspaceExplorerView {
   private contextMenuEl: HTMLElement | null = null;
   private typeMenuEl: HTMLElement | null = null;
   private contextSubmenuEl: HTMLElement | null = null;
+  private contextSubmenuOwner: HTMLButtonElement | null = null;
   private timestampTooltipEl: HTMLElement | null = null;
   private selectionFollowsActive = true;
   private activeRelativePath: string | null = null;
@@ -145,8 +145,10 @@ export class WorkspaceExplorerView {
     if (!menu) return;
     const hit = document.elementFromPoint(event.clientX, event.clientY);
     const hovered = hit?.closest<HTMLButtonElement>('button');
+    if (hovered && hovered !== this.contextSubmenuOwner && menu.contains(hovered)) this.closeContextSubmenu();
     for (const button of menu.querySelectorAll<HTMLButtonElement>(':scope > button')) {
-      button.classList.toggle('is-hovered', button === hovered && !button.disabled);
+      const active = button === hovered || button === this.contextSubmenuOwner;
+      button.classList.toggle('is-hovered', active && !button.disabled);
     }
   };
 
@@ -1040,6 +1042,7 @@ export class WorkspaceExplorerView {
             color: '#dcb67a',
             svg: customDef.svg,
           };
+          icon.classList.add('is-custom-folder-icon');
         } else {
           iconDesc = resolveWorkspaceTreeIcon({
             kind: entry.kind,
@@ -1193,7 +1196,8 @@ export class WorkspaceExplorerView {
     chevron.textContent = '›';
     button.append(label, chevron);
     const show = () => {
-      this.contextSubmenuEl?.remove();
+      if (this.contextSubmenuOwner === button) return;
+      this.closeContextSubmenu();
       const sub = document.createElement('div');
       sub.className = 'workspace-file-context-menu workspace-context-submenu';
       sub.setAttribute('role', 'menu');
@@ -1208,14 +1212,23 @@ export class WorkspaceExplorerView {
       }
       document.body.appendChild(sub);
       this.contextSubmenuEl = sub;
+      this.contextSubmenuOwner = button;
+      const pad = 4;
       const parentRect = button.getBoundingClientRect();
-      let left = parentRect.right - 4;
+      const { width, height } = sub.getBoundingClientRect();
+      let left = parentRect.right - pad;
       let top = parentRect.top;
-      sub.style.left = `${left}px`;
-      sub.style.top = `${top}px`;
-      const rect = sub.getBoundingClientRect();
-      if (rect.right > window.innerWidth) left = Math.max(0, parentRect.left - rect.width + 4);
-      if (rect.bottom > window.innerHeight) top = Math.max(0, window.innerHeight - rect.height - 4);
+      if (left + width > window.innerWidth - pad) {
+        const flipped = parentRect.left - width + pad;
+        if (flipped >= pad) {
+          left = flipped;
+        } else {
+          // Too narrow for either side: hug the right edge and drop below the item so it stays visible.
+          left = Math.max(pad, window.innerWidth - width - pad);
+          top = parentRect.bottom;
+        }
+      }
+      if (top + height > window.innerHeight - pad) top = Math.max(pad, window.innerHeight - height - pad);
       sub.style.left = `${left}px`;
       sub.style.top = `${top}px`;
     };
@@ -1341,11 +1354,16 @@ export class WorkspaceExplorerView {
 
   private closeContextMenu(): void {
     window.removeEventListener('pointermove', this.handleContextMenuPointerMove, true);
-    this.contextSubmenuEl?.remove();
-    this.contextSubmenuEl = null;
+    this.closeContextSubmenu();
     this.contextMenuEl?.remove();
     this.contextMenuEl = null;
     this.closeTypeMenu();
+  }
+
+  private closeContextSubmenu(): void {
+    this.contextSubmenuEl?.remove();
+    this.contextSubmenuEl = null;
+    this.contextSubmenuOwner = null;
   }
 
   private closeTypeMenu(): void {
@@ -1507,9 +1525,10 @@ export class WorkspaceExplorerView {
   private openIconPicker(relativePath: string): void {
     if (!this.rootUri) return;
     const rootPath = this.rootUri;
-    
-    const themes = getAllFolderIconThemes();
+    const current = getCustomFolderIcon(rootPath, relativePath);
+
     const tabLabels: Record<FolderIconTheme, string> = {
+      default: tExplorer('iconTab.default'),
       outline: tExplorer('iconTab.outline'),
       'filled-line': tExplorer('iconTab.filledLine'),
       flat: tExplorer('iconTab.flat'),
@@ -1521,25 +1540,36 @@ export class WorkspaceExplorerView {
       lunar: tExplorer('iconTab.lunar'),
       valentine: tExplorer('iconTab.valentine'),
     };
-    
-    openFolderIconPicker({
-      title: tExplorer('customizeIconTitle'),
-      resetLabel: tExplorer('resetIcon'),
-      tabLabels,
-      onSelect: (theme: FolderIconTheme, variant: FolderIconVariant) => {
-        setCustomFolderIcon(rootPath, relativePath, { theme, variant });
-        void this.loadDirectory(parentRelativePath(relativePath));
-        if (relativePath === '') void this.refreshExpanded();
-      },
-      onReset: () => {
-        setCustomFolderIcon(rootPath, relativePath, null);
-        void this.loadDirectory(parentRelativePath(relativePath));
-        if (relativePath === '') void this.refreshExpanded();
-      },
-      onClose: () => {
-        // Dialog closed without selection
-      },
-    });
+
+    try {
+      openFolderIconPicker({
+        title: tExplorer('customizeIconTitle'),
+        resetLabel: tExplorer('resetIcon'),
+        tabLabels,
+        layout: 'sections',
+        selected: current,
+        onSelect: (theme: FolderIconTheme, variant: FolderIconVariant) => {
+          // Picking the Default group clears any custom mapping (same as reset).
+          if (theme === 'default') setCustomFolderIcon(rootPath, relativePath, null);
+          else setCustomFolderIcon(rootPath, relativePath, { theme, variant });
+          this.render();
+          void this.loadDirectory(parentRelativePath(relativePath));
+          if (relativePath === '') void this.refreshExpanded();
+        },
+        onReset: () => {
+          setCustomFolderIcon(rootPath, relativePath, null);
+          this.render();
+          void this.loadDirectory(parentRelativePath(relativePath));
+          if (relativePath === '') void this.refreshExpanded();
+        },
+        onClose: () => {
+          // Dialog closed without selection
+        },
+      });
+    } catch (error) {
+      console.error('[EasyView] openFolderIconPicker failed', error);
+      this.showError(error instanceof Error ? error.message : String(error));
+    }
   }
 
   private renderRenameInput(entry: WorkspaceExplorerEntry): HTMLInputElement {

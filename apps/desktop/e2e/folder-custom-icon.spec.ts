@@ -51,9 +51,13 @@ test('folder context customize icon picker applies and resets', async () => {
     const tabs = page.locator('.folder-icon-picker-tab');
     await expect(tabs).toHaveCount(10);
     await expect(tabs.first()).toHaveClass(/active/);
+    await expect(tabs.first()).toHaveText(/默认|Default/);
+    // Uncustomized folder: Default tile is selected
+    await expect(page.locator('.folder-icon-picker-tile.selected')).toHaveCount(1);
+    await expect(page.locator('.folder-icon-picker-tile')).toHaveCount(1);
 
     // Switch through a few tabs and ensure grids render
-    for (const label of ['Flat', 'macOS', 'Christmas', 'Valentine']) {
+    for (const label of ['Flat', 'macOS', 'Lunar', 'Valentine']) {
       await tabs.filter({ hasText: new RegExp(`^${label}$`) }).click();
       await expect(page.locator('.folder-icon-picker-tab.active')).toHaveText(label);
       await expect(page.locator('.folder-icon-picker-tile')).toHaveCount(14);

@@ -11,7 +11,6 @@ import {
   getCustomFolderIcon,
   setCustomFolderIcon,
   getFolderIconDefinition,
-  getAllFolderIconThemes,
   type FolderIconTheme,
   type FolderIconVariant,
 } from '@easyview/contracts';
@@ -925,6 +924,7 @@ export class WorkspaceExplorer {
             color: '#dcb67a',
             svg: customDef.svg,
           };
+          icon.classList.add('is-custom-folder-icon');
         } else {
           iconDesc = resolveWorkspaceTreeIcon({
             kind: entry.kind,
@@ -1055,9 +1055,10 @@ export class WorkspaceExplorer {
   private openIconPicker(relativePath: string): void {
     if (!this.state?.rootPath) return;
     const rootPath = this.state.rootPath;
-    
-    const themes = getAllFolderIconThemes();
+    const current = getCustomFolderIcon(rootPath, relativePath);
+
     const tabLabels: Record<FolderIconTheme, string> = {
+      default: tExplorer('iconTab.default'),
       outline: tExplorer('iconTab.outline'),
       'filled-line': tExplorer('iconTab.filledLine'),
       flat: tExplorer('iconTab.flat'),
@@ -1069,18 +1070,23 @@ export class WorkspaceExplorer {
       lunar: tExplorer('iconTab.lunar'),
       valentine: tExplorer('iconTab.valentine'),
     };
-    
+
     openFolderIconPicker({
       title: tExplorer('customizeIconTitle'),
       resetLabel: tExplorer('resetIcon'),
       tabLabels,
+      selected: current,
       onSelect: (theme: FolderIconTheme, variant: FolderIconVariant) => {
-        setCustomFolderIcon(rootPath, relativePath, { theme, variant });
+        // Picking the Default group clears any custom mapping (same as reset).
+        if (theme === 'default') setCustomFolderIcon(rootPath, relativePath, null);
+        else setCustomFolderIcon(rootPath, relativePath, { theme, variant });
+        this.render();
         void this.loadDirectory(parentRelativePath(relativePath));
         if (relativePath === '') void this.refreshExpanded();
       },
       onReset: () => {
         setCustomFolderIcon(rootPath, relativePath, null);
+        this.render();
         void this.loadDirectory(parentRelativePath(relativePath));
         if (relativePath === '') void this.refreshExpanded();
       },

@@ -1,9 +1,11 @@
 /**
  * Custom folder icon definitions for workspace tree customization.
- * Provides 10 theme tabs with various icon styles and functional variants.
+ * Provides theme tabs with various icon styles and functional variants.
+ * Christmas assets remain for backward-compatible saved mappings but are not listed in the picker.
  */
 
 export type FolderIconTheme =
+  | 'default'
   | 'outline'
   | 'filled-line'
   | 'flat'
@@ -37,6 +39,31 @@ export interface FolderIconDefinition {
   svg: string;
   color?: string;
 }
+
+
+/**
+ * Default theme - the same beige Seti-style folder used by the directory tree
+ * when no custom icon is assigned (closed silhouette, #dcb67a).
+ */
+const DEFAULT_FOLDER_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="#dcb67a" aria-hidden="true"><path d="M27.4 8.5H15.8V7.2c0-1.3-1-2.3-2.3-2.3H3.5v20.3h25.1V10.8c0-1.3-.9-2.3-2.2-2.3z"/></svg>';
+
+const DEFAULT_ICONS: Record<FolderIconVariant, string> = {
+  plain: DEFAULT_FOLDER_SVG,
+  lock: DEFAULT_FOLDER_SVG,
+  cloud: DEFAULT_FOLDER_SVG,
+  music: DEFAULT_FOLDER_SVG,
+  code: DEFAULT_FOLDER_SVG,
+  clock: DEFAULT_FOLDER_SVG,
+  star: DEFAULT_FOLDER_SVG,
+  search: DEFAULT_FOLDER_SVG,
+  plus: DEFAULT_FOLDER_SVG,
+  check: DEFAULT_FOLDER_SVG,
+  list: DEFAULT_FOLDER_SVG,
+  gift: DEFAULT_FOLDER_SVG,
+  tree: DEFAULT_FOLDER_SVG,
+  bell: DEFAULT_FOLDER_SVG,
+};
 
 /**
  * Outline theme - clean geometric line icons
@@ -239,6 +266,7 @@ const VALENTINE_ICONS: Record<FolderIconVariant, string> = {
 };
 
 const ALL_THEMES: Record<FolderIconTheme, Record<FolderIconVariant, string>> = {
+  default: DEFAULT_ICONS,
   outline: OUTLINE_ICONS,
   'filled-line': FILLED_LINE_ICONS,
   flat: FLAT_ICONS,
@@ -260,9 +288,19 @@ export function getFolderIconDefinition(theme: FolderIconTheme, variant: FolderI
 }
 
 export function getAllFolderIconThemes(): FolderIconTheme[] {
-  return Object.keys(ALL_THEMES) as FolderIconTheme[];
+  return (Object.keys(ALL_THEMES) as FolderIconTheme[]).filter((theme) => theme !== 'christmas');
 }
 
 export function getAllFolderIconVariants(): FolderIconVariant[] {
   return ['plain', 'lock', 'cloud', 'music', 'code', 'clock', 'star', 'search', 'plus', 'check', 'list', 'gift', 'tree', 'bell'];
+}
+
+/** Variants shown in the picker for a theme (default is a single recovery tile). */
+export function getFolderIconVariantsForTheme(theme: FolderIconTheme): FolderIconVariant[] {
+  if (theme === 'default') return ['plain'];
+  return getAllFolderIconVariants();
+}
+
+export function isDefaultFolderIconTheme(theme: FolderIconTheme): boolean {
+  return theme === 'default';
 }

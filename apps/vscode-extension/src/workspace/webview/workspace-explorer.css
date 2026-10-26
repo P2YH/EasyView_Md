@@ -473,6 +473,18 @@ body {
   flex: none;
 }
 
+/* Keep custom folder SVGs at the same CSS box as default tree icons (16×16).
+   Their 24 viewBox painted mass is close to the default 32 viewBox; do not shrink. */
+.workspace-entry-icon.is-custom-folder-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.workspace-icon-large.is-custom-icon svg {
+  width: 46px;
+  height: 46px;
+}
+
 .workspace-entry-name > span:not(.workspace-chevron):not(.workspace-entry-icon) {
   flex: none;
   overflow: hidden;
@@ -722,4 +734,194 @@ body {
 .workspace-context-submenu,
 .workspace-new-file-type-menu {
   z-index: 10001;
+}
+
+/* Custom folder icon picker — sized for the narrow EasyView sidebar webview */
+.folder-icon-picker-overlay {
+  container-type: inline-size;
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  padding: 6px;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.45);
+  animation: folderIconPickerFadeIn 150ms ease;
+}
+@keyframes folderIconPickerFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.folder-icon-picker-dialog {
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background, #1e1e1e));
+  border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  animation: folderIconPickerSlideIn 160ms ease;
+  box-sizing: border-box;
+}
+@keyframes folderIconPickerSlideIn { from { transform: translateY(-8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+.folder-icon-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
+  flex: none;
+}
+.folder-icon-picker-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--vscode-editor-foreground);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.folder-icon-picker-close {
+  background: none;
+  border: none;
+  color: var(--vscode-editor-foreground);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.folder-icon-picker-close:hover { background: var(--vscode-toolbar-hoverBackground, rgba(128,128,128,0.2)); }
+
+.folder-icon-picker-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 8px 6px;
+  border-bottom: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
+  overflow: visible;
+  flex: none;
+}
+.folder-icon-picker-dialog[data-layout="sections"] .folder-icon-picker-tabs { display: none; }
+
+.folder-icon-picker-tab {
+  background: var(--vscode-button-secondaryBackground, rgba(128,128,128,0.2));
+  border: none;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  color: var(--vscode-button-secondaryForeground, inherit);
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+.folder-icon-picker-tab:hover { background: var(--vscode-button-secondaryHoverBackground, rgba(128,128,128,0.3)); }
+.folder-icon-picker-tab.active {
+  background: var(--vscode-button-background, #0e639c);
+  color: var(--vscode-button-foreground, #fff);
+  font-weight: 600;
+}
+
+.folder-icon-picker-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px;
+  min-height: 0;
+}
+.folder-icon-picker-dialog[data-layout="sections"] .folder-icon-picker-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 10px 8px 12px;
+}
+
+.folder-icon-picker-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: none;
+}
+.folder-icon-picker-section-title {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 4px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+  color: var(--vscode-descriptionForeground, color-mix(in srgb, var(--vscode-editor-foreground) 72%, transparent));
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background, #1e1e1e));
+}
+
+.folder-icon-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  gap: 6px;
+}
+.folder-icon-picker-tile {
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
+  border-radius: 6px;
+  padding: 6px;
+  cursor: pointer;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+.folder-icon-picker-tile:hover {
+  border-color: var(--vscode-focusBorder, #007fd4);
+  background: var(--vscode-list-hoverBackground, rgba(128,128,128,0.15));
+}
+.folder-icon-picker-tile.selected {
+  border-color: var(--vscode-focusBorder, #007fd4);
+  background: var(--vscode-list-activeSelectionBackground, rgba(0, 127, 212, 0.18));
+  box-shadow: inset 0 0 0 1px var(--vscode-focusBorder, #007fd4);
+}
+.folder-icon-picker-tile svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+  color: var(--vscode-editor-foreground);
+}
+
+.folder-icon-picker-footer {
+  padding: 8px 10px;
+  border-top: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.35));
+  display: flex;
+  justify-content: flex-end;
+  flex: none;
+}
+.folder-icon-picker-reset {
+  background: var(--vscode-button-secondaryBackground, rgba(128,128,128,0.2));
+  border: none;
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 11px;
+  color: var(--vscode-button-secondaryForeground, inherit);
+  cursor: pointer;
+}
+.folder-icon-picker-reset:hover { background: var(--vscode-button-secondaryHoverBackground, rgba(128,128,128,0.3)); }
+
+/* Slightly roomier tiles when the sidebar itself is wider */
+@container (min-width: 320px) {
+  .folder-icon-picker-grid { grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 8px; }
+  .folder-icon-picker-tile svg { width: 26px; height: 26px; }
 }

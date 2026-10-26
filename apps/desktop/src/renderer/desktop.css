@@ -432,6 +432,8 @@ body.desktop-welcome-full:not(.desktop-ai-chat-on-welcome) #desktop-ai-chat-host
 .workspace-chevron.is-directory.is-expanded::before { transform: translateY(-1px) rotate(45deg); }
 .workspace-entry-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; line-height: 0; flex: none; color: inherit; }
 .workspace-entry-icon svg { display: block; width: 16px; height: 16px; flex: none; }
+.workspace-entry-icon.is-custom-folder-icon svg { width: 18px; height: 18px; }
+.workspace-icon-large.is-custom-icon svg { width: 46px; height: 46px; }
 .workspace-entry-name > span:not(.workspace-chevron):not(.workspace-entry-icon) { flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 22px; }
 /* Overlays the row tail on hover so no width is permanently reserved for it. */
 .workspace-entry-create {
@@ -766,6 +768,11 @@ body.desktop-welcome-active:not(.desktop-welcome-full) #version-guard-host { bac
 }
 .folder-icon-picker-tile:hover {
   border-color: var(--vscode-focusBorder); background: var(--vscode-list-hoverBackground); transform: scale(1.05);
+}
+.folder-icon-picker-tile.selected {
+  border-color: var(--vscode-focusBorder, #007fd4);
+  background: var(--vscode-list-activeSelectionBackground, rgba(0, 127, 212, 0.18));
+  box-shadow: inset 0 0 0 1px var(--vscode-focusBorder, #007fd4);
 }
 .folder-icon-picker-tile svg { width: 48px; height: 48px; display: block; color: var(--vscode-editor-foreground); }
 

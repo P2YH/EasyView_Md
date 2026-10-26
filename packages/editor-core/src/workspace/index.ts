@@ -5,4 +5,5 @@ export {
   type WorkspaceSettingsDialogOptions,
   type WorkspaceSettingsValues,
 } from './WorkspaceSettingsDialog';
+export { openFolderIconPicker } from './FolderIconPicker';
 export { EDITOR_MIN_WIDTH, PANEL_WIDTH_SANITY_MAX, maxPanelWidth, clampPanelWidth, sanitizePersistedPanelWidth } from '../runtime/panelWidth';

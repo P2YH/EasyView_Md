@@ -2,12 +2,19 @@ import { TimelinePanel } from '@easyview/editor-core/timeline';
 import {
   WorkspaceSearchPanel,
   openWorkspaceSettingsDialog,
+  openFolderIconPicker,
   type WorkspaceSettingsDialogHandle,
   type WorkspaceSettingsValues,
 } from '@easyview/editor-core/workspace';
 import type { TimelineClient, WorkspaceSearchResult } from '@easyview/contracts';
 import {
   describeWorkspaceEntryTimestamps,
+  getCustomFolderIcon,
+  setCustomFolderIcon,
+  getFolderIconDefinition,
+  getAllFolderIconThemes,
+  type FolderIconTheme,
+  type FolderIconVariant,
   filterWorkspaceEntriesByDotVisibility,
   normalizeWorkspaceViewRelativePath as normalizeRelativePath,
   parentOfWorkspaceViewRelativePath as parentRelativePath,
@@ -839,7 +846,17 @@ export class WorkspaceExplorerView {
       tile.classList.toggle('selected', this.selected.has(entry.relativePath));
       const icon = document.createElement('span');
       icon.className = entry.kind === 'directory' ? 'workspace-icon-large is-folder' : 'workspace-icon-large';
-      if (entry.kind !== 'directory') {
+      
+      // Check for custom folder icon
+      if (entry.kind === 'directory' && this.rootUri) {
+        const customIcon = getCustomFolderIcon(this.rootUri, entry.relativePath);
+        if (customIcon) {
+          const customDef = getFolderIconDefinition(customIcon.theme, customIcon.variant);
+          icon.classList.remove('is-folder');
+          icon.classList.add('is-custom-icon');
+          icon.innerHTML = customDef.svg;
+        }
+      } else if (entry.kind !== 'directory') {
         const descriptor = resolveWorkspaceTreeIcon({ kind: entry.kind, name: entry.name });
         icon.dataset.icon = descriptor.id;
         icon.innerHTML = descriptor.svg;
@@ -1010,11 +1027,33 @@ export class WorkspaceExplorerView {
       }
       const icon = document.createElement('span');
       icon.className = 'workspace-entry-icon';
-      const iconDesc = resolveWorkspaceTreeIcon({
-        kind: entry.kind,
-        name: entry.name,
-        expanded: entry.kind === 'directory' ? expanded : false,
-      });
+      
+      // Check for custom folder icon
+      let iconDesc;
+      if (entry.kind === 'directory' && this.rootUri) {
+        const customIcon = getCustomFolderIcon(this.rootUri, entry.relativePath);
+        if (customIcon) {
+          const customDef = getFolderIconDefinition(customIcon.theme, customIcon.variant);
+          iconDesc = {
+            id: `custom-${customIcon.theme}-${customIcon.variant}`,
+            codicon: 'folder',
+            color: '#dcb67a',
+            svg: customDef.svg,
+          };
+        } else {
+          iconDesc = resolveWorkspaceTreeIcon({
+            kind: entry.kind,
+            name: entry.name,
+            expanded,
+          });
+        }
+      } else {
+        iconDesc = resolveWorkspaceTreeIcon({
+          kind: entry.kind,
+          name: entry.name,
+          expanded: entry.kind === 'directory' ? expanded : false,
+        });
+      }
       icon.dataset.icon = iconDesc.id;
       icon.innerHTML = iconDesc.svg;
       name.append(chevron, icon);
@@ -1401,6 +1440,15 @@ export class WorkspaceExplorerView {
         : tExplorer('context.revealInFileExplorer'),
       action: () => this.post({ type: 'revealInOS', relativePath: entry.relativePath }),
     });
+    
+    if (entry.kind === 'directory') {
+      items.push({ label: '---', action: () => undefined });
+      items.push({
+        label: tExplorer('context.customizeIcon'),
+        action: () => this.openIconPicker(entry.relativePath),
+      });
+    }
+    
     items.push({ label: '---', action: () => undefined });
 
     if (writable) {
@@ -1454,6 +1502,44 @@ export class WorkspaceExplorerView {
       );
     }
     return items;
+  }
+
+  private openIconPicker(relativePath: string): void {
+    if (!this.rootUri) return;
+    const rootPath = this.rootUri;
+    
+    const themes = getAllFolderIconThemes();
+    const tabLabels: Record<FolderIconTheme, string> = {
+      outline: tExplorer('iconTab.outline'),
+      'filled-line': tExplorer('iconTab.filledLine'),
+      flat: tExplorer('iconTab.flat'),
+      glyph: tExplorer('iconTab.glyph'),
+      gradient: tExplorer('iconTab.gradient'),
+      macos: tExplorer('iconTab.macos'),
+      windows: tExplorer('iconTab.windows'),
+      christmas: tExplorer('iconTab.christmas'),
+      lunar: tExplorer('iconTab.lunar'),
+      valentine: tExplorer('iconTab.valentine'),
+    };
+    
+    openFolderIconPicker({
+      title: tExplorer('customizeIconTitle'),
+      resetLabel: tExplorer('resetIcon'),
+      tabLabels,
+      onSelect: (theme: FolderIconTheme, variant: FolderIconVariant) => {
+        setCustomFolderIcon(rootPath, relativePath, { theme, variant });
+        void this.loadDirectory(parentRelativePath(relativePath));
+        if (relativePath === '') void this.refreshExpanded();
+      },
+      onReset: () => {
+        setCustomFolderIcon(rootPath, relativePath, null);
+        void this.loadDirectory(parentRelativePath(relativePath));
+        if (relativePath === '') void this.refreshExpanded();
+      },
+      onClose: () => {
+        // Dialog closed without selection
+      },
+    });
   }
 
   private renderRenameInput(entry: WorkspaceExplorerEntry): HTMLInputElement {

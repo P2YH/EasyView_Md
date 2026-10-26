@@ -1,6 +1,7 @@
 name: Desktop Build
 
-# Layer 2: desktop build + Electron e2e on macOS and Windows. Unit tests run in ci.yml (layer 1).
+# Layer 2: desktop build + Electron e2e on macOS and Windows, then installs the DMG / NSIS setup
+# the same way release.yml does. Unit tests run in ci.yml (layer 1).
 on:
   workflow_dispatch:
   pull_request:
@@ -16,14 +17,23 @@ permissions:
 
 jobs:
   desktop:
+    name: ${{ matrix.name }}
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, windows-latest]
+        include:
+          - name: macOS
+            os: macos-14
+          - name: Windows
+            os: windows-latest
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -33,9 +43,8 @@ jobs:
       - run: npm run test:e2e:desktop
       - name: Show e2e failure context
         if: failure()
-        shell: bash
         run: find apps/desktop/test-results -name '*.md' -exec sh -c 'echo "== $1"; cat "$1"' _ {} \; || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: e2e-results-${{ matrix.os }}
@@ -44,3 +53,40 @@ jobs:
       - run: npm run package:desktop
       - run: npm run verify:desktop-package
       - run: npm run verify:desktop-runtime
+      - name: Read desktop version
+        id: version
+        run: echo "version=$(node -p "require('./apps/desktop/package.json').version")" >> "$GITHUB_OUTPUT"
+      - if: runner.os == 'macOS'
+        run: npm run make:dmg --workspace @easyview/desktop
+      - name: Install, launch and remove macOS DMG
+        if: runner.os == 'macOS'
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          bash .github/scripts/macos-install-test.sh \
+            "apps/desktop/out/make/dmg/arm64/EasyView_Md-$RELEASE_VERSION-arm64.dmg" \
+            "$RELEASE_VERSION" .github/test-sample.md logs-install
+      - name: Make Windows installer (NSIS)
+        if: runner.os == 'Windows'
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run make:nsis --workspace @easyview/desktop
+      - name: Install, launch and uninstall Windows setup
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          .\.github\scripts\windows-install-test.ps1 `
+            -SetupPath apps/desktop/out/nsis/EasyView_Md-win-x64-setup.exe `
+            -ExpectedVersion $env:RELEASE_VERSION `
+            -TestFile .github/test-sample.md `
+            -LogsDir logs-install
+      - name: Upload install test logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: install-test-${{ matrix.os }}
+          path: logs-install/
+          retention-days: 14
+          if-no-files-found: ignore

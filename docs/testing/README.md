@@ -29,10 +29,10 @@ Unit tests never ship: the extension bundles only esbuild entry points and `.vsc
 | Layer | What | Command | Workflow (trigger) |
 |---|---|---|---|
 | 1. Quick checks | typecheck, lint, architecture/i18n/brand checks, build, **all** unit tests | `npm run verify:quick` | `ci.yml`: ubuntu, push to `main`, PRs |
-| 2a. Desktop e2e | desktop build, Electron e2e, package/runtime checks | `npm run test:e2e:desktop` | `desktop-build.yml`: macos-14 + windows-latest, push to `main`, PRs |
+| 2a. Desktop e2e | desktop build, Electron e2e, package/runtime checks, DMG / NSIS install smoke | `npm run test:e2e:desktop` | `desktop-build.yml`: macos-14 + windows-latest, push to `main`, PRs |
 | 2b. Extension e2e | Playwright VS Code suites, extension-host suites included (xvfb), then VSIX package + verify | `npm run test:e2e:vscode` | `extension-e2e.yml`: ubuntu, push to `main`, PRs |
 | 3. Release gate | the tagged commit must already have green layer 1 + 2 runs; nothing is re-run | `npm run check:release-gate -- --sha <commit>` | `release.yml` job `ci-gate` (`actions: read`). Waits up to 50 min for runs in progress. `workflow_dispatch` input `skip_ci_gate` is the emergency override |
-| 4. Install smoke | install/uninstall the built installers on clean runners | — | the `release.yml` build jobs (`.github/scripts/*-install-test.*`), `windows-smoke-test.yml` |
+| 4. Install smoke | install/uninstall the built installers on clean runners | — | `desktop-build.yml` and the `release.yml` build jobs (`.github/scripts/*-install-test.*`) |
 
 ## Background mode (local e2e)
 Local e2e runs don't disturb the person using the machine:

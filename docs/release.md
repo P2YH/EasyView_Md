@@ -23,7 +23,7 @@ Release 先创建为草稿，上传完成后公开。失败重跑时，草稿继
 
 Windows 官网安装包 `EasyView_Md-win-x64-setup.exe` 是 NSIS 安装向导：Windows job 在 Forge `make` 之后运行 `npm run make:nsis --workspace @easyview/desktop`，用 electron-builder 把 Forge 产物重新打包，程序文件与 ZIP、商店版一致。随后 `.github/scripts/windows-install-test.ps1` 分别以“仅为我”（`/currentuser`）和“所有用户”（`/allusers`）静默安装到含空格的自定义目录，校验版本、卸载项、“打开方式”注册和快捷方式，启动冒烟测试后静默卸载并检查清理，失败则阻止发布。升级时保持单一安装：已有安装则沿用其安装范围（两种范围都有时按“所有用户”安装，并移除“仅为我”的副本），2.0.14 及以前的 Squirrel 安装在复制新程序文件后、创建快捷方式前静默卸载（`build/installer.nsh`）。
 
-VSIX 随同一 tag 构建与发布，但扩展版本号独立维护。现有 Desktop Build 仅保留应用打包与运行验证，不制作发布安装包；旧 `desktop-release.yml` 已由新流程替代。
+VSIX 随同一 tag 构建与发布，但扩展版本号独立维护。Desktop Build 在每次 PR 和推送 `main` 时打包应用并做运行验证，同时制作 DMG / NSIS 安装包并用同样的安装测试脚本验证，但不上传安装包；旧 `desktop-release.yml` 已由新流程替代。
 
 ## VS Code 扩展（VSIX）
 

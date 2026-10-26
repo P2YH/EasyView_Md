@@ -3,8 +3,8 @@ import { isMarkdownFilePath } from '@easyview/contracts';
 import { listSampleFiles } from '../../../tests/fixtures/sampleFiles';
 import { launchPreviewWorkspace, SAMPLE_WORKSPACE_FOLDER, type PreviewWorkspace } from './support/previewWorkspace';
 
-/** Smoke test over every file in the repo's `样例文件/`: each one opens and renders without an error. */
-test.describe.serial('样例文件 samples', () => {
+/** Smoke test over every file in the repo's `samples/`: each one opens and renders without an error. */
+test.describe.serial('samples', () => {
   let ws: PreviewWorkspace;
   test.beforeAll(async () => { ws = await launchPreviewWorkspace(); });
   test.afterAll(async () => { await ws?.dispose(); });

@@ -124,7 +124,7 @@ it('resolves WPS numeric style ids through the document styles', () => {
   ]);
 });
 
-// Rendered DOM of the original 样例文件/中文/示例旧版文档.doc: the file has a single paragraph-property
+// Rendered DOM of the original samples/中文/示例旧版文档.doc: the file has a single paragraph-property
 // run, so @file-viewer/doc puts all 31 paragraphs in one <p> separated by line breaks (all 12pt regular).
 const MERGED_SAMPLE_LINES = [
   '示例项目文档', '1. 概述',

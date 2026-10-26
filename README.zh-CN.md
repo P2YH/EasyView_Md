@@ -34,7 +34,8 @@ packages/contracts      跨端消息、能力接口、结果和运行校验契�
 packages/node-runtime   Git、终端、导出、转换和文件 Node 运行时
 packages/editor-sync    平台无关的 Markdown 规范化同步
 packages/preview-ui     共用文件预览与文档工具栏
-tests/fixtures          两端共用测试文档与样本（单元测试与代码同目录，e2e 在 apps/*/e2e，见 docs/testing）
+tests/fixtures          两端共用测试文档与样本（单元测试与代码同目录，e2e 在 apps/*/e2e）
+samples                 中英文真实样例文档，供测试与演示使用
 resources               公共品牌、演示、字体和运行样式源文件
 tooling                  架构、维护、品牌、发布与手工检查工具
 ```

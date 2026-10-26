@@ -50,7 +50,7 @@ test('audio shows a live spectrum; video controls hide while playing once the po
         return connect.call(mute, args[0]);
       } as typeof AudioNode.prototype.connect;
     });
-    await ws.open('样例文件/中文/示例音频.mp3');
+    await ws.open('samples/中文/示例音频.mp3');
     const viewer = page.locator('#file-preview-root .preview-audio-viewer');
     await expect(viewer.locator('.preview-audio-title')).toHaveText('示例音频.mp3', { timeout: 30_000 });
     await expect(viewer.locator('.preview-media-time')).toHaveText(/^0:00 \/ (?!0:00)\d+:\d\d$/);

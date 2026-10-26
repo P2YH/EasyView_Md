@@ -5,8 +5,8 @@ import { copySampleFiles } from '../../../../tests/fixtures/sampleFiles';
 import { resumeRestoredSession, terminateElectron } from './electronApp';
 
 export const previewFixtures = path.resolve(process.cwd(), '../../tests/fixtures/preview');
-/** Workspace folder holding a copy of the repo's `样例文件/` samples (see tests/fixtures/sampleFiles.ts). */
-export const SAMPLE_WORKSPACE_FOLDER = '样例文件';
+/** Workspace folder holding a copy of the repo's `samples/` samples (see tests/fixtures/sampleFiles.ts). */
+export const SAMPLE_WORKSPACE_FOLDER = 'samples';
 
 export interface PreviewWorkspace {
   application: ElectronApplication;

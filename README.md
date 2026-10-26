@@ -48,7 +48,8 @@ packages/contracts      Cross-platform messages, capabilities and result contrac
 packages/node-runtime   Node runtime for Git, terminal, export, conversion and files
 packages/editor-sync    Platform-neutral canonical Markdown synchronization
 packages/preview-ui     Shared file previewers and document toolbars
-tests/fixtures          Shared test documents and samples (unit tests sit next to code; e2e in apps/*/e2e, see docs/testing)
+tests/fixtures          Shared test documents and samples (unit tests sit next to code; e2e in apps/*/e2e)
+samples                 Realistic sample documents (Chinese + English) used by tests and demos
 resources               Shared brand, demo, font and runtime-style sources
 tooling                  Architecture, maintenance, brand, release and manual harnesses
 ```

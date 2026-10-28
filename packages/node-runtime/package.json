@@ -10,6 +10,7 @@
     "./ai-chat-client": "./src/ai/openai-chat-client.ts",
     "./chat-prompt": "./src/ai/chatPrompt.ts",
     "./xlsx-export": "./src/export/xlsx-export.ts",
+    "./xlsx-edit": "./src/ai/xlsx-edit.ts",
     "./html-export": "./src/export/html-export.ts",
     "./pdf-export": "./src/export/pdf-export.ts",
     "./docx-export": "./src/export/docx-export.ts",

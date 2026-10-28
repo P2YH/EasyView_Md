@@ -27,8 +27,10 @@ export function applyAiTextPatches(content: string, patches: readonly AiTextPatc
   if (patches.length === 0) throw new Error(tTextPatch('noPatches'));
   const ranges: TextPatchRange[] = patches.map((patch) => {
     if (!patch.description.trim()) throw new Error(tTextPatch('emptyDescription'));
-    if (!patch.expectedText) throw new Error(tTextPatch('emptyExpectedText'));
-    const start = uniqueMatchIndex(content, patch.expectedText);
+    // Empty documents have exactly one insertion point. Never interpret an
+    // empty anchor as an insertion into nonempty text or a multi-patch batch.
+    if (!patch.expectedText && (content.length !== 0 || patches.length !== 1)) throw new Error(tTextPatch('emptyExpectedText'));
+    const start = patch.expectedText ? uniqueMatchIndex(content, patch.expectedText) : 0;
     return { ...patch, start, end: start + patch.expectedText.length };
   });
 

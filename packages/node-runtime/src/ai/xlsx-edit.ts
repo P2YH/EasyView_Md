@@ -243,10 +243,16 @@ function summarizeSheet(sheet: ExcelJS.Worksheet, maxRows: number): XlsxSheetSum
 
 export async function inspectXlsxFile(filePath: string, maxRows = XLSX_DEFAULT_PREVIEW_ROWS): Promise<XlsxInspection> {
   const bytes = await readXlsxBytes(filePath);
-  const workbook = await loadWorkbook(bytes);
+  return inspectXlsxBytes(bytes, path.basename(filePath), maxRows);
+}
+
+/** Inspection of Provider-authorized bytes; no filesystem access. */
+export async function inspectXlsxBytes(bytes: Uint8Array, fileName: string, maxRows = XLSX_DEFAULT_PREVIEW_ROWS): Promise<XlsxInspection> {
+  if (bytes.byteLength > XLSX_MAX_FILE_BYTES) throw new Error(tAi('tools.fileTooLarge', { size: bytes.byteLength, max: XLSX_MAX_FILE_BYTES }));
+  const workbook = await loadWorkbook(Buffer.from(bytes));
   const limit = Math.max(0, Math.min(XLSX_MAX_PREVIEW_ROWS, Math.floor(maxRows)));
   return {
-    fileName: path.basename(filePath),
+    fileName,
     fingerprint: fingerprintBytes(bytes),
     sheets: workbook.worksheets.map((sheet) => summarizeSheet(sheet, limit)),
   };
@@ -409,11 +415,20 @@ export async function planXlsxEdit(
   rawOps: unknown,
   timeoutMs = XLSX_OPERATION_TIMEOUT_MS,
 ): Promise<XlsxProposal> {
+  return planXlsxBytes(await readXlsxBytes(filePath), filePath, expectedFingerprint, rawOps, timeoutMs);
+}
+
+/** Reuse the original operation engine with bytes; DSH publishes only via its journal. */
+export async function planXlsxBytes(
+  input: Uint8Array, filePath: string, expectedFingerprint: string, rawOps: unknown,
+  timeoutMs = XLSX_OPERATION_TIMEOUT_MS,
+): Promise<XlsxProposal> {
+  if (input.byteLength > XLSX_MAX_FILE_BYTES) throw new Error(tAi('tools.fileTooLarge', { size: input.byteLength, max: XLSX_MAX_FILE_BYTES }));
+  const bytes = Buffer.from(input);
   const ops = xlsxSheetOpsSchema.parse(rawOps);
   const rangeCells = ops.reduce((sum, op) => sum + rangeOpCells(op), 0);
   if (rangeCells > XLSX_MAX_RANGE_CELLS) throw new Error(tAi('xlsx.rangeTooLarge', { cells: rangeCells, max: XLSX_MAX_RANGE_CELLS }));
   return withTimeout((async () => {
-    const bytes = await readXlsxBytes(filePath);
     const baseFingerprint = fingerprintBytes(bytes);
     if (baseFingerprint !== expectedFingerprint) throw new Error(tAi('xlsx.fingerprintStale'));
     const original = await loadWorkbook(bytes);

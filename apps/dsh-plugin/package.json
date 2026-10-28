@@ -1,0 +1,66 @@
+{
+  "name": "dsh-plugin-easyview",
+  "version": "0.1.0-dev.0",
+  "description": "EasyView document workbench for DeepSeek Harness",
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./ai-preset": "./lib/ai-preset.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE.txt"
+  ],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "license": "MIT",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.frame.json",
+    "build": "node scripts/build.mjs",
+    "test:unit": "node --import tsx/esm --test tests/*.test.mjs",
+    "test:integration": "node scripts/acceptance.mjs integration",
+    "test:dsh": "node scripts/acceptance.mjs dsh",
+    "test:ai": "node scripts/acceptance.mjs ai",
+    "test:package": "node scripts/probe-package.mjs",
+    "pack:offline": "node scripts/pack.mjs",
+    "pack:dev": "node scripts/pack-dev.mjs",
+    "verify:local": "node scripts/verify-local.mjs",
+    "probe:dsh": "node scripts/probe-dsh.mjs"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ]
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.5"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@easyview/node-runtime": "*",
+    "tsx": "^4.23.15"
+  },
+  "dependencies": {
+    "exceljs": "4.4.0",
+    "koffi": "3.1.1"
+  }
+}

@@ -150,6 +150,10 @@ export interface PreviewTextResult {
 export interface PreviewWriteResult {
   size: number;
   mtimeMs: number;
+  /** Verified content hash when the Host provides durable, journal-backed saves. */
+  diskHash?: string;
+  /** A retried durable save may confirm an older revision while newer input remains dirty. */
+  savedEditorRevision?: number;
 }
 
 export interface ArchiveEntry {

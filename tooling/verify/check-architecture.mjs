@@ -41,6 +41,11 @@ async function forbidImports(directory, isForbidden, reason) {
   }
 }
 
+await forbidImports('packages/workbench-core/src', (specifier) =>
+  specifier === 'electron' || specifier === 'vscode' || specifier.includes('cordis')
+  || specifier.startsWith('@easyview/node-runtime') || specifier.includes('office-agents')
+  || specifier.includes('/apps/') || specifier.startsWith('apps/') || nodeBuiltins.has(specifier),
+'workbench-core must remain browser-only and independent of product hosts');
 await forbidImports('packages/editor-core/src', (specifier) =>
   specifier === 'vscode'
   || specifier === 'electron'

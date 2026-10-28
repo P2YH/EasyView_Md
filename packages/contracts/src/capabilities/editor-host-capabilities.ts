@@ -5,6 +5,8 @@ export interface EditorHostCapabilities {
   terminal: boolean;
   aiCommitMessage: boolean;
   aiChat: boolean;
+  /** Host projects stable AI message identities; path-local browser history is disabled. */
+  aiChatHistory?: 'host';
   documentConversion: boolean;
   shortcutPersistence: boolean;
 }

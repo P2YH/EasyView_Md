@@ -3,6 +3,12 @@ import { applyAiTextPatches } from './text-patch';
 import { resetLocale, setLocale } from '../i18n/i18n';
 
 describe('applyAiTextPatches', () => {
+  it('allows one insertion into an empty document and rejects ambiguous empty anchors', () => {
+    const patch = { description: 'Start a draft', expectedText: '', replacement: '# New document\n' };
+    expect(applyAiTextPatches('', [patch])).toBe('# New document\n');
+    expect(() => applyAiTextPatches('existing content', [patch])).toThrow();
+    expect(() => applyAiTextPatches('', [patch, patch])).toThrow();
+  });
   afterEach(() => resetLocale());
 
   it('applies independent exact patches atomically', () => {

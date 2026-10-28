@@ -1,0 +1,26 @@
+{
+  "name": "@easyview/workbench-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared EasyView browser workbench consumed by Electron and DSH",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./host": "./src/host.ts",
+    "./contracts": "./src/contracts/index.ts",
+    "./contracts/*": "./src/contracts/*.ts"
+  },
+  "scripts": { "typecheck": "tsc --noEmit -p tsconfig.json" },
+  "dependencies": {
+    "@easyview/contracts": "*",
+    "@easyview/editor-core": "*",
+    "@easyview/preview-ui": "*",
+    "@file-viewer/ppt": "^0.3.3",
+    "dompurify": "^3.3.2",
+    "heic2any": "^0.0.4",
+    "pako": "^2.2.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  }
+}

@@ -2,6 +2,11 @@ import type { AiChatAttachment, AiChatHistoryEntry, AiChatSettings, AiOfficeCell
 import type { AiTextPatch } from '../ai/text-patch';
 import type { XlsxTablePayload } from '../export/xlsx-export';
 
+export interface AiOfficeEditProjection {
+  proposalId: string; fileName: string; changes: AiOfficeCellChange[]; total: number; structural: string[]; truncated: boolean;
+  status: 'pending' | 'applying' | 'applied' | 'rejected' | 'undoing' | 'undone' | 'error'; commitId?: string; error?: string;
+}
+
 export interface EditorSettingsPayload {
   fullWidth: boolean;
   tocVisible: boolean;
@@ -65,6 +70,8 @@ export interface EditorUiStatePayload {
 }
 
 export interface DocumentSnapshotPayload {
+  /** Present for hosts that own durable drafts and explicit file commits. */
+  editorBaseline?: { sourceDiskHash: string; format: 'markdown' | 'text'; savedEditorRevision: number };
   documentId: string;
   revision: number;
   content: string;
@@ -140,6 +147,8 @@ export type EditorToHostMessage =
   | { type: 'exportHtml'; html: string; images: ExportImagePayload[] }
   | { type: 'aiChat.send'; requestId: string; mode: 'chat' | 'agent'; model: string; userMessage: string; attachments: AiChatAttachment[]; history: AiChatHistoryEntry[]; documentContent?: string; documentFileName?: string; documentFilePath?: string }
   | { type: 'aiChat.abort'; requestId: string }
+  | { type: 'aiChat.hydrate'; requestId: string; filePath: string }
+  | { type: 'aiChat.clear'; requestId: string; filePath: string }
   | { type: 'aiChat.getSettings'; requestId: string }
   | { type: 'aiChat.saveSettings'; requestId: string; settings: AiChatSettings }
   | { type: 'aiChat.saveApiKey'; requestId: string; apiKey: string }
@@ -187,11 +196,14 @@ export type HostToEditorMessage =
   | { type: 'terminalExit'; sessionId: string; code: number; signal: number | null }
   | { type: 'terminalError'; message: string }
   | { type: 'aiChat.delta'; requestId: string; text?: string; reasoning?: string }
+  | { type: 'aiChat.hydrated'; requestId: string; filePath: string;
+      messages: Array<{ id: string; role: 'user' | 'assistant'; content: string; error?: string; badge?: 'error' | 'applied' | 'stopped'; toolCalls?: Array<{ id: string; name: string; done: boolean }>; officeEdits?: AiOfficeEditProjection[] }>;
+      activeRequestId?: string; streamingMessageId?: string }
   | { type: 'aiChat.done'; requestId: string; content: string; reasoning?: string; finishReason?: string }
-  | { type: 'aiChat.tool'; requestId: string; phase: 'call' | 'result'; toolName: string; input: unknown; output?: unknown }
+  | { type: 'aiChat.tool'; requestId: string; callId?: string; phase: 'call' | 'result'; toolName: string; input: unknown; output?: unknown }
   | { type: 'aiChat.applyPatches'; requestId: string; operationId: string; path: string; patches: AiTextPatch[] }
   | { type: 'aiChat.officeProposal'; requestId: string; proposalId: string; fileName: string; changes: AiOfficeCellChange[]; total: number; structural: string[]; truncated: boolean }
-  | { type: 'aiChat.officeCommitted'; requestId: string; commitId: string; filePath: string; backup: string }
+  | { type: 'aiChat.officeCommitted'; requestId: string; commitId: string; proposalId?: string; filePath: string; backup: string }
   | { type: 'aiChat.officeUndone'; requestId: string; commitId: string; filePath?: string; error?: string }
   | { type: 'aiChat.error'; requestId: string; message: string; aborted?: boolean }
   | { type: 'aiChat.settingsResponse'; requestId: string; settings: AiChatSettings; hasApiKey: boolean; hasWebSearchApiKey: boolean }
@@ -238,6 +250,8 @@ const EDITOR_MESSAGE_TYPES = new Set<EditorToHostMessage['type']>([
   'exportHtml',
   'aiChat.send',
   'aiChat.abort',
+  'aiChat.hydrate',
+  'aiChat.clear',
   'aiChat.getSettings',
   'aiChat.saveSettings',
   'aiChat.saveApiKey',

@@ -8,6 +8,7 @@ import { spreadsheetToolbarIconCss } from '../toolbarIcons';
 import type { PreviewWriteResult } from '@easyview/contracts';
 import type { XsSpreadsheetFactory, XsSpreadsheetInstance } from '../spreadsheet/xSpreadsheetTypes';
 import type { PreviewHost } from '../types';
+import { ByteEditorLifecycle } from '../editorLifecycle';
 import {
   extension,
   h,
@@ -100,7 +101,7 @@ export function reserveToolbarChrome(toolbar: HTMLElement, slot: HTMLElement): v
  * - .xls / .ods / .csv / .tsv / others → UniversalFilePreview (same chrome as PDF)
  */
 export function SpreadsheetViewer({ descriptor, host }: SpreadsheetViewerProps): React.ReactElement {
-  if (!isEditableSpreadsheetFile(descriptor.fileName) || !host?.writeBytes) {
+  if (!isEditableSpreadsheetFile(descriptor.fileName) || !host?.writeBytes || host.canEdit === false) {
     return h(UniversalFilePreview, { descriptor, loadingLabel: tPreview('spreadsheet.loadingViewer') });
   }
   return h(SpreadsheetEditor, { descriptor, host });
@@ -117,7 +118,7 @@ function SpreadsheetEditor({ descriptor, host }: { descriptor: ViewerProps['desc
   const [selectedSheet, setSelectedSheet] = React.useState(0);
   const switching = React.useRef(false);
   const generationRef = React.useRef(0);
-  const revisionRef = React.useRef(0);
+  const lifecycleRef = React.useRef<ByteEditorLifecycle | null>(null);
   const [error, setError] = React.useState<unknown>(null);
   const [loading, setLoading] = React.useState(true);
   const [dirty, setDirty] = React.useState(false);
@@ -141,13 +142,44 @@ function SpreadsheetEditor({ descriptor, host }: { descriptor: ViewerProps['desc
     const abort = new AbortController();
     let resizeObserver: ResizeObserver | null = null;
     let detachWheel: (() => void) | null = null;
+    let unregisterEditor: (() => void) | undefined;
+    let unsubscribeEditor: (() => void) | undefined;
+    const lifecycle = new ByteEditorLifecycle({
+      documentId: descriptor.sessionId, format: 'xlsx', sourceDiskHash: host.getSourceDiskHash?.(descriptor.sessionId) ?? '',
+      root: () => mountRef.current?.closest<HTMLElement>('.preview-spreadsheet-editor') ?? null,
+      flushInput() { sheetRef.current?.commitInput(); },
+      async serialize(signal) {
+        const spreadsheet = sheetRef.current, workbook = workbookRef.current;
+        if (!spreadsheet || !workbook || switching.current) throw new Error('editor_not_ready');
+        workingSheets.current.set(activeSheet.current, structuredClone(spreadsheet.getData()[0]));
+        const changes = [...workingSheets.current].map(([index, data]) => ({ index, data: structuredClone(data) }));
+        signal.throwIfAborted();
+        return workbook.save(changes);
+      },
+      async restore(bytes, signal) {
+        if (!assets.spreadsheetWorkerUrl || !sheetRef.current || switching.current) throw new Error('editor_not_ready');
+        const restored = await openSpreadsheetWorker(new Uint8Array(bytes).buffer, assets.spreadsheetWorkerUrl, abort.signal);
+        try {
+          signal.throwIfAborted();
+          if (disposed) throw new Error('editor_disposed');
+          switching.current = true;
+          sheetRef.current.loadData([structuredClone(restored.overview.data)]);
+          workbookRef.current?.dispose(); workbookRef.current = restored;
+          workingSheets.current.clear(); activeSheet.current = restored.overview.active;
+          setSelectedSheet(restored.overview.active); setSheetNames(restored.overview.sheets.map(sheet => sheet.name));
+          applyXSpreadsheetTheme(sheetRef.current, themeModeRef.current);
+        } catch (error) { restored.dispose(); throw error; }
+        finally { switching.current = false; }
+      },
+    });
+    lifecycleRef.current = lifecycle;
+    unsubscribeEditor = lifecycle.subscribe(state => setDirty(state.dirty));
 
     async function boot(): Promise<void> {
       setLoading(true);
       setError(null);
       setDirty(false);
       setSaving(false);
-      revisionRef.current = 0;
       setSaveMessage(null);
       setChromeSlot(null);
       try {
@@ -220,7 +252,7 @@ html, body, .preview-root, .preview-shell, .preview-content {
         sheetRef.current = spreadsheet;
         spreadsheet.loadData(sheets);
         spreadsheet.change(() => {
-          if (!disposed && !switching.current) { revisionRef.current++; setDirty(true); }
+          if (!disposed && !switching.current) lifecycle.changed();
         });
         applyXSpreadsheetTheme(spreadsheet, themeModeRef.current);
         detachWheel = attachSpreadsheetWheelNormalization(mountRef.current);
@@ -252,7 +284,7 @@ html, body, .preview-root, .preview-shell, .preview-content {
           if (!disposed) spreadsheet.reRender?.();
         });
         resizeObserver.observe(mountRef.current);
-        if (!disposed) setLoading(false);
+        if (!disposed) { unregisterEditor = host.registerEditor?.(lifecycle); setLoading(false); }
       } catch (reason) {
         releaseSpreadsheet();
         if (!disposed) {
@@ -265,6 +297,8 @@ html, body, .preview-root, .preview-shell, .preview-content {
     void boot();
     return () => {
       disposed = true;
+      unregisterEditor?.(); unsubscribeEditor?.(); lifecycle.dispose();
+      if (lifecycleRef.current === lifecycle) lifecycleRef.current = null;
       abort.abort();
       workbookRef.current?.dispose(); workbookRef.current = null;
       workingSheets.current.clear();
@@ -276,7 +310,7 @@ html, body, .preview-root, .preview-shell, .preview-content {
       setChromeSlot(null);
       if (mountRef.current) mountRef.current.innerHTML = '';
     };
-  }, [descriptor.contentUrl, descriptor.sessionId, assets.spreadsheetWorkerUrl]);
+  }, [descriptor.contentUrl, descriptor.sessionId, assets.spreadsheetWorkerUrl, host]);
 
   React.useEffect(() => {
     applyXSpreadsheetTheme(sheetRef.current, themeMode);
@@ -300,22 +334,17 @@ html, body, .preview-root, .preview-shell, .preview-content {
   }, [pinnedOpen, descriptor.sessionId]);
 
   const save = React.useCallback(async () => {
-    if (!host.writeBytes || !sheetRef.current || saving) return;
-    const spreadsheet = sheetRef.current;
+    if (!host.writeBytes || !sheetRef.current || saving || host.canSave === false) return;
     const generation = generationRef.current;
-    const revision = revisionRef.current;
     const sessionId = descriptor.sessionId;
     setSaving(true);
     setSaveMessage(null);
     try {
-      const workbook = workbookRef.current;
-      if (!workbook) return;
-      workingSheets.current.set(activeSheet.current, spreadsheet.getData()[0]);
-      const changes = [...workingSheets.current].map(([index, data]) => ({ index, data: structuredClone(data) }));
-      const bytes = await workbook.save(changes);
-      const result: PreviewWriteResult = await host.writeBytes(sessionId, bytes);
+      const captured = await lifecycleRef.current?.capture(new AbortController().signal);
+      if (!captured) throw new Error('editor_not_ready');
+      const result: PreviewWriteResult = host.saveSnapshot ? await host.saveSnapshot(captured) : await host.writeBytes(sessionId, captured.bytes);
       if (generationRef.current !== generation) return;
-      if (revisionRef.current === revision) setDirty(false);
+      lifecycleRef.current?.acknowledgeSaved(result.savedEditorRevision ?? captured.editorRevision, result.diskHash ?? '');
       setSaveMessage(tPreview('common.savedSize', { size: (result.size / 1024).toFixed(result.size >= 10240 ? 0 : 1) }));
     } catch (reason) {
       if (generationRef.current === generation) setSaveMessage(reason instanceof Error ? reason.message : tPreview('common.saveFailed'));
@@ -328,6 +357,7 @@ html, body, .preview-root, .preview-shell, .preview-content {
     const workbook = workbookRef.current, spreadsheet = sheetRef.current;
     if (!workbook || !spreadsheet || switching.current || index === activeSheet.current) return;
     const generation = generationRef.current;
+    spreadsheet.commitInput();
     workingSheets.current.set(activeSheet.current, structuredClone(spreadsheet.getData()[0]));
     switching.current = true; setLoading(true);
     try {
@@ -349,6 +379,7 @@ html, body, .preview-root, .preview-shell, .preview-content {
           onTogglePinned: togglePinned,
           dirty,
           saving,
+          saveDisabled: host.canSave === false,
           saveMessage,
           onSave: () => { void save(); },
         }),
@@ -372,6 +403,13 @@ html, body, .preview-root, .preview-shell, .preview-content {
       className: 'preview-spreadsheet-mount',
       ref: mountRef,
       'aria-busy': loading || undefined,
+      onCompositionStartCapture: () => lifecycleRef.current?.composition(true),
+      onCompositionEndCapture: () => lifecycleRef.current?.composition(false),
+      // Cell text is still a user revision before x-spreadsheet commits on Enter/blur.
+      // This starts the continuous checkpoint queue while the active cell is open.
+      onInputCapture: (event: React.FormEvent) => {
+        if ((event.target as HTMLElement).matches('.x-spreadsheet-editor textarea')) lifecycleRef.current?.changed();
+      },
     }),
     h('div', { className: 'preview-spreadsheet-tabs', role: 'tablist' },
       ...sheetNames.map((name, index) => h('button', { key: index, role: 'tab', 'aria-selected': selectedSheet === index, disabled: loading, onClick: () => { void switchSheet(index); } }, name))),

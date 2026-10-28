@@ -1,3 +1,1 @@
-export * from './desktop';
-export * from './workspace';
-export * from './preview';
+export * from '@easyview/workbench-core/contracts';

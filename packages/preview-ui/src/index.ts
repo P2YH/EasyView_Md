@@ -7,6 +7,8 @@ export type {
   PreviewViewerLoader,
   PreviewViewerRenderer,
 } from './types';
+export { ByteEditorLifecycle, type DocumentEditorLifecycle, type DraftSnapshot, type EditorState, type CommitLease } from './editorLifecycle';
+export { EditorCheckpointQueue, type CheckpointStatus } from './editorCheckpointQueue';
 export { PreviewAssetsProvider, usePreviewAssets } from './assets';
 export {
   DESKTOP_ONLY_PREVIEW_ROUTES,

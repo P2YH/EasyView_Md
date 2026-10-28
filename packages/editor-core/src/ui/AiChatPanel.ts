@@ -60,7 +60,7 @@ interface ChatUiMessage {
   role: 'user' | 'assistant';
   content: string;
   reasoning?: string;
-  toolCalls?: Array<{ name: string; done: boolean }>;
+  toolCalls?: Array<{ id?: string; name: string; done: boolean }>;
   officeEdits?: OfficeEditState[];
   attachments?: AiChatAttachment[];
   badge?: MessageBadge;
@@ -81,6 +81,7 @@ interface StoredAiChatSession {
 }
 
 export interface AiChatPanelDeps {
+  historyProvider?: 'host';
   postMessage: (message: EditorToHostMessage) => void;
   getDocumentContent: () => string;
   getFilePath: () => string;
@@ -729,6 +730,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
 
   const persistSession = (): void => {
     trimMessages();
+    if (deps.historyProvider === 'host') return;
     if (messages.length === 0) {
       try {
         window.localStorage.removeItem(historyStorageKey());
@@ -756,6 +758,10 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
   const restoreSession = (): void => {
     messages = [];
     visibleMessageCount = MAX_VISIBLE_MESSAGES;
+    if (deps.historyProvider === 'host') {
+      deps.postMessage({ type: 'aiChat.hydrate', requestId: createRequestId(), filePath: currentFilePath });
+      renderMessages(); return;
+    }
     try {
       const raw = window.localStorage.getItem(historyStorageKey());
       if (raw) {
@@ -1089,6 +1095,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
   let settingsDialog: SettingsDialogHandle | null = null;
 
   const openSettings = (initialError?: string): void => {
+    if (deps.historyProvider === 'host') { window.alert(tAiChat('settings.hostManaged')); return; }
     settingsDialog?.close();
     const input = (type: string, value: string, placeholder = '', wide = true): HTMLInputElement => {
       const element = document.createElement('input');
@@ -1478,6 +1485,9 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
     const action = button.dataset.action;
     switch (action) {
       case 'clear':
+        if (deps.historyProvider === 'host') {
+          deps.postMessage({ type: 'aiChat.clear', requestId: createRequestId(), filePath: currentFilePath }); break;
+        }
         messages = [];
             persistSession();
         renderMessages();
@@ -1536,6 +1546,19 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
   const handleMessage = (message: HostToEditorMessage): boolean => {
     if (disposed || !message?.type.startsWith('aiChat.')) return false;
     switch (message.type) {
+      case 'aiChat.hydrated': {
+        if (deps.historyProvider !== 'host' || message.filePath !== currentFilePath) return false;
+        // Do not replace a newly submitted prompt with a delayed hydration.
+        if (activeRequestId && activeRequestId !== message.activeRequestId) return true;
+        messages = message.messages.map(item => ({ ...item }));
+        activeRequestId = message.activeRequestId ?? null;
+        streamingMessageId = message.streamingMessageId ?? null;
+        if (activeRequestId) {
+          const target = messages.find(item => item.id === streamingMessageId);
+          if (target) target.streaming = true;
+        }
+        renderMessages(); updateSendButton(); return true;
+      }
       case 'aiChat.delta': {
         if (message.requestId !== activeRequestId) return true;
         const target = messages.find((item) => item.id === streamingMessageId);
@@ -1560,9 +1583,9 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         if (!target) return true;
         const calls = target.toolCalls ?? [];
         if (message.phase === 'call') {
-          target.toolCalls = [...calls, { name: message.toolName, done: false }];
+          if (!message.callId || !calls.some(call => call.id === message.callId)) target.toolCalls = [...calls, { id: message.callId, name: message.toolName, done: false }];
         } else {
-          const pending = calls.findIndex((call) => !call.done && call.name === message.toolName);
+          const pending = calls.findIndex((call) => !call.done && (message.callId ? call.id === message.callId : call.name === message.toolName));
           target.toolCalls = calls.map((call, index) => (index === pending ? { ...call, done: true } : call));
         }
         renderMessages();
@@ -1607,7 +1630,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
         return true;
       }
       case 'aiChat.officeCommitted': {
-        const found = findOfficeEdit((edit) => edit.proposalId === message.commitId);
+        const found = findOfficeEdit((edit) => edit.proposalId === (message.proposalId ?? message.commitId));
         if (found) updateOfficeEdit(found.message.id, found.edit.proposalId, { status: 'applied', commitId: message.commitId });
         return true;
       }
@@ -1717,7 +1740,10 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
       notifyLayoutChange();
       if (focusTimer) clearTimeout(focusTimer);
       focusTimer = setTimeout(() => {
-        if (!disposed && openState) inputEl.focus();
+        const focused = document.activeElement;
+        const editingElsewhere = focused instanceof HTMLElement && !root.contains(focused)
+          && (focused.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(focused.tagName));
+        if (!disposed && openState && !editingElsewhere) inputEl.focus();
       }, 220);
     } else {
       if (activeRequestId) stopGeneration();
@@ -1783,6 +1809,7 @@ export function createAiChatPanel(deps: AiChatPanelDeps): AiChatPanel {
   loadPanelWidth();
   applyPanelWidth();
   setFilePath(deps.getFilePath());
+  if (deps.historyProvider === 'host' && !currentFilePath) restoreSession();
   updateModeButtons();
   updateSendButton();
   updatePendingAttachments();

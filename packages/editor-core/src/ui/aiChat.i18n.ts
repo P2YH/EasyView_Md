@@ -2,6 +2,7 @@ import { defineMessages } from '@easyview/contracts/i18n';
 
 export const tAiChat = defineMessages({
   'zh-CN': {
+    'settings.hostManaged': '模型与密钥由 DSH 管理，请在 DSH 模型设置中配置。',
     'office.title': 'AI 拟修改「{name}」：共 {count} 处',
     'office.cell': '单元格',
     'office.before': '原值',
@@ -77,6 +78,7 @@ export const tAiChat = defineMessages({
     'truncated': '注意：回复因长度限制被截断。',
   },
   en: {
+    'settings.hostManaged': 'Models and credentials are managed by DSH. Configure them in DSH model settings.',
     'office.title': 'AI proposes changes to "{name}": {count} in total',
     'office.cell': 'Cell',
     'office.before': 'Before',

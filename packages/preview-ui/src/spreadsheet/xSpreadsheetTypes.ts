@@ -90,6 +90,8 @@ export interface XsSpreadsheetLike {
 }
 
 export interface XsSpreadsheetInstance extends XsSpreadsheetLike {
+  /** Pinned engine adapter commits the active cell, including an empty value. */
+  commitInput(): void;
   destroy(): void;
   loadData: (data: XsSheetData[]) => unknown;
   getData: () => XsSheetData[];

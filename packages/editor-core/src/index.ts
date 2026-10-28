@@ -89,6 +89,7 @@ import { createLazyAiChatPanel } from './ui/lazyAiChatPanel';
 export { createLazyAiChatPanel, type AiChatPanel } from './ui/lazyAiChatPanel';
 import type { EditorHostTransport, EditorSourceDocumentRequest, GitRefreshStatus, HostToEditorMessage } from '@easyview/contracts';
 import { EditorSyncAdapter } from './sync/editorSyncAdapter';
+import { TextEditorLifecycle } from './sync/textEditorLifecycle';
 import type { EasyViewEditorHostActions } from './hosts/host-actions';
 export type { EasyViewEditorHostActions } from './hosts/host-actions';
 import { handleHostMessageSideEffect } from './hostMessageRouter';
@@ -228,6 +229,8 @@ const notifyUiState = (): void => {
 };
 let canPostEditsToHost = false;
 let editorSync: EditorSyncAdapter | null = null;
+let textLifecycle: TextEditorLifecycle | undefined;
+let unregisterTextLifecycle: (() => void) | undefined;
 let sourceEditor: ReturnType<typeof createSourceEditor> | null = null;
 let sourceModeController: SourceModeController | null = null;
 const toggleSourceMode = (): void => {
@@ -1099,7 +1102,9 @@ function postEdit(content: string, edits?: import('@easyview/editor-sync').TextO
     console.debug('[EasyView_Md] Suppressed pre-snapshot edit sync', { length: content.length });
     return;
   }
+  const changed = content !== editorSync.content;
   editorSync.applyLocalContent(content, 'local', edits);
+  if (changed) textLifecycle?.changed();
 }
 
 type HeadingBreadcrumbEntry = { level: number; text: string; pos: number };
@@ -1670,6 +1675,23 @@ function initEditor() {
         requestAnimationFrame(() => externalFollowController?.enqueue(previousContentForFollow, content, revision));
       }
 
+      if (message.editorBaseline && hostActions.registerDocumentEditor && textLifecycle?.snapshot().documentId !== message.documentId) {
+        unregisterTextLifecycle?.(); textLifecycle?.dispose();
+        textLifecycle = new TextEditorLifecycle({
+          ...message.editorBaseline, documentId: message.documentId, root: dom.themeRoot,
+          revision: () => editorSync?.revision ?? 0,
+          content: () => editorSync?.content ?? currentContent,
+          flush: async () => { editor.flushSync(); await editorSync?.whenSynced(); },
+          restore: async (next) => {
+            textLifecycle?.assertWritable(); currentContent = next;
+            if (isSourceMode && sourceEditor) sourceEditor.setContent(next, { addToHistory: true });
+            else editor.setContent(next, false, { externalChange: true, addToHistory: true, scrollIntoView: false });
+            postEdit(next); await editorSync?.whenSynced();
+          },
+        });
+        unregisterTextLifecycle = hostActions.registerDocumentEditor(textLifecycle);
+      }
+
       if (isInit) {
         toolbar.update(view);
         toc.update(view);
@@ -1755,6 +1777,7 @@ function initEditor() {
   }
 
   const aiChatPanel = createLazyAiChatPanel({
+    historyProvider: host.capabilities.aiChatHistory,
     postMessage: (msg) => host.postMessage(msg),
     container: aiChatContainer,
     getDocumentContent: () => (isSourceMode && sourceEditor
@@ -1763,6 +1786,7 @@ function initEditor() {
     getFilePath: () => currentFilePath,
     getFileName: () => currentFilePath.split('/').pop() || '',
     applyDocumentEdit: async (content) => {
+      textLifecycle?.assertWritable();
       currentContent = content;
       if (isSourceMode && sourceEditor) {
         sourceEditor.setContent(content, { addToHistory: true });
@@ -2507,6 +2531,7 @@ function initEditor() {
     dom.eventTarget.dispatchEvent(new CustomEvent('easyview-editor-layout-change'));
   };
   executeCommandImpl = (command) => {
+    if (textLifecycle?.committing) return;
     switch (command) {
       case 'toggleOutline':
         toc.toggle();
@@ -2735,6 +2760,7 @@ function initEditor() {
       case 'resyncRequired': {
         const previousContent = currentContent;
         editorSync?.handleMessage(message);
+        if (message.type === 'editsApplied') textLifecycle?.acknowledged();
         if (message.type === 'documentPatched' && message.source === 'external' && currentContent !== previousContent) {
           externalFollowController?.enqueue(previousContent, currentContent, message.revision);
         }
@@ -2851,6 +2877,7 @@ function initEditor() {
     dispose: () => {
       if (disposed) return;
       disposed = true;
+      unregisterTextLifecycle?.(); textLifecycle?.dispose();
       hostSubscription.unsubscribe();
       if (readyRetryTimer) clearInterval(readyRetryTimer);
       if (readyRetryStopTimer) clearTimeout(readyRetryStopTimer);

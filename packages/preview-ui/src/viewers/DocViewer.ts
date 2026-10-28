@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import type { DocxEditorRef } from '@eigenpal/docx-editor-react';
 import type { PreviewWriteResult } from '@easyview/contracts';
 import type { PreviewHost } from '../types';
+import { ByteEditorLifecycle } from '../editorLifecycle';
 import {
   extension,
   h,
@@ -46,7 +47,7 @@ export interface DocViewerProps extends ViewerProps {
  * Collapse keeps the host toolbar mounted and hides it with the shared upward animation.
  */
 export function DocViewer({ descriptor, host }: DocViewerProps): React.ReactElement {
-  if (isEditableWordFile(descriptor.fileName) && host?.writeBytes) {
+  if (isEditableWordFile(descriptor.fileName) && host?.writeBytes && host.canEdit !== false) {
     return h(WordEditor, { descriptor, host });
   }
   return h(UniversalFilePreview, { descriptor, loadingLabel: tPreview('word.loadingViewer') });
@@ -54,6 +55,9 @@ export function DocViewer({ descriptor, host }: DocViewerProps): React.ReactElem
 
 function WordEditor({ descriptor, host }: { descriptor: ViewerProps['descriptor']; host: PreviewHost }): React.ReactElement {
   const editorRef = React.useRef<DocxEditorRef | null>(null);
+  const lifecycleRef = React.useRef<ByteEditorLifecycle | null>(null);
+  const registeredRef = React.useRef<{ lifecycle: ByteEditorLifecycle; unregister(): void } | null>(null);
+  const restoredViewRef = React.useRef<{ ready(): void; fail(error: unknown): void } | null>(null);
   const [DocxEditor, setDocxEditor] = React.useState<React.ComponentType<Record<string, unknown>> | null>(null);
   const [buffer, setBuffer] = React.useState<ArrayBuffer | null>(null);
   const [error, setError] = React.useState<unknown>(null);
@@ -69,6 +73,55 @@ function WordEditor({ descriptor, host }: { descriptor: ViewerProps['descriptor'
   const commentsSidebarUserGestureRef = React.useRef(false);
   const colorMode = easyViewThemeToDocxColorMode(themeMode);
   const mountRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    const lifecycle = new ByteEditorLifecycle({
+      documentId: descriptor.sessionId, format: 'docx', sourceDiskHash: host.getSourceDiskHash?.(descriptor.sessionId) ?? '',
+      root: () => mountRef.current, flushInput() {},
+      async serialize(signal) {
+        const editor = editorRef.current;
+        const model = editor?.getAgent()?.getDocument();
+        const live = editor?.getEditorRef()?.getDocument();
+        if (!model || !live) throw new Error(tPreview('word.notReadyToSave'));
+        const snapshot = structuredClone(model);
+        snapshot.package.document.content = structuredClone(live.package.document.content);
+        // Serialize an isolated model. DocxEditorRef.save also invokes onSave and
+        // clears live change tracking, neither of which belongs in a checkpoint.
+        const { DocumentAgent } = await import('@eigenpal/docx-editor-core/agent');
+        signal.throwIfAborted();
+        return new Uint8Array(await new DocumentAgent(snapshot).toBuffer());
+      },
+      async restore(bytes, signal) {
+        if (!editorRef.current) throw new Error(tPreview('word.notReadyToSave'));
+        signal.throwIfAborted();
+        // The library promise acknowledges parsing, before React has mounted the
+        // replacement ProseMirror view. A capture/SaveAll must await that view.
+        let settle!: () => void, fail!: (error: unknown) => void;
+        const ready = new Promise<void>((resolve, reject) => { settle = resolve; fail = reject; });
+        const pending = { ready: settle, fail };
+        restoredViewRef.current = pending;
+        const abort = () => fail(signal.reason);
+        signal.addEventListener('abort', abort, { once: true });
+        const timeout = window.setTimeout(() => fail(new Error(tPreview('word.notReadyToSave'))), 30_000);
+        try {
+          // Observe rejection even if parsing fails before the readiness await.
+          void ready.catch(() => {});
+          await editorRef.current.loadDocumentBuffer(bytes);
+          await ready;
+          signal.throwIfAborted();
+        } finally {
+          clearTimeout(timeout); signal.removeEventListener('abort', abort);
+          if (restoredViewRef.current === pending) restoredViewRef.current = null;
+        }
+      },
+    });
+    lifecycleRef.current = lifecycle;
+    const unsubscribe = lifecycle.subscribe(state => setDirty(state.dirty));
+    return () => {
+      restoredViewRef.current?.fail(new Error('editor_disposed')); restoredViewRef.current = null;
+      if (registeredRef.current?.lifecycle === lifecycle) { registeredRef.current.unregister(); registeredRef.current = null; }
+      unsubscribe(); lifecycle.dispose(); if (lifecycleRef.current === lifecycle) lifecycleRef.current = null;
+    };
+  }, [descriptor.sessionId, descriptor.contentUrl, host]);
   const outlineListenersRef = React.useRef(new Set<() => void>());
   const [sidebarHidden, setSidebarHidden] = React.useState(() => !readWordOutlinePinned());
   const toggleSidebar = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
@@ -260,34 +313,46 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
     return () => window.clearTimeout(timer);
   }, [buffer, loading, themeMode]);
 
-  const persist = React.useCallback(async (bytes: ArrayBuffer) => {
+  const persist = React.useCallback(async (snapshot: import('../editorLifecycle').DraftSnapshot) => {
     if (!host.writeBytes) throw new Error(tPreview('word.saveUnavailable'));
-    const result: PreviewWriteResult = await host.writeBytes(descriptor.sessionId, new Uint8Array(bytes));
-    setDirty(false);
+    const result: PreviewWriteResult = host.saveSnapshot ? await host.saveSnapshot(snapshot) : await host.writeBytes(descriptor.sessionId, snapshot.bytes);
+    lifecycleRef.current?.acknowledgeSaved(result.savedEditorRevision ?? snapshot.editorRevision, result.diskHash ?? '');
     setSaveMessage(tPreview('common.savedSize', { size: (result.size / 1024).toFixed(result.size >= 10240 ? 0 : 1) }));
     return result;
   }, [descriptor.sessionId, host]);
 
   const save = React.useCallback(async () => {
-    if (saving) return;
+    if (saving || host.canSave === false) return;
     setSaving(true);
     setSaveMessage(null);
     try {
-      const bytes = await editorRef.current?.save();
-      if (!bytes) throw new Error(tPreview('word.notReadyToSave'));
-      await persist(bytes);
+      const captured = await lifecycleRef.current?.capture(new AbortController().signal);
+      if (!captured) throw new Error(tPreview('word.notReadyToSave'));
+      await persist(captured);
     } catch (reason) {
       setSaveMessage(reason instanceof Error ? reason.message : tPreview('common.saveFailed'));
     } finally {
       setSaving(false);
     }
-  }, [persist, saving]);
+  }, [persist, saving, host]);
+
+  React.useEffect(() => {
+    const root = mountRef.current;
+    if (!root) return;
+    const keydown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault(); event.stopImmediatePropagation(); void save();
+      }
+    };
+    root.addEventListener('keydown', keydown, true);
+    return () => root.removeEventListener('keydown', keydown, true);
+  }, [save, loading]);
 
   const exportDocx = React.useCallback(async () => {
     try {
-      const bytes = await editorRef.current?.save();
-      if (!bytes) throw new Error(tPreview('word.notReadyToExport'));
-      const blob = new Blob([bytes], {
+      const captured = await lifecycleRef.current?.capture(new AbortController().signal);
+      if (!captured) throw new Error(tPreview('word.notReadyToExport'));
+      const blob = new Blob([new Uint8Array(captured.bytes)], {
         type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       });
       const url = URL.createObjectURL(blob);
@@ -387,7 +452,7 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
       onTogglePinned: togglePinned,
       dirty,
       saving,
-      saveDisabled: !buffer,
+      saveDisabled: !buffer || host.canSave === false,
       saveMessage,
       onSave: () => { void save(); },
       documentActions,
@@ -412,6 +477,8 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
           className: 'preview-word-mount',
           ref: mountRef,
           'data-preview-sidebar': sidebarHidden ? 'hidden' : 'visible',
+          onCompositionStartCapture: () => lifecycleRef.current?.composition(true),
+          onCompositionEndCapture: () => lifecycleRef.current?.composition(false),
         },
           sidebarToggle,
           h(DocxEditor, {
@@ -438,22 +505,22 @@ html, body, .preview-root, .preview-shell, .preview-content, .preview-word-edito
             documentName: descriptor.fileName,
             commentsSidebarOpen,
             onCommentsSidebarOpenChange,
-            onChange: () => {
-              setDirty(true);
-              notifyOutline();
+            onEditorViewReady: () => {
+              // Readiness callbacks can precede imperative-ref publication in
+              // the same React commit. Resolve at the following browser frame.
+              const pending = restoredViewRef.current;
+              if (pending) requestAnimationFrame(() => {
+                if (restoredViewRef.current === pending && editorRef.current?.getEditorRef()?.getDocument()) pending.ready();
+              });
+              const lifecycle = lifecycleRef.current;
+              if (lifecycle && registeredRef.current?.lifecycle !== lifecycle) {
+                registeredRef.current?.unregister();
+                registeredRef.current = { lifecycle, unregister: host.registerEditor?.(lifecycle) ?? (() => {}) };
+              }
             },
-            onSave: (next: ArrayBuffer) => {
-              void (async () => {
-                setSaving(true);
-                setSaveMessage(null);
-                try {
-                  await persist(next);
-                } catch (reason) {
-                  setSaveMessage(reason instanceof Error ? reason.message : tPreview('common.saveFailed'));
-                } finally {
-                  setSaving(false);
-                }
-              })();
+            onChange: () => {
+              lifecycleRef.current?.changed();
+              notifyOutline();
             },
             onError: (err: Error) => setError(err),
             style: { height: '100%', width: '100%' },

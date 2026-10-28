@@ -1,0 +1,6 @@
+/lib/
+/artifacts/
+/node_modules/
+
+# Local acceptance evidence and packaging outputs
+/docs/evidence/

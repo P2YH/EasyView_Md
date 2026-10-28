@@ -20,11 +20,19 @@ export interface PreviewState {
 
 /** Host-injected actions consumed by viewers. Desktop/Extension adapt their APIs here. */
 export interface PreviewHost {
+  canEdit?: boolean;
+  /** Editing recoverable drafts does not imply permission to save originals. */
+  canSave?: boolean;
+  /** Optional owner registration; disposer belongs to the mounted Viewer generation. */
+  registerEditor?(editor: import('./editorLifecycle').DocumentEditorLifecycle): () => void;
+  /** Baseline is supplied by the authorized document owner, not inferred from mtime. */
+  getSourceDiskHash?(sessionId: string): string;
   getState(): PreviewState;
   subscribe(listener: () => void): () => void;
   readText?(sessionId: string): Promise<PreviewTextResult>;
   /** Persist document-route bytes back to the source file (Excel first; Word/PPT later). */
   writeBytes?(sessionId: string, bytes: Uint8Array): Promise<PreviewWriteResult>;
+  saveSnapshot?(snapshot: import('./editorLifecycle').DraftSnapshot): Promise<PreviewWriteResult>;
   listArchive?(sessionId: string): Promise<ArchiveEntry[]>;
   openArchiveEntry?(sessionId: string, path: string): Promise<ArchiveEntryPreview>;
   exportArchiveEntry?(sessionId: string, path: string): Promise<void>;

@@ -1,7 +1,7 @@
 /** @vitest-environment happy-dom */
 import { afterEach, expect, it, vi } from 'vitest';
 import { WorkspaceExplorerView } from './WorkspaceExplorerView';
-import { WorkspaceExplorer } from '../../../../desktop/src/renderer/workspace/WorkspaceExplorer';
+import { WorkspaceExplorer } from '../../../../../packages/workbench-core/src/renderer/workspace/WorkspaceExplorer';
 import type { WorkspaceExplorerEntry } from './workspace-explorer-messages';
 
 const entry: WorkspaceExplorerEntry = {

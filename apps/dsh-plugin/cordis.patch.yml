@@ -1,0 +1,21 @@
+- insert:
+    - id: easyview
+      name: dsh-plugin-easyview
+    - id: easyview-chat-preset
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: easyview-chat-v1
+        name: EasyView Chat
+        plugins:
+          - name: dsh-plugin-easyview/ai-preset
+            config:
+              mode: chat
+    - id: easyview-agent-preset
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: easyview-agent-v1
+        name: EasyView Agent
+        plugins:
+          - name: dsh-plugin-easyview/ai-preset
+            config:
+              mode: agent

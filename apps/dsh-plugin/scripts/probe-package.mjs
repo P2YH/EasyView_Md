@@ -23,7 +23,7 @@ try {
   await writeFile(resolve(root, 'docs/evidence/package-install.log'), installed.stdout + installed.stderr);
   const manifest = JSON.parse(await readFile(resolve(installationRoot, 'lib/workbench/asset-manifest.json'), 'utf8'));
   const host = await readFile(resolve(installationRoot, 'lib/index.js'), 'utf8');
-  if (host.includes('C:\\workspace\\dsh\\EasyView_Md-dsh') || host.includes('C:/workspace/dsh/EasyView_Md-dsh')) throw new Error('Development checkout leaked into runtime bundle');
+  if (/[\\/]((?:EasyView_Md-dsh)|(?:dsh-plugin-easyview))[\\/]/u.test(host)) throw new Error('Development checkout leaked into runtime bundle');
   result = { ...result, assets: manifest.files.length, installedVersion: JSON.parse(await readFile(resolve(installationRoot, 'package.json'), 'utf8')).version,
     nativeDependency: JSON.parse(await readFile(resolve(prefix, 'node_modules/koffi/package.json'), 'utf8')).version };
   const probe = await run(process.execPath, ['scripts/probe-dsh.mjs'], { cwd: root, env: { ...process.env, DSH_EASYVIEW_PACKAGE_ROOT: installationRoot },
